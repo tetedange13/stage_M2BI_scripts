@@ -6,7 +6,20 @@ Make the following steps from a given cluster of reads:
 1) Pick randomly 1 read from the cluster (the 1st one acutally)
 2) BLASTn this read against the nt-NCBI database [accesssion: 12 feb 2019]
 3) Get the taxid associated with the top BLAST hit
+4) Get the taxonomic rank associated with the taxid
+5) Generate a report (csv file)
 
+Usage:
+  clust_tax.py (-i <inputFqFile>) (-c <clustFile>) [-m <minMemb>] [-a <altHits>] [-t <threads>]
+  
+Options:
+  -h --help                  help
+  --version                  version of the script
+  -i --inputFqFile=input_fq  input fastq file (given for clustering)
+  -c --clustFile=clust       input txt file detailling the clusters
+  -m --minMemb=min_memb      minimum number of members within a cluster [default: 5]
+  -a --altHits=alt_hits      number of alternative BLAST hits to look for [default: 1]
+  -t --threads=nb_threads    number of threads to use [default: 10]
 """
 
 import sys, os, re
@@ -17,6 +30,42 @@ import multiprocessing as mp
 from Bio import Entrez, SeqIO
 from Bio.Blast.Applications import NcbiblastxCommandline
 from Bio.Blast import NCBIXML
+from docopt import docopt
+
+
+def check_input_fq(input_fq_path):
+    """
+    Check if everything's fine with the fq file given as input
+    """
+    if not os.path.isfile(input_fq_path):
+        print("ERROR! Wrong specified input fastq file")
+        sys.exit(2)
+    else:
+        head_input_fq, tail_input_fq = os.path.split(input_fq_path)
+        input_fq_base, input_fq_ext = os.path.splitext(tail_input_fq)
+        
+        if input_fq_ext[1:] not in ("fq", "fastq"):
+            err_ext = ("ERROR! Current only fastq file (ext=fq or " +
+                       "ext=fastq) are accepted")
+            print(err_ext)
+            sys.exit(2)
+        
+        else:
+            return input_fq_path
+
+
+def check_input_nb(input_nb):
+    """
+    Check if a integer given as argument is valid
+    """
+    try:
+        int(input_nb)
+        
+    except ValueError:
+        print("ERROR! You should give an integer here")
+        sys.exit(2)
+    
+    return input_nb
 
 
 def query_taxid(term_to_search):
@@ -264,15 +313,19 @@ def in_zymo(sp_name, sp_rank, taxo_level_cutoff):
 # MAIN:
 if __name__ == "__main__":
     # COMMON VARIABLES AND PATHES:
-    NB_THREADS = str(15)
     path_apps = "/home/sheldon/Applications/"
     path_proj = "/projets/metage_ONT_2019/"
+    out_xml_file = "../opuntia_" + NB_MIN_BY_CLUST + ".xml" # Needed later
     #NB_MIN_BY_CLUST = str(250) # 10 clusters
     #NB_MIN_BY_CLUST = str(25) # 20 clusters
     #NB_MIN_BY_CLUST = str(15) # 50 clusters
-    NB_MIN_BY_CLUST = str(5) # Needed later
-    NB_ALT = 1 # Number of alternative hits to look for
-    out_xml_file = "../opuntia_" + NB_MIN_BY_CLUST + ".xml" # Needed later
+    
+    ARGS = docopt(__doc__, version='0.1')
+    input_fq_path = check_input_fq(ARGS["--inputFqFile"])
+    CLUST_FILE = ARGS["--clustFile"]
+    NB_THREADS = check_input_nb(ARGS["--threads"])
+    NB_MIN_BY_CLUST = check_input_nb(ARGS["--minMemb"]) # Needed later
+    NB_ALT = check_input_nb(ARGS["--altHits"])
     
     if not os.path.isfile(out_xml_file):
     #if True:         
@@ -437,69 +490,4 @@ if __name__ == "__main__":
     print("Problems solved !")    
     # We have to re-write the new report file, with problems solved:
     df_hits.to_csv(report_filename, sep='\t')
-    #print(df_hits.index)
-    #sys.exit()
-    #print(df_hits.columns)
     
-    
-    # CALCULATION OF STATISTICS:
-    dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
-    dict_str = {'TN': "Assigned et un de nos Euk",
-                'TP': "Assigned et une de nos bactos !",
-                'FN': "Not assigned ! (cutoff plus bas dans l'arbre)",
-                'FP': "Assigned, mais appartient pas à la Zymo"}
-    
-    
-    rownames_df = df_hits.index
-    #print(df_hits) ; sys.exit()
-    for clust in rownames_df:
-        if "clust" in clust:
-            splitted_remarks = df_hits.loc[clust, "remarks"].split()
-            print("\n", clust, " | ", "E-VAL:", splitted_remarks[-1],
-            " | ", "SCORE:", splitted_remarks[-2])
-                 
-            print("NAME:", df_hits.loc[clust, "topHit"], " | ", 
-                  "RANK:", df_hits.loc[clust, "rank"])
-
-            res = in_zymo(df_hits.loc[clust, "topHit"], 
-                          df_hits.loc[clust, "rank"], 
-                          taxonomy_level_cutoff)
-            
-
-            if res == "FP":
-                # Look for alternative hits:
-                print("Not within the Zymo --> Look for alternative hit!")
-
-                alt_index = "alt_" + clust.split('_')[1] + "_1"
-                if alt_index in rownames_df:
-                    res_alt = in_zymo(df_hits.loc[alt_index, "topHit"], 
-                                      df_hits.loc[alt_index, "rank"], 
-                                      taxonomy_level_cutoff)
-                    if res_alt != 'FP':
-                        print("FOUND:", df_hits.loc[alt_index, "topHit"], 
-                              " | ", "RANK:", df_hits.loc[alt_index, "rank"]) 
-                        remarks_alt = df_hits.loc[alt_index, "remarks"]
-                        splitted_remarks_alt = remarks_alt.split()
-                        print(alt_index, " | ", "E-VAL:", 
-                              splitted_remarks_alt[-1], " | ", "SCORE:", 
-                              splitted_remarks_alt[-2])        
-                    else:
-                        print("The alternative is still a FP")
-                        
-                    dict_stats[res_alt] += 1
-                    print(dict_str[res_alt])
-                        
-                else:
-                    print("NO alternative hit available")
-                    dict_stats[res] += 1 
-                    
-            
-            else:
-                print(dict_str[res])
-                dict_stats[res] += 1    
-        #print(res)        
-
-        #print('\n', df_hits.loc[clust, :])
-    
-    print(dict_stats)
-

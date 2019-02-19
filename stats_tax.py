@@ -59,4 +59,69 @@ def in_zymo(sp_name, sp_rank, taxo_level_cutoff):
     
     else:
         return 'FN'
+        
+        
+# MAIN:
+if __name__ == "__main__":
+    # CALCULATION OF STATISTICS:
+    dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
+    dict_str = {'TN': "Assigned et un de nos Euk",
+                'TP': "Assigned et une de nos bactos !",
+                'FN': "Not assigned ! (cutoff plus bas dans l'arbre)",
+                'FP': "Assigned, mais appartient pas à la Zymo"}
+    
+    
+    rownames_df = df_hits.index
+    #print(df_hits) ; sys.exit()
+    for clust in rownames_df:
+        if "clust" in clust:
+            splitted_remarks = df_hits.loc[clust, "remarks"].split()
+            print("\n", clust, " | ", "E-VAL:", splitted_remarks[-1],
+            " | ", "SCORE:", splitted_remarks[-2])
+                 
+            print("NAME:", df_hits.loc[clust, "topHit"], " | ", 
+                  "RANK:", df_hits.loc[clust, "rank"])
+
+            res = in_zymo(df_hits.loc[clust, "topHit"], 
+                          df_hits.loc[clust, "rank"], 
+                          taxonomy_level_cutoff)
+            
+
+            if res == "FP":
+                # Look for alternative hits:
+                print("Not within the Zymo --> Look for alternative hit!")
+
+                alt_index = "alt_" + clust.split('_')[1] + "_1"
+                if alt_index in rownames_df:
+                    res_alt = in_zymo(df_hits.loc[alt_index, "topHit"], 
+                                      df_hits.loc[alt_index, "rank"], 
+                                      taxonomy_level_cutoff)
+                    if res_alt != 'FP':
+                        print("FOUND:", df_hits.loc[alt_index, "topHit"], 
+                              " | ", "RANK:", df_hits.loc[alt_index, "rank"]) 
+                        remarks_alt = df_hits.loc[alt_index, "remarks"]
+                        splitted_remarks_alt = remarks_alt.split()
+                        print(alt_index, " | ", "E-VAL:", 
+                              splitted_remarks_alt[-1], " | ", "SCORE:", 
+                              splitted_remarks_alt[-2])        
+                    else:
+                        print("The alternative is still a FP")
+                        
+                    dict_stats[res_alt] += 1
+                    print(dict_str[res_alt])
+                        
+                else:
+                    print("NO alternative hit available")
+                    dict_stats[res] += 1 
+                    
+            
+            else:
+                print(dict_str[res])
+                dict_stats[res] += 1    
+        #print(res)        
+
+        #print('\n', df_hits.loc[clust, :])
+    
+    print(dict_stats)
+
 
