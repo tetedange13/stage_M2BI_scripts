@@ -18,7 +18,7 @@ Options:
   -i --inputFqFile=input_fq  input fastq file (given for clustering)
   -c --clustFile=clust       input txt file detailling the clusters
   -m --minMemb=min_memb      minimum number of members within a cluster [default: 250]
-  -a --altHits=alt_hits      number of alternative BLAST hits to look for [default: 1]
+  -a --altHits=alt_hits      number of alternative BLAST hits to look for [default: 0]
   -t --threads=nb_threads    number of threads to use [default: 10]
 """
 
@@ -186,6 +186,9 @@ def parse_BLAST(enum_iter):
     Tiny function, mostly useful for parallelization actually
     """
     idx, blast_res = enum_iter
+    #print(blast_res.__dict__.keys())
+    #print(blast_res.num_good_extends, blast_res.sc_mismatch)
+    #sys.exit()
     
     readID = blast_res.query.split()[0]
     print("\n\nCLUSTER", idx, " | ", "QUERY =", readID)
@@ -209,36 +212,37 @@ def look_for_alt(blast_res, nb_alt, cutoff_e_val, my_df):
           max_score)
     
     #if (float(max_e_val) < cutoff_e_val):
-    
-    print("Alternatives hits (with EXACT SAME SCORE):")
     alt = False
     
     for j in range(1, nb_alt+1):
-        descr_alt = blast_res.descriptions[j]
-        alt_score, alt_e_val = str(descr_alt.score), str(descr_alt.e)
-        
-        if (alt_score == max_score and alt_e_val == max_e_val):
-            alt = True
-            to_df_alt = dict_from_BLASTres(blast_res, j)
-            keys_alt = to_df_alt.keys()
-            alt_idx = "alt_" + str(idx) + "_" + str(j)
+        if len(blast_res.descriptions) > j: # If enough hits
+            descr_alt = blast_res.descriptions[j]
+            alt_score, alt_e_val = str(descr_alt.score), str(descr_alt.e)
+            print("Looking for alternative hit #" + str(j))
+            #print(descr_alt)
             
-            if "problems" in keys_alt:
-                print("PROBLEM WITH ALT!", to_df["problems"])
-                #sys.exit()
-            #    with open(pb_filename, 'a') as pb_log_file:
-            #        pb_log_file.write(alt_idx + " | " + "QUERY =" +
-            #                          to_df_alt + '\n')
-            
-            else:
-                print("FOUND:", to_df_alt["topHit"], " | ", "E-VAL:", 
-                alt_e_val, " | ", "SC:", alt_score)
-                for key_alt in keys_alt:
-                    my_df.loc[alt_idx, key_alt] = to_df_alt[key_alt]
-            
+            if (alt_score == max_score and alt_e_val == max_e_val):
+                alt = True
+                to_df_alt = dict_from_BLASTres(blast_res, j)
+                keys_alt = to_df_alt.keys()
+                alt_idx = "alt_" + str(idx) + "_" + str(j)
+                
+                if "problems" in keys_alt:
+                    print("PROBLEM WITH ALT!", to_df["problems"])
+                    #sys.exit()
+                #    with open(pb_filename, 'a') as pb_log_file:
+                #        pb_log_file.write(alt_idx + " | " + "QUERY =" +
+                #                          to_df_alt + '\n')
+                
+                else:
+                    print("FOUND:", to_df_alt["topHit"], " | ", "E-VAL:", 
+                    alt_e_val, " | ", "SC:", alt_score)
+                    for key_alt in keys_alt:
+                        my_df.loc[alt_idx, key_alt] = to_df_alt[key_alt]
+                
     
     if not alt:
-        print("No alternative hits")
+        print("NO acceptable alternative hit found")
     
    
 def handle_strain(sp_name, rank):
@@ -313,6 +317,7 @@ if __name__ == "__main__":
     START_TIME = t.time()
     
     if not os.path.isfile(out_xml_file):
+    #if True:
         # GENERATE 1 FASTA FILE PER CLUSTER (with CARNAC-LR's dedicated script):
         to_CARNAC_to_fasta = (path_apps + "CARNAC-LR_git93dd640/scripts/" +
                               "CARNAC_to_fasta.py")
@@ -335,10 +340,13 @@ if __name__ == "__main__":
         to_NCBIdb = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/" +
                      "metage_ONT_2019/nt_BLASTdb/nt")
         
-        cmd_BLAST = NcbiblastxCommandline(cmd=to_blast_exe, db=to_NCBIdb, 
-                                          num_threads=NB_THREADS,
-                                          out=out_xml_file, outfmt=5)
-        
+        cmd_BLAST = str(NcbiblastxCommandline(cmd=to_blast_exe, db=to_NCBIdb, 
+                                              num_threads=NB_THREADS,
+                                              out=out_xml_file, outfmt=5,
+                                              max_target_seqs=100,
+                                              word_size=11))
+        cmd_BLAST += " -task=blastn" # Pb with this specific parameter
+        #print(cmd_BLAST); sys.exit()
         print("BLAST query against NCBI db for 1 read by cluster...")
         os.system(cmd_pick_one + " | " + str(cmd_BLAST))
         
@@ -354,7 +362,8 @@ if __name__ == "__main__":
     #global pb_filename
     pb_filename = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".log"
     
-    if not os.path.isfile(report_filename):
+    #if not os.path.isfile(report_filename):
+    if True:
         print("PARSING BLAST OUTPUT...")
         
         if NB_ALT > 0:
@@ -426,9 +435,9 @@ if __name__ == "__main__":
     
     
     # DEAL WITH THE DIFFERENT PROBLEMS ENCOUNTERED:
+    print("Solving the encountered problems...")
+    
     if os.path.isfile(pb_filename): # Check if there are problems to solve
-        print("Solving the encountered problems...")
-        
         with open(pb_filename, 'r') as pb_log_file:
             problems_list = pb_log_file.read().splitlines()
         
@@ -449,7 +458,8 @@ if __name__ == "__main__":
                 sys.exit()
         
         if NB_ALT > 0 and len(dict_problems['FP']) > 0: # If there are some FP
-            print("Looking for alternative BLAST hits for FP...") 
+            print("Looking for alternative BLAST hits (with EXACT same " +
+                  "score) for FP...") 
             if os.path.isfile(report_filename): # list_TP does not already exist
                 res_handle = open(out_xml_file)
                 blast_records = NCBIXML.parse(res_handle)
@@ -467,5 +477,9 @@ if __name__ == "__main__":
         df_hits.to_csv(report_filename, sep='\t')
     
     
-    print("TOTAL RUNTIME:", t.time() - START_TIME)  
+    else:
+        print("NO problems to solve")
+    
+    
+    print("\n\nTOTAL RUNTIME:", t.time() - START_TIME)  
       
