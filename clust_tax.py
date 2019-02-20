@@ -17,7 +17,7 @@ Options:
   --version                  version of the script
   -i --inputFqFile=input_fq  input fastq file (given for clustering)
   -c --clustFile=clust       input txt file detailling the clusters
-  -m --minMemb=min_memb      minimum number of members within a cluster [default: 5]
+  -m --minMemb=min_memb      minimum number of members within a cluster [default: 250]
   -a --altHits=alt_hits      number of alternative BLAST hits to look for [default: 1]
   -t --threads=nb_threads    number of threads to use [default: 10]
 """
@@ -51,7 +51,7 @@ def check_input_fq(input_fq_path):
             sys.exit(2)
         
         else:
-            return input_fq_path
+            return (input_fq_path, input_fq_base)
 
 
 def check_input_nb(input_nb):
@@ -124,8 +124,7 @@ def annot_from_title(title):
     
     elif match_taxid and match_organism:
         taxid = match_taxid.group(2)
-        #organism = " ".join(match_taxo_org.group(2).split()[0:2])
-        # We keep the whole name (not just "Genus species"):
+        # We keep the whole ScientificName (not just "Genus species"):
         organism = match_organism.group(2) 
         taxonomy = match_taxo.group(2)
         
@@ -138,8 +137,6 @@ def annot_from_title(title):
         print("The ScientificName doesn't correspond to any taxid")
         print("    --> Querying the taxid with only 'Genus species'")
         taxid = query_taxid(' '.join(organism.split()[0:2]))
-    #else:
-    #    print("Taxid successfully got")
         
     return (taxid, organism, taxonomy)
 
@@ -156,14 +153,6 @@ def query_taxonomy(str_taxid):
 
     return res_fetch[0]
     
-    
-def dl_gbk_file():
-    """
-    """
-    # https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&retmode=text&rettype=gb&id=835164530&email=felix.deslacs%40gmail.com
-    # --> Est-ce que c'est vraiment une bonne idee ? Je vais encore me prendre
-    # des stops par le site si je dl trop de trucs en meme temps...
-    
 
 def dict_from_BLASTres(blast_res, idx_to_take):
     """
@@ -173,7 +162,6 @@ def dict_from_BLASTres(blast_res, idx_to_take):
     dict_res = { "readID":blast_res.query.split()[0] }
     
     if len(blast_res.descriptions) == 0: # NO BLAST hit
-        #print("No BLAST hits --> ignored ?")
         dict_res["problems"] = "NO_BLAST_HIT"
         return dict_res
         
@@ -183,12 +171,7 @@ def dict_from_BLASTres(blast_res, idx_to_take):
         print("bit-score (best HSP) =", 
               blast_res.alignments[idx_to_take].hsps[0].bits)
     
-    taxid_hit, sp_name_hit, taxo_hit = annot_from_title(descr_blast.title)
-    
-    #if taxid_hit == "TAXO_NOT_FOUND":
-    #    dict_res["problems"] = taxid_hit
-    #    return dict_res
-    
+    taxid_hit, sp_name_hit, taxo_hit = annot_from_title(descr_blast.title)   
     tax_record = query_taxonomy(taxid_hit)
     dict_res["remarks"] = str(descr_blast)
     dict_res["topHit"] = sp_name_hit
@@ -225,37 +208,37 @@ def look_for_alt(blast_res, nb_alt, cutoff_e_val, my_df):
     print("\nTOP HIT:", topHit, " | ", "E-VAL:", max_e_val, " | ", "SC:", 
           max_score)
     
-    if (float(max_e_val) < cutoff_e_val): 
-        print("Alternatives hits (with EXACT SAME SCORE):")
-        alt = False
+    #if (float(max_e_val) < cutoff_e_val):
+    
+    print("Alternatives hits (with EXACT SAME SCORE):")
+    alt = False
+    
+    for j in range(1, nb_alt+1):
+        descr_alt = blast_res.descriptions[j]
+        alt_score, alt_e_val = str(descr_alt.score), str(descr_alt.e)
         
-        for j in range(1, nb_alt+1):
-        #if False:
-            descr_alt = blast_res.descriptions[j]
-            alt_score, alt_e_val = str(descr_alt.score), str(descr_alt.e)
+        if (alt_score == max_score and alt_e_val == max_e_val):
+            alt = True
+            to_df_alt = dict_from_BLASTres(blast_res, j)
+            keys_alt = to_df_alt.keys()
+            alt_idx = "alt_" + str(idx) + "_" + str(j)
             
-            if (alt_score == max_score and alt_e_val == max_e_val):
-                alt = True
-                to_df_alt = dict_from_BLASTres(blast_res, j)
-                keys_alt = to_df_alt.keys()
-                alt_idx = "alt_" + str(idx) + "_" + str(j)
-                
-                if "problems" in keys_alt:
-                    print("PROBLEM WITH ALT!", to_df["problems"])
-                    sys.exit()
-                #    with open(pb_filename, 'a') as pb_log_file:
-                #        pb_log_file.write(alt_idx + " | " + "QUERY =" +
-                #                          to_df_alt + '\n')
-                
-                else:
-                    print("FOUND:", to_df_alt["topHit"], " | ", "E-VAL:", 
-                    alt_e_val, " | ", "SC:", alt_score)
-                    for key_alt in keys_alt:
-                        my_df.loc[alt_idx, key_alt] = to_df_alt[key_alt]
-                
-        
-        if not alt:
-            print("No alternative hits")
+            if "problems" in keys_alt:
+                print("PROBLEM WITH ALT!", to_df["problems"])
+                #sys.exit()
+            #    with open(pb_filename, 'a') as pb_log_file:
+            #        pb_log_file.write(alt_idx + " | " + "QUERY =" +
+            #                          to_df_alt + '\n')
+            
+            else:
+                print("FOUND:", to_df_alt["topHit"], " | ", "E-VAL:", 
+                alt_e_val, " | ", "SC:", alt_score)
+                for key_alt in keys_alt:
+                    my_df.loc[alt_idx, key_alt] = to_df_alt[key_alt]
+            
+    
+    if not alt:
+        print("No alternative hits")
     
    
 def handle_strain(sp_name, rank):
@@ -312,45 +295,40 @@ def in_zymo(sp_name, sp_rank, taxo_level_cutoff):
 
 # MAIN:
 if __name__ == "__main__":
-    # COMMON VARIABLES AND PATHES:
-    path_apps = "/home/sheldon/Applications/"
-    path_proj = "/projets/metage_ONT_2019/"
-    out_xml_file = "../opuntia_" + NB_MIN_BY_CLUST + ".xml" # Needed later
-    #NB_MIN_BY_CLUST = str(250) # 10 clusters
-    #NB_MIN_BY_CLUST = str(25) # 20 clusters
-    #NB_MIN_BY_CLUST = str(15) # 50 clusters
-    
+    # COMMON VARIABLES AND PATHES:   
     ARGS = docopt(__doc__, version='0.1')
-    input_fq_path = check_input_fq(ARGS["--inputFqFile"])
-    CLUST_FILE = ARGS["--clustFile"]
+    input_fq_path, input_fq_base = check_input_fq(ARGS["--inputFqFile"])
+    TO_CLUST_FILE = ARGS["--clustFile"]
     NB_THREADS = check_input_nb(ARGS["--threads"])
     NB_MIN_BY_CLUST = check_input_nb(ARGS["--minMemb"]) # Needed later
-    NB_ALT = check_input_nb(ARGS["--altHits"])
+    NB_ALT = int(check_input_nb(ARGS["--altHits"]))
+    
+    if NB_ALT > 1:
+        print("Sorry, for now this script does not work with more than 1 " +
+              "alternative BLAST hit (it largely enough most of the time)\n")
+        sys.exit(2) 
+    
+    out_xml_file = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".xml" # Needed later
+    path_apps = "/home/sheldon/Applications/"
+    START_TIME = t.time()
     
     if not os.path.isfile(out_xml_file):
-    #if True:         
         # GENERATE 1 FASTA FILE PER CLUSTER (with CARNAC-LR's dedicated script):
         to_CARNAC_to_fasta = (path_apps + "CARNAC-LR_git93dd640/scripts/" +
                               "CARNAC_to_fasta.py")
-        to_CARNAC_txt = "../CARNAC/cDNA_run1_sampl50k_CARNAC.txt"
-        to_fq = "../../cDNA_run1_sampl50k.fq"
         out_clust_fa = "tmp_clust/"
         
         cmd_clust_to_fasta = ("python3 " + to_CARNAC_to_fasta + " " +
-                              to_CARNAC_txt + " " + to_fq + " " + out_clust_fa + 
-                              " " + NB_MIN_BY_CLUST)
-        #print(cmd_clust_to_fasta)
+                              TO_CLUST_FILE + " " + input_fq_path + " " + 
+                              out_clust_fa + " " + NB_MIN_BY_CLUST)
+
         print("Generating 1 fasta file by cluster (with minimum", 
               NB_MIN_BY_CLUST, "members) ...")
         os.system(cmd_clust_to_fasta)
-        #sys.exit()
         
         # GET 1 READ BY CLUSTER AND CONCATENATE ALL THEM (into the stream):
         BLAST_TIME = t.time()
-        #cmd_pick_one = ("head -qn 4 " + out_clust_fa + "cluster*.fasta | " +
-        #                "sed -n '1~4s/^@/>/p;2~4p'")
         cmd_pick_one = "head -qn 2 " + out_clust_fa + "cluster*.fasta"
-        #print(cmd_pick_one)
         
         # QUERY THIS FASTA FILE TO THE NCBI (nt) DATABASE:
         to_blast_exe = path_apps + "blast-2.8.1+-src/ReleaseMT/bin/blastn"
@@ -362,9 +340,7 @@ if __name__ == "__main__":
                                           out=out_xml_file, outfmt=5)
         
         print("BLAST query against NCBI db for 1 read by cluster...")
-        #print(cmd_BLAST) ; sys.exit()
         os.system(cmd_pick_one + " | " + str(cmd_BLAST))
-        #stdout, stderr = toto() # Not needed cuz BLAST is not outputting anything
         
         #os.system("rm -r " + out_clust_fa) # Cleaning
         print("BLAST query finished !")
@@ -374,12 +350,11 @@ if __name__ == "__main__":
     # PARSING BLAST OUTPUT, TO EXTRACT TAXID:
     Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
     taxonomy_level_cutoff = "genus" 
-    report_filename = "report_" + NB_MIN_BY_CLUST + ".csv"
-    global pb_filename
-    pb_filename = "problems_" + NB_MIN_BY_CLUST + ".log"
+    report_filename = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".csv"
+    #global pb_filename
+    pb_filename = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".log"
     
     if not os.path.isfile(report_filename):
-    #if True:
         print("PARSING BLAST OUTPUT...")
         
         if NB_ALT > 0:
@@ -387,9 +362,7 @@ if __name__ == "__main__":
                
         PARSING_TIME = t.time()
         df_hits = pd.DataFrame(data=None)
-        #NB_CLUSTERS = 0 # Count the total number of clusters
         res_handle = open(out_xml_file)
-        #blast_records = SearchIO.parse(result_handle, 'blast-xml')
         blast_records = NCBIXML.parse(res_handle)
         
         if os.path.isfile(pb_filename):
@@ -453,41 +426,46 @@ if __name__ == "__main__":
     
     
     # DEAL WITH THE DIFFERENT PROBLEMS ENCOUNTERED:
-    print("Solving the encountered problems...")
-    with open(pb_filename, 'r') as pb_log_file:
-        problems_list = pb_log_file.read().splitlines()
-    
-    dict_problems = {'FP':[], 'NO_BLAST_HIT':[]}
-    for problem in problems_list:
-        splitted_problm = problem.split(" | ")
-        problm_name = splitted_problm[-1]
-        clust_name = splitted_problm[0]
+    if os.path.isfile(pb_filename): # Check if there are problems to solve
+        print("Solving the encountered problems...")
         
-        if problm_name == 'FP':
-            dict_problems['FP'].append(clust_name)
- 
-        elif problm_name == "NO_BLAST_HIT": # Plus emmerdant a gerer ca..
-            dict_problems['NO_BLAST_HIT'].append(clust_name)
+        with open(pb_filename, 'r') as pb_log_file:
+            problems_list = pb_log_file.read().splitlines()
         
-        else:
-            print("UNKNOWN PROBLEM")
-            sys.exit()
-    
-    if NB_ALT > 0 and len(dict_problems['FP']) > 0: # If there are some FP
-        print("Looking for alternative BLAST hits for FP...") 
-        if os.path.isfile(report_filename): # list_TP does not already exist
-            res_handle = open(out_xml_file)
-            blast_records = NCBIXML.parse(res_handle)
-            list_FP = []
-            for idx, blast_rec in enumerate(blast_records):
-                if "clust_" + str(idx) in dict_problems['FP']:
-                    list_FP.append(blast_rec)    
-            res_handle.close() 
-    
-        for blast_res in list_FP:
-            look_for_alt(blast_res, NB_ALT, 0.001, df_hits)
+        dict_problems = {'FP':[], 'NO_BLAST_HIT':[]}
+        for problem in problems_list:
+            splitted_problm = problem.split(" | ")
+            problm_name = splitted_problm[-1]
+            clust_name = splitted_problm[0]
+            
+            if problm_name == 'FP':
+                dict_problems['FP'].append(clust_name)
+     
+            elif problm_name == "NO_BLAST_HIT": # Plus emmerdant a gerer ca..
+                dict_problems['NO_BLAST_HIT'].append(clust_name)
+            
+            else:
+                print("UNKNOWN PROBLEM")
+                sys.exit()
         
-    print("Problems solved !")    
-    # We have to re-write the new report file, with problems solved:
-    df_hits.to_csv(report_filename, sep='\t')
+        if NB_ALT > 0 and len(dict_problems['FP']) > 0: # If there are some FP
+            print("Looking for alternative BLAST hits for FP...") 
+            if os.path.isfile(report_filename): # list_TP does not already exist
+                res_handle = open(out_xml_file)
+                blast_records = NCBIXML.parse(res_handle)
+                list_FP = []
+                for idx, blast_rec in enumerate(blast_records):
+                    if "clust_" + str(idx) in dict_problems['FP']:
+                        list_FP.append(blast_rec)    
+                res_handle.close() 
+        
+            for blast_res in list_FP:
+                look_for_alt(blast_res, NB_ALT, 0.001, df_hits)
+            
+        print("Problems solved !")    
+        # We have to re-write the new report file, with problems solved:
+        df_hits.to_csv(report_filename, sep='\t')
     
+    
+    print("TOTAL RUNTIME:", t.time() - START_TIME)  
+      
