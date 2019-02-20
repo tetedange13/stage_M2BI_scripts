@@ -10,7 +10,7 @@ Make the following steps from a given cluster of reads:
 5) Generate a report (csv file)
 
 Usage:
-  clust_tax.py (-i <inputFqFile>) (-c <clustFile>) [-m <minMemb>] [-a <altHits>] [-t <threads>]
+  clust_tax.py (-i <inputFqFile>) (-c <clustFile>) [-m <minMemb>] [-a <altHits>] [-t <threads>] [-l <taxoCut>]
   
 Options:
   -h --help                  help
@@ -19,7 +19,11 @@ Options:
   -c --clustFile=clust       input txt file detailling the clusters
   -m --minMemb=min_memb      minimum number of members within a cluster [default: 250]
   -a --altHits=alt_hits      number of alternative BLAST hits to look for [default: 0]
+  -l --taxoCut=taxo_cutoff   cutoff for the taxonomic level [default: None]
   -t --threads=nb_threads    number of threads to use [default: 10]
+  
+Remark: The  cutoff for the taxonomic level becomes mandatory when more than 1
+        alternative BLAST hit is specified
 """
 
 import sys, os, re
@@ -66,6 +70,19 @@ def check_input_nb(input_nb):
         sys.exit(2)
     
     return input_nb
+    
+
+def check_input_taxo_cutoff(input_cutoff):
+    """
+    Check if a the cutoff for taxonomic level given as argument is valid
+    """
+    cutoff = input_cutoff.lower()
+    if cutoff in taxo_levels + ["none"]:
+        return input_cutoff
+    else:
+        print("ERROR! You must enter a valid cutoff for taxonomic level")
+        print("Must be in:", taxo_levels, '\n')
+        sys.exit(2)
 
 
 def query_taxid(term_to_search):
@@ -196,12 +213,13 @@ def parse_BLAST(enum_iter):
     return ( idx, dict_from_BLASTres(blast_res, 0) )
 
 
-def look_for_alt(blast_res, nb_alt, cutoff_e_val, my_df):
+def look_for_alt(tupl_blast_res, nb_alt, my_df):
     """
     Take a BLAST result that has been identified as a FP (assigned but not 
     within the Zymo) and query other possible hits (for the same read), looking
     for hits with exact same score (and  e-value)
     """
+    clust_key, blast_res = tupl_blast_res
     descr_topHit = blast_res.descriptions[0]
     splitted_remark = str(descr_topHit).split()
     # Reference values (from the top hit):
@@ -219,13 +237,13 @@ def look_for_alt(blast_res, nb_alt, cutoff_e_val, my_df):
             descr_alt = blast_res.descriptions[j]
             alt_score, alt_e_val = str(descr_alt.score), str(descr_alt.e)
             print("Looking for alternative hit #" + str(j))
-            #print(descr_alt)
+            print(descr_alt)
             
             if (alt_score == max_score and alt_e_val == max_e_val):
                 alt = True
                 to_df_alt = dict_from_BLASTres(blast_res, j)
                 keys_alt = to_df_alt.keys()
-                alt_idx = "alt_" + str(idx) + "_" + str(j)
+                alt_idx = "alt_" + clust_key.split('_')[1] + "_" + str(j)
                 
                 if "problems" in keys_alt:
                     print("PROBLEM WITH ALT!", to_df["problems"])
@@ -272,8 +290,6 @@ def in_zymo(sp_name, sp_rank, taxo_level_cutoff):
     ('TP', 'FP', 'TN', 'FN').
     The name of the species is also requiered, to deal with 'strain' cases
     """
-    taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
-                   'genus', 'species', 'subspecies'] + ["strain"]
     # Define the species contained within the Zymo mock community:
     list_prok = ['Listeria monocytogenes', 'Bacillus subtilis', 
                  'Staphylococcus aureus', 'Escherichia coli', 
@@ -297,20 +313,41 @@ def in_zymo(sp_name, sp_rank, taxo_level_cutoff):
         return 'FN'
 
 
+def parall_FP_search(clust, name_df, rank_df, taxo_cutoff, blast_res):
+    """
+    """
+    res = in_zymo(name_df, rank_df, taxo_cutoff)
+    
+    if res == 'FP':
+        return ('FP', clust, blast_res)
+    
+    return "NOT_FP"
+    
+
+
 # MAIN:
 if __name__ == "__main__":
-    # COMMON VARIABLES AND PATHES:   
+    # COMMON VARIABLES AND PATHES:
+    global taxo_levels
+    taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
+                   'genus', 'species', 'subspecies'] + ["strain"]
     ARGS = docopt(__doc__, version='0.1')
     input_fq_path, input_fq_base = check_input_fq(ARGS["--inputFqFile"])
     TO_CLUST_FILE = ARGS["--clustFile"]
     NB_THREADS = check_input_nb(ARGS["--threads"])
     NB_MIN_BY_CLUST = check_input_nb(ARGS["--minMemb"]) # Needed later
     NB_ALT = int(check_input_nb(ARGS["--altHits"]))
+    taxonomic_level_cutoff = check_input_taxo_cutoff(ARGS["--taxoCut"])
     
-    if NB_ALT > 1:
+    # CHECK ARGS FOR ALTERNATIVE HITS AND CUTOFF:
+    if NB_ALT == 1 and taxonomic_level_cutoff == "None":
+        print("ERROR! As you want alternative hits, you have to specify a "
+              "cutoff for the taxonomic level\n")
+        sys.exit(2)
+    elif NB_ALT > 1:
         print("Sorry, for now this script does not work with more than 1 " +
               "alternative BLAST hit (it largely enough most of the time)\n")
-        sys.exit(2) 
+        sys.exit(2)
     
     out_xml_file = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".xml" # Needed later
     path_apps = "/home/sheldon/Applications/"
@@ -357,17 +394,16 @@ if __name__ == "__main__":
     
     # PARSING BLAST OUTPUT, TO EXTRACT TAXID:
     Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
-    taxonomy_level_cutoff = "genus" 
     report_filename = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".csv"
     #global pb_filename
     pb_filename = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".log"
     
-    #if not os.path.isfile(report_filename):
-    if True:
+    if not os.path.isfile(report_filename):
+    #if True:
         print("PARSING BLAST OUTPUT...")
         
-        if NB_ALT > 0:
-            list_FP = []
+        #if NB_ALT > 0:
+        #    list_FP_search = []
                
         PARSING_TIME = t.time()
         df_hits = pd.DataFrame(data=None)
@@ -381,7 +417,6 @@ if __name__ == "__main__":
         for enum_iterable in enumerate(blast_records):
             #if enum_iterable[0] == 65:
             if True:
-                current_blast_res = enum_iterable[1]
                 idx, to_df = parse_BLAST(enum_iterable)
                 keys_to_df = to_df.keys()
                 
@@ -393,22 +428,25 @@ if __name__ == "__main__":
                                           to_df["problems"] + '\n')
                 
                 else:
-                    membership = in_zymo(to_df["topHit"], to_df["rank"], 
-                                         taxonomy_level_cutoff)
-                    if membership == 'FP' and NB_ALT > 0: 
-                        list_FP.append(current_blast_res)
+                    #membership = in_zymo(to_df["topHit"], to_df["rank"], 
+                    #                     taxonomy_level_cutoff)
+                    #if membership == 'FP' and NB_ALT > 0:
+                    #if NB_ALT > 0:
+                        #tuple_FP = ("clust_" + str(idx), to_df["topHit"], 
+                        #            to_df["rank"]) 
+                        #list_FP_search.append(tuple_FP)
                         # We write it into the 'problems' file:
-                        with open(pb_filename, 'a') as pb_log_file:
-                            pb_log_file.write("clust_" + str(idx) + " | " + 
-                                              "QUERY: " + to_df["readID"] + 
-                                              " | " + membership + '\n')    
-                    else:
+                    #    with open(pb_filename, 'a') as pb_log_file:
+                    #        pb_log_file.write("clust_" + str(idx) + " | " + 
+                    #                          "QUERY: " + to_df["readID"] + 
+                    #                          " | " + membership + '\n')    
+                    #else:
                         # We can store informations about the top hit:
-                        keys_to_df = to_df.keys()
-                        idx_df = "clust_" + str(idx)
-                        
-                        for key_to_df in keys_to_df:
-                            df_hits.loc[idx_df, key_to_df] = to_df[key_to_df]
+                    keys_to_df = to_df.keys()
+                    idx_df = "clust_" + str(idx)
+                    
+                    for key_to_df in keys_to_df:
+                        df_hits.loc[idx_df, key_to_df] = to_df[key_to_df]
         
         # PARALLELIZED VERSION:
         #pool_parsing = mp.Pool(int(NB_THREADS))
@@ -434,48 +472,60 @@ if __name__ == "__main__":
         df_hits = pd.read_csv(report_filename, sep='\t', index_col=0)  
     
     
+    # LOOKING FOR ALTERNATIVE BLAST HITS:
+    if NB_ALT > 0:# and len(dict_problems['FP']) > 0: # If there are some FP
+        print("Looking for alternative BLAST hits (with EXACT same " +
+              "score) for FP...") 
+        #if os.path.isfile(report_filename): # list_TP does not already exist
+        res_handle = open(out_xml_file)
+        blast_records = NCBIXML.parse(res_handle)
+        list_FP_tmp = []
+        for idx, blast_rec in enumerate(blast_records):
+            df_index = "clust_" + str(idx)
+            name_df = df_hits.loc[df_index, "topHit"]
+            rank_df = df_hits.loc[df_index, "rank"]
+            list_FP_tmp.append(parall_FP_search(df_index, name_df, rank_df, 
+                                                taxonomic_level_cutoff, 
+                                                blast_rec))
+
+        res_handle.close() 
+    
+        list_FP = [tupl[1:3] for tupl in list_FP_tmp if tupl[0] == "FP"]
+        for tuple_blast_res in list_FP:
+            look_for_alt(tuple_blast_res, NB_ALT, df_hits)
+        print(list_FP)
+        print("Search for alternative hits for FP finished !\n")     
+        # We have to re-write the new report file, with problems solved:u
+        df_hits.to_csv(report_filename, sep='\t')
+    
+    
     # DEAL WITH THE DIFFERENT PROBLEMS ENCOUNTERED:
     print("Solving the encountered problems...")
-    
     if os.path.isfile(pb_filename): # Check if there are problems to solve
         with open(pb_filename, 'r') as pb_log_file:
             problems_list = pb_log_file.read().splitlines()
         
-        dict_problems = {'FP':[], 'NO_BLAST_HIT':[]}
+        #dict_problems = {'FP':[], 'NO_BLAST_HIT':[]}
+        dict_problems = {'NO_BLAST_HIT':[]}
         for problem in problems_list:
             splitted_problm = problem.split(" | ")
             problm_name = splitted_problm[-1]
             clust_name = splitted_problm[0]
             
-            if problm_name == 'FP':
-                dict_problems['FP'].append(clust_name)
+            #if problm_name == 'FP':
+            #    dict_problems['FP'].append(clust_name)
      
-            elif problm_name == "NO_BLAST_HIT": # Plus emmerdant a gerer ca..
+            #elif problm_name == "NO_BLAST_HIT": # Plus emmerdant a gerer ca..
+            if problm_name == "NO_BLAST_HIT": # Plus emmerdant a gerer ca..
                 dict_problems['NO_BLAST_HIT'].append(clust_name)
             
             else:
                 print("UNKNOWN PROBLEM")
                 sys.exit()
-        
-        if NB_ALT > 0 and len(dict_problems['FP']) > 0: # If there are some FP
-            print("Looking for alternative BLAST hits (with EXACT same " +
-                  "score) for FP...") 
-            if os.path.isfile(report_filename): # list_TP does not already exist
-                res_handle = open(out_xml_file)
-                blast_records = NCBIXML.parse(res_handle)
-                list_FP = []
-                for idx, blast_rec in enumerate(blast_records):
-                    if "clust_" + str(idx) in dict_problems['FP']:
-                        list_FP.append(blast_rec)    
-                res_handle.close() 
-        
-            for blast_res in list_FP:
-                look_for_alt(blast_res, NB_ALT, 0.001, df_hits)
-            
+           
         print("Problems solved !")    
         # We have to re-write the new report file, with problems solved:
         df_hits.to_csv(report_filename, sep='\t')
-    
     
     else:
         print("NO problems to solve")
