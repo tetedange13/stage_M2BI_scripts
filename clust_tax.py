@@ -30,6 +30,7 @@ import sys, os, re
 import Bio
 import pandas as pd
 import time as t
+from functools import partial
 import multiprocessing as mp
 from Bio import Entrez, SeqIO
 from Bio.Blast.Applications import NcbiblastxCommandline
@@ -189,10 +190,13 @@ def dict_from_BLASTres(blast_res, idx_to_take):
               blast_res.alignments[idx_to_take].hsps[0].bits)
     
     taxid_hit, sp_name_hit, taxo_hit = annot_from_title(descr_blast.title)   
-    tax_record = query_taxonomy(taxid_hit)
+    
     dict_res["remarks"] = str(descr_blast)
     dict_res["topHit"] = sp_name_hit
+    dict_res["taxid"] = taxid_hit
     dict_res["taxo"] = taxo_hit
+    
+    tax_record = query_taxonomy(taxid_hit)
     dict_res["rank"] = tax_record['Rank']
 
     return dict_res
@@ -313,15 +317,18 @@ def in_zymo(sp_name, sp_rank, taxo_level_cutoff):
         return 'FN'
 
 
-def parall_FP_search(clust, name_df, rank_df, taxo_cutoff, blast_res):
+def parall_FP_search(tupl_blast_res_and_idx, my_df, taxo_cutoff):
     """
     """
-    res = in_zymo(name_df, rank_df, taxo_cutoff)
+    idx_arg, blast_res = tupl_blast_res_and_idx
+    df_index = "clust_" + str(idx_arg)
+    name_df = my_df.loc[df_index, "topHit"]
+    rank_df = my_df.loc[df_index, "rank"]
     
-    if res == 'FP':
-        return ('FP', clust, blast_res)
+    if in_zymo(name_df, rank_df, taxo_cutoff) == 'FP':
+        return ('FP', df_index, blast_res)
     
-    return "NOT_FP"
+    return ["NOT_FP"]
     
 
 
@@ -375,7 +382,7 @@ if __name__ == "__main__":
         # QUERY THIS FASTA FILE TO THE NCBI (nt) DATABASE:
         to_blast_exe = path_apps + "blast-2.8.1+-src/ReleaseMT/bin/blastn"
         to_NCBIdb = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/" +
-                     "metage_ONT_2019/nt_BLASTdb/nt")
+                     "metage_ONT_2019/nt_db/BLASTdb/nt")
         
         cmd_BLAST = str(NcbiblastxCommandline(cmd=to_blast_exe, db=to_NCBIdb, 
                                               num_threads=NB_THREADS,
@@ -398,8 +405,8 @@ if __name__ == "__main__":
     #global pb_filename
     pb_filename = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".log"
     
-    if not os.path.isfile(report_filename):
-    #if True:
+    #if not os.path.isfile(report_filename):
+    if True:
         print("PARSING BLAST OUTPUT...")
         
         #if NB_ALT > 0:
@@ -428,20 +435,7 @@ if __name__ == "__main__":
                                           to_df["problems"] + '\n')
                 
                 else:
-                    #membership = in_zymo(to_df["topHit"], to_df["rank"], 
-                    #                     taxonomy_level_cutoff)
-                    #if membership == 'FP' and NB_ALT > 0:
-                    #if NB_ALT > 0:
-                        #tuple_FP = ("clust_" + str(idx), to_df["topHit"], 
-                        #            to_df["rank"]) 
-                        #list_FP_search.append(tuple_FP)
-                        # We write it into the 'problems' file:
-                    #    with open(pb_filename, 'a') as pb_log_file:
-                    #        pb_log_file.write("clust_" + str(idx) + " | " + 
-                    #                          "QUERY: " + to_df["readID"] + 
-                    #                          " | " + membership + '\n')    
-                    #else:
-                        # We can store informations about the top hit:
+                    # We can store informations about the top hit:
                     keys_to_df = to_df.keys()
                     idx_df = "clust_" + str(idx)
                     
@@ -479,14 +473,17 @@ if __name__ == "__main__":
         #if os.path.isfile(report_filename): # list_TP does not already exist
         res_handle = open(out_xml_file)
         blast_records = NCBIXML.parse(res_handle)
-        list_FP_tmp = []
-        for idx, blast_rec in enumerate(blast_records):
-            df_index = "clust_" + str(idx)
-            name_df = df_hits.loc[df_index, "topHit"]
-            rank_df = df_hits.loc[df_index, "rank"]
-            list_FP_tmp.append(parall_FP_search(df_index, name_df, rank_df, 
-                                                taxonomic_level_cutoff, 
-                                                blast_rec))
+        #list_FP_tmp = []
+        func_parallel = partial(parall_FP_search, my_df=df_hits,
+                                taxo_cutoff=taxonomic_level_cutoff )
+        pool_searchFP = mp.Pool(int(NB_THREADS))
+        list_FP_tmp = pool_searchFP.map(func_parallel, enumerate(blast_records))
+        pool_searchFP.close()
+        #print(res)
+        #for tupl_enum in enumerate(blast_records):
+        #    list_FP_tmp.append(parall_FP_search(df_hits, 
+        #                                        taxonomic_level_cutoff, 
+        #                                        tupl_enum))
 
         res_handle.close() 
     
