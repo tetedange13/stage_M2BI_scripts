@@ -44,14 +44,15 @@ def check_input_nb(input_nb):
     return input_nb
     
 
-def check_input_taxo_cutoff(input_cutoff):
+def check_input_taxo_cutoff(input_cutoff, list_taxo):
     """
     Check if a the cutoff for taxonomic level given as argument is valid
     """
     cutoff = input_cutoff.lower()
-    if cutoff in taxo_levels + ["none"]:
+    if cutoff in list_taxo + ["none"]:
         return input_cutoff
     else:
         print("ERROR! You must enter a valid cutoff for taxonomic level")
-        print("Must be in:", taxo_levels, '\n')
+        print("Must be in:", list_taxo, '\n')
         sys.exit(2)
+
