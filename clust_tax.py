@@ -37,54 +37,7 @@ from Bio.Blast.Applications import NcbiblastxCommandline
 from Bio.Blast import NCBIXML
 from docopt import docopt
 from src.shared_fun import in_zymo
-
-
-def check_input_fq(input_fq_path):
-    """
-    Check if everything's fine with the fq file given as input
-    """
-    if not os.path.isfile(input_fq_path):
-        print("ERROR! Wrong specified input fastq file")
-        sys.exit(2)
-    else:
-        head_input_fq, tail_input_fq = os.path.split(input_fq_path)
-        input_fq_base, input_fq_ext = os.path.splitext(tail_input_fq)
-        
-        if input_fq_ext[1:] not in ("fq", "fastq"):
-            err_ext = ("ERROR! Current only fastq file (ext=fq or " +
-                       "ext=fastq) are accepted")
-            print(err_ext)
-            sys.exit(2)
-        
-        else:
-            return (input_fq_path, input_fq_base)
-
-
-def check_input_nb(input_nb):
-    """
-    Check if a integer given as argument is valid
-    """
-    try:
-        int(input_nb)
-        
-    except ValueError:
-        print("ERROR! You should give an integer here")
-        sys.exit(2)
-    
-    return input_nb
-    
-
-def check_input_taxo_cutoff(input_cutoff):
-    """
-    Check if a the cutoff for taxonomic level given as argument is valid
-    """
-    cutoff = input_cutoff.lower()
-    if cutoff in taxo_levels + ["none"]:
-        return input_cutoff
-    else:
-        print("ERROR! You must enter a valid cutoff for taxonomic level")
-        print("Must be in:", taxo_levels, '\n')
-        sys.exit(2)
+import src.check_args as cA
 
 
 def query_taxid(term_to_search):
@@ -208,10 +161,6 @@ def parse_BLAST(enum_iter):
     Tiny function, mostly useful for parallelization actually
     """
     idx, blast_res = enum_iter
-    #print(blast_res.__dict__.keys())
-    #print(blast_res.num_good_extends, blast_res.sc_mismatch)
-    #sys.exit()
-    
     readID = blast_res.query.split()[0]
     print("\n\nCLUSTER", idx, " | ", "QUERY =", readID)
     
@@ -310,12 +259,12 @@ if __name__ == "__main__":
     taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
                    'genus', 'species', 'subspecies'] + ["strain"]
     ARGS = docopt(__doc__, version='0.1')
-    input_fq_path, input_fq_base = check_input_fq(ARGS["--inputFqFile"])
+    input_fq_path, input_fq_base = cA.check_input_fq(ARGS["--inputFqFile"])
     TO_CLUST_FILE = ARGS["--clustFile"]
-    NB_THREADS = check_input_nb(ARGS["--threads"])
+    NB_THREADS = cA.check_input_nb(ARGS["--threads"])
     NB_MIN_BY_CLUST = check_input_nb(ARGS["--minMemb"]) # Needed later
-    NB_ALT = int(check_input_nb(ARGS["--altHits"]))
-    taxonomic_level_cutoff = check_input_taxo_cutoff(ARGS["--taxoCut"])
+    NB_ALT = int(cA.check_input_nb(ARGS["--altHits"]))
+    taxonomic_level_cutoff = cA.check_input_taxo_cutoff(ARGS["--taxoCut"])
     
     # CHECK ARGS FOR ALTERNATIVE HITS AND CUTOFF:
     if NB_ALT == 1 and taxonomic_level_cutoff == "None":
