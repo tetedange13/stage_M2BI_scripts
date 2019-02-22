@@ -116,14 +116,47 @@ def annot_from_title(title):
 def query_taxonomy(str_taxid):
     """
     Given a taxid to fetch from the taxonomy db, this function returns the 
-    the rank associated with the given taxid
+    the object with all taxonomic info
     """
     fetch_handle = Entrez.efetch(db="Taxonomy", id=str_taxid)
     res_fetch = Entrez.read(fetch_handle)
     fetch_handle.close()
-    lin_ex = res_fetch[0]["LineageEx"]
 
     return res_fetch[0]
+
+
+def query_rank_remote(str_taxid):
+    """
+    Given a taxid fetch the taxonomic rank querying (remotely) the Taxonomy db
+    """
+    fetch_handle = Entrez.efetch(db="Taxonomy", id=str_taxid)
+    res_fetch = Entrez.read(fetch_handle)
+    fetch_handle.close()
+
+    return res_fetch[0]["Rank"]
+    
+
+def query_rank_local(list_taxids):
+    """
+    Given a list of taxids, search their associated taxonomic ranks locally, by
+    using the NCBI dump files (names and nodes) stored
+    
+    ENCORE EN CHANTIER...
+    """
+    import src.ncbi_taxdump_utils
+    
+    nodes_path = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019" + 
+                  "/nt_db/taxo_18feb19/nodes.dmp")
+    names_path = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019" + 
+                  "/nt_db/taxo_18feb19/names.dmp")
+    taxfoo = ncbi_taxdump_utils.NCBI_TaxonomyFoo()
+    taxfoo.load_nodes_dmp(nodes_path)
+    taxfoo.load_names_dmp(names_path)
+    want_taxonomy = ['superkingdom', 'phylum', 'class', 'order', 'family', 
+                     'genus', 'species', 'strain']    
+    
+    for taxid in list_taxids:
+        lin_dict = taxfoo.get_lineage_as_dict(taxid, want_taxonomy)
     
 
 def dict_from_BLASTres(blast_res, idx_to_take):
@@ -150,8 +183,8 @@ def dict_from_BLASTres(blast_res, idx_to_take):
     dict_res["taxid"] = taxid_hit
     dict_res["taxo"] = taxo_hit
     
-    tax_record = query_taxonomy(taxid_hit)
-    dict_res["rank"] = tax_record['Rank']
+    #tax_record = query_taxonomy(taxid_hit)
+    dict_res["rank"] = query_rank_remote(taxid_hit)
 
     return dict_res
     
@@ -183,9 +216,7 @@ def look_for_alt(tupl_blast_res, nb_alt, my_df):
     print("\nTOP HIT:", topHit, " | ", "E-VAL:", max_e_val, " | ", "SC:", 
           max_score)
     
-    #if (float(max_e_val) < cutoff_e_val):
     alt = False
-    
     for j in range(1, nb_alt+1):
         if len(blast_res.descriptions) > j: # If enough hits
             descr_alt = blast_res.descriptions[j]
@@ -201,10 +232,6 @@ def look_for_alt(tupl_blast_res, nb_alt, my_df):
                 
                 if "problems" in keys_alt:
                     print("PROBLEM WITH ALT!", to_df["problems"])
-                    #sys.exit()
-                #    with open(pb_filename, 'a') as pb_log_file:
-                #        pb_log_file.write(alt_idx + " | " + "QUERY =" +
-                #                          to_df_alt + '\n')
                 
                 else:
                     print("FOUND:", to_df_alt["topHit"], " | ", "E-VAL:", 
@@ -245,7 +272,7 @@ def parall_FP_search(tupl_blast_res_and_idx, my_df, taxo_cutoff):
     name_df = my_df.loc[df_index, "topHit"]
     rank_df = my_df.loc[df_index, "rank"]
     
-    if in_zymo(name_df, rank_df, taxo_cutoff) == 'FP':
+    if in_zymo(name_df, rank_df, taxo_cutoff, taxo_levels) == 'FP':
         return ('FP', df_index, blast_res)
     
     return ["NOT_FP"]
@@ -255,16 +282,16 @@ def parall_FP_search(tupl_blast_res_and_idx, my_df, taxo_cutoff):
 # MAIN:
 if __name__ == "__main__":
     # COMMON VARIABLES AND PATHES:
-    global taxo_levels
     taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
-                   'genus', 'species', 'subspecies'] + ["strain"]
+                   'genus', 'species', 'subspecies'] + ["strain"]   
     ARGS = docopt(__doc__, version='0.1')
     input_fq_path, input_fq_base = cA.check_input_fq(ARGS["--inputFqFile"])
     TO_CLUST_FILE = ARGS["--clustFile"]
     NB_THREADS = cA.check_input_nb(ARGS["--threads"])
-    NB_MIN_BY_CLUST = check_input_nb(ARGS["--minMemb"]) # Needed later
+    NB_MIN_BY_CLUST = cA.check_input_nb(ARGS["--minMemb"]) # Needed later
     NB_ALT = int(cA.check_input_nb(ARGS["--altHits"]))
-    taxonomic_level_cutoff = cA.check_input_taxo_cutoff(ARGS["--taxoCut"])
+    taxonomic_level_cutoff = cA.check_input_taxo_cutoff(ARGS["--taxoCut"],
+                                                        taxo_levels)
     
     # CHECK ARGS FOR ALTERNATIVE HITS AND CUTOFF:
     if NB_ALT == 1 and taxonomic_level_cutoff == "None":
@@ -285,7 +312,7 @@ if __name__ == "__main__":
         # GENERATE 1 FASTA FILE PER CLUSTER (with CARNAC-LR's dedicated script):
         to_CARNAC_to_fasta = (path_apps + "CARNAC-LR_git93dd640/scripts/" +
                               "CARNAC_to_fasta.py")
-        out_clust_fa = "tmp_clust/"
+        out_clust_fa = "tmp_clust_memb" + NB_MIN_BY_CLUST + "/"
         
         cmd_clust_to_fasta = ("python3 " + to_CARNAC_to_fasta + " " +
                               TO_CLUST_FILE + " " + input_fq_path + " " + 
@@ -325,13 +352,10 @@ if __name__ == "__main__":
     #global pb_filename
     pb_filename = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".log"
     
-    #if not os.path.isfile(report_filename):
-    if True:
+    if not os.path.isfile(report_filename):
+    #if True:
         print("PARSING BLAST OUTPUT...")
-        
-        #if NB_ALT > 0:
-        #    list_FP_search = []
-               
+
         PARSING_TIME = t.time()
         df_hits = pd.DataFrame(data=None)
         res_handle = open(out_xml_file)
@@ -399,18 +423,12 @@ if __name__ == "__main__":
         pool_searchFP = mp.Pool(int(NB_THREADS))
         list_FP_tmp = pool_searchFP.map(func_parallel, enumerate(blast_records))
         pool_searchFP.close()
-        #print(res)
-        #for tupl_enum in enumerate(blast_records):
-        #    list_FP_tmp.append(parall_FP_search(df_hits, 
-        #                                        taxonomic_level_cutoff, 
-        #                                        tupl_enum))
-
         res_handle.close() 
     
         list_FP = [tupl[1:3] for tupl in list_FP_tmp if tupl[0] == "FP"]
         for tuple_blast_res in list_FP:
             look_for_alt(tuple_blast_res, NB_ALT, df_hits)
-        print(list_FP)
+
         print("Search for alternative hits for FP finished !\n")     
         # We have to re-write the new report file, with problems solved:u
         df_hits.to_csv(report_filename, sep='\t')
