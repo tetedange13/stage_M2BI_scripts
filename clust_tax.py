@@ -36,7 +36,7 @@ from Bio import Entrez, SeqIO
 from Bio.Blast.Applications import NcbiblastxCommandline
 from Bio.Blast import NCBIXML
 from docopt import docopt
-from src.shared_fun import in_zymo
+from src.shared_fun import handle_strain, in_zymo
 import src.check_args as cA
 
 
