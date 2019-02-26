@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import sys, os
+import sys, os, gzip
 import subprocess as sub
 from Bio import Entrez
     
@@ -33,6 +33,13 @@ if __name__ == "__main__":
     
     
     # GETTING TAXIDS:
+    with open(args.acc_file) as fp:
+        acc_set = set([ x.strip().split('.')[0] for x in fp ])
+            
+    to_gz_gi2taxid = ""
+    with gzip.open(to_gz_gi2taxid, 'r') as gi2taxid_gz:
+        for line
+    
     if not os.path.isfile(seqid2taxid_file):
         with open(dirIn_db + "Zymo_spList.txt", 'r') as spList_file:
             list_sp = spList_file.read().splitlines()
