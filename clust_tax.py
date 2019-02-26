@@ -123,40 +123,6 @@ def query_taxonomy(str_taxid):
     fetch_handle.close()
 
     return res_fetch[0]
-
-
-def query_rank_remote(str_taxid):
-    """
-    Given a taxid fetch the taxonomic rank querying (remotely) the Taxonomy db
-    """
-    fetch_handle = Entrez.efetch(db="Taxonomy", id=str_taxid)
-    res_fetch = Entrez.read(fetch_handle)
-    fetch_handle.close()
-
-    return res_fetch[0]["Rank"]
-    
-
-def query_rank_local(list_taxids):
-    """
-    Given a list of taxids, search their associated taxonomic ranks locally, by
-    using the NCBI dump files (names and nodes) stored
-    
-    ENCORE EN CHANTIER...
-    """
-    import src.ncbi_taxdump_utils
-    
-    nodes_path = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019" + 
-                  "/nt_db/taxo_18feb19/nodes.dmp")
-    names_path = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019" + 
-                  "/nt_db/taxo_18feb19/names.dmp")
-    taxfoo = ncbi_taxdump_utils.NCBI_TaxonomyFoo()
-    taxfoo.load_nodes_dmp(nodes_path)
-    taxfoo.load_names_dmp(names_path)
-    want_taxonomy = ['superkingdom', 'phylum', 'class', 'order', 'family', 
-                     'genus', 'species', 'strain']    
-    
-    for taxid in list_taxids:
-        lin_dict = taxfoo.get_lineage_as_dict(taxid, want_taxonomy)
     
 
 def dict_from_BLASTres(blast_res, idx_to_take):
@@ -183,11 +149,40 @@ def dict_from_BLASTres(blast_res, idx_to_take):
     dict_res["taxid"] = taxid_hit
     dict_res["taxo"] = taxo_hit
     
-    #tax_record = query_taxonomy(taxid_hit)
-    dict_res["rank"] = query_rank_remote(taxid_hit)
-
+    #tax_record = query_taxonomy(taxid_hit)    
     return dict_res
+
+
+def query_rank_remote(str_taxid):
+    """
+    Given a taxid fetch the taxonomic rank querying (remotely) the Taxonomy db
+    """
+    fetch_handle = Entrez.efetch(db="Taxonomy", id=str_taxid)
+    res_fetch = Entrez.read(fetch_handle)
+    fetch_handle.close()
+
+    return res_fetch[0]["Rank"]
     
+
+def query_rank_local(str_taxid):
+    """
+    Given a list of taxids, search their associated taxonomic ranks locally, by
+    using the NCBI dump files (names and nodes) stored
+    
+    ENCORE EN CHANTIER...
+    """
+    return taxfoo.get_taxid_rank(str_taxid)
+    
+
+def prllel_rk_search(tupl_enum_taxids, query_rank_func):
+    """
+    To perform parallel local taxonomic rank search
+    """
+    idx, taxid = tupl_enum_taxids
+    #print(taxid)
+    
+    return ( "clust_" + str(idx), query_rank_func(int(taxid)) )
+
 
 def parse_BLAST(enum_iter):
     """
@@ -364,7 +359,7 @@ if __name__ == "__main__":
         if os.path.isfile(pb_filename):
             os.remove(pb_filename)
         
-        # SERIAL VERSION:    
+        # GET TAXIDs AND OTHER INFORMATION:    
         for enum_iterable in enumerate(blast_records):
             #if enum_iterable[0] == 65:
             if True:
@@ -386,19 +381,43 @@ if __name__ == "__main__":
                     for key_to_df in keys_to_df:
                         df_hits.loc[idx_df, key_to_df] = to_df[key_to_df]
         
-        # PARALLELIZED VERSION:
-        #pool_parsing = mp.Pool(int(NB_THREADS))
-        #pool_parsing = mp.Pool(5)
-        #pool_parsing.map(parse_BLAST, enumerate(blast_records), chunksize=8)
-        #try:
-        #    pool_parsing.map(parse_BLAST, enumerate(blast_records))
-        #except mp.pool.MaybeEncodingError:
-        #    print("Bonjour")
-        
-        #pool_parsing.close()
-        #pool_parsing.join()
-
         res_handle.close()
+        
+        # GET TAXONOMIC RANKS ASSOCIATED WITH EACH FOUND TAXID:
+        #global local_taxo_search
+        query_rk = query_rank_remote # Pointer to function
+        local_taxo_search = True
+        
+        if local_taxo_search:
+            import src.ncbi_taxdump_utils as taxo_utils
+
+            nodes_path = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019" + 
+                          "/nt_db/taxo_18feb19/nodes.dmp")
+            names_path = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019" + 
+                          "/nt_db/taxo_18feb19/names.dmp")
+            global taxfoo
+            taxfoo = taxo_utils.NCBI_TaxonomyFoo()
+            taxfoo.load_nodes_dmp(nodes_path)
+            taxfoo.load_names_dmp(names_path)
+            query_rk = query_rank_local # Pointer to function changed
+        
+        # Serial version:    
+        #list_ranks = []
+        #for tupl_taxids in enumerate(df_hits["taxid"]):
+        #    list_ranks.append(prllel_rk_search(tupl_taxids, query_rk))
+        
+        # Parallelized version:
+        partial_rk_search = partial(prllel_rk_search, 
+                                    query_rank_func=query_rk) 
+        pool_parsing = mp.Pool(int(NB_THREADS))
+        list_ranks = pool_parsing.map(partial_rk_search, 
+                                      enumerate(df_hits["taxid"]))
+        pool_parsing.close()
+        
+        for tupl_rak in list_ranks:
+            current_df_idx, current_rk = tupl_rak
+            df_hits.loc[current_df_idx, "rank"] = current_rk
+        
         # Results saved to a report file:
         df_hits.to_csv(report_filename, sep='\t')
         print("\nTOTAL TIME FOR PARSING THE BLAST RESULTS:", 
