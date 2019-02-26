@@ -7,28 +7,34 @@
 
 import sys, os
 import pandas as pd
-from src.shared_fun import in_zymo
+from src.shared_fun import handle_strain, in_zymo
 
 
-def handle_strain(sp_name, rank):
-    """
-    Deals with 'strain' issues (i.e. organism that have been detected beyond
-    the species level taxonomicly = 'no rank')
-    Cut the name of the organism to keep only the 'Genus species' form and
-    attributes the taxonomic level 'strain' to it  
-    """
-    splitted_sp_name = sp_name.split()
-    
-    # Very likely a strain if name longer than 2:
-    if rank in ('no rank', 'subspecies') and len(splitted_sp_name) > 2: 
-        # We keep only the first 2 words and we change the rank value:
-        new_sp_name, new_rank_sp = " ".join(splitted_sp_name[0:2]), "strain"
+def to_full_name(header):
+    converter = {"BS":"Bacillus subtilis", "SA":"Staphylococcus aureus",
+                 "EF":"Enterococcus faecalis", "LB":"Lactobacillus fermentum", 
+                 "LM":"Listeria monocytogenes",  "PA":"Pseudomonas aeruginosa", 
+                 "SE":"Salmonella enterica", "EC":"Escherichia coli", 
+                 "CN":"Cryptococcus neoformans", 
+                 "SC":"Saccharomyces cerevisiae"}
+    return converter[header[0:2]]
         
-        return (new_sp_name, new_rank_sp)
+
+def twosCom_decBin(dec, digit):
+    """
+    Convert the decimal flag of a SAM into binary number
     
+    From: https://cysecguide.blogspot.com/2017/12/converting-binarydecimal-of-twos.html
+    """
+    if dec>=0:
+        bin1 = bin(dec).split("0b")[1]
+        while len(bin1)<digit :
+                bin1 = '0'+bin1
+        return bin1
     else:
-        return (sp_name, rank)
-        
+        bin1 = -1*dec
+        return bin(dec-pow(2,digit)).split("0b")[1]
+
         
 # MAIN:
 if __name__ == "__main__":

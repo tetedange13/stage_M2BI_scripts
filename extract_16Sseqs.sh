@@ -19,34 +19,45 @@ do
     
     # RUN BLAST:
     echo ""
-    echo RUNNING BLAST..
     rRNA_filename=$(basename $full_sp_name .fasta)"_16S.fasta"
+    echo RUNNING BLAST.. "ON:" $rRNA_filename
     echo "TAILLE 16S:" $(cat $to_16S/$rRNA_filename | grep -v ">" | wc -c)
     out_BLAST=$(cat $to_16S/$rRNA_filename | \
               $apps/blast-2.8.1+-src/ReleaseMT/bin/blastn -task=blastn \
               -num_threads=10 -outfmt 6 -db $current_BLASTdb \
-              -max_target_seqs 100) #-word_size=11)
+              -max_target_seqs 100 -word_size=15)
     #echo "$out_BLAST"
     #exit 1
     
     # EXTRACT RANGES FROM BLAST OUTPUT:
-    ranges=$(echo "$out_BLAST" | awk '{ if ($4 > 1000) printf $9 "-" $10 " " }')
+    #ranges=$(echo "$out_BLAST" | awk '{ if ($4 > 1000) printf $9 "-" $10 " " }' | sort -k1,1)
+    ranges=$(echo "$out_BLAST" | awk '{ if ($4 > 1000) print $2,$4,$9"-"$10 }' | sort -k1,1)
     #echo "$ranges"
+    #exit 1
     
     # EXTRACT SEQUENCES OF FOUND 16S:
     compt=0
-    #for range in $ranges
-    echo "$out_BLAST" | while read line # Pour parcourir un fichier
+    OLDIFS=$IFS
+    IFS=$'\n'
+    
+    for line in $out_BLAST # Les guillements sont IMPORTANTS
+    #echo "$out_BLAST" | while read line # Pour parcourir un fichier
     do
-        echo $line | awk '{ if ($4 > 1000) print $2,$4,$9"-"$10 }' | sort -r -t" " -k1,1
-        #echo $range
+        echo $line | awk '{print $2,$4,$9"-"$10 }'
+        
+        length=$(echo $line | awk '{printf $4}')
+        if [ "$length" -gt "1000" ]; then
+            #echo $line | awk '{print $2,$4,$9"-"$10}'
+            compt=$((compt+1))
+        fi
         #seq_16S=$(echo LM1 $range | \
         #          $apps/blast-2.8.1+-src/ReleaseMT/bin/blastdbcmd \
         #          -db Listeria_BLASTdb -entry_batch - -out $genus"_"$range.fa)
-        compt=$((compt+1))
+        
         #break
     done
     echo "NB 16S FOUND:" $compt
+    IFS=$OLDIFS
         
     #break
 done
