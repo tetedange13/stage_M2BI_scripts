@@ -18,24 +18,17 @@ def to_full_name(header):
                  "CN":"Cryptococcus neoformans", 
                  "SC":"Saccharomyces cerevisiae"}
     return converter[header[0:2]]
-        
+       
 
-def twosCom_decBin(dec, digit):
+def decompose_SAMflag(str_SAMflag):
     """
-    Convert the decimal flag of a SAM into binary number
+    Inspired from: http://broadinstitute.github.io/picard/explain-flags.html
+    """
+    list_2powers = [2**idx for idx in range(12)]
     
-    From: https://cysecguide.blogspot.com/2017/12/converting-binarydecimal-of-twos.html
-    """
-    if dec>=0:
-        bin1 = bin(dec).split("0b")[1]
-        while len(bin1)<digit :
-                bin1 = '0'+bin1
-        return bin1
-    else:
-        bin1 = -1*dec
-        return bin(dec-pow(2,digit)).split("0b")[1]
-
-        
+    return [power for power in list_2powers if int(str_SAMflag) & power]
+    
+   
 # MAIN:
 if __name__ == "__main__":
     # ARGUMENTS:
