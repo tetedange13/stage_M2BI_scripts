@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# This script aims to catch the sequences of all 16S copies of a given 
+# organism from the Zymo mock community.
+# It uses the 16S seq (FASTA file provided by Zymo) and BLAST it (locally) 
+# against the genome of the given organism (FASTA file also provided by Zymo)   
+
 
 to_genomes=Zymo_genomes-ZR160406
 to_16S=Zymo_16S-ZR160406
@@ -17,6 +22,7 @@ do
     $apps/blast-2.8.1+-src/ReleaseMT/bin/makeblastdb -in $genome_file \
     -dbtype nucl -parse_seqids -out $current_BLASTdb
     
+    
     # RUN BLAST:
     echo ""
     rRNA_filename=$(basename $full_sp_name .fasta)"_16S.fasta"
@@ -26,21 +32,20 @@ do
               $apps/blast-2.8.1+-src/ReleaseMT/bin/blastn -task=blastn \
               -num_threads=10 -outfmt 6 -db $current_BLASTdb \
               -max_target_seqs 100 -word_size=15)
-    #echo "$out_BLAST"
-    #exit 1
+              
     
     # EXTRACT RANGES FROM BLAST OUTPUT:
     #ranges=$(echo "$out_BLAST" | awk '{ if ($4 > 1000) printf $9 "-" $10 " " }' | sort -k1,1)
     ranges=$(echo "$out_BLAST" | awk '{ if ($4 > 1000) print $2,$4,$9"-"$10 }' | sort -k1,1)
     #echo "$ranges"
-    #exit 1
+    
     
     # EXTRACT SEQUENCES OF FOUND 16S:
     compt=0
     OLDIFS=$IFS
     IFS=$'\n'
     
-    for line in $out_BLAST # Les guillements sont IMPORTANTS
+    for line in $out_BLAST
     #echo "$out_BLAST" | while read line # Pour parcourir un fichier
     do
         echo $line | awk '{print $2,$4,$9"-"$10 }'
@@ -53,15 +58,8 @@ do
         #seq_16S=$(echo LM1 $range | \
         #          $apps/blast-2.8.1+-src/ReleaseMT/bin/blastdbcmd \
         #          -db Listeria_BLASTdb -entry_batch - -out $genus"_"$range.fa)
-        
-        #break
     done
     echo "NB 16S FOUND:" $compt
     IFS=$OLDIFS
-        
-    #break
 done
-exit 1
 
-
-#head 
