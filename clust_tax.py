@@ -38,6 +38,7 @@ from Bio.Blast import NCBIXML
 from docopt import docopt
 from src.shared_fun import handle_strain, in_zymo
 import src.check_args as cA
+import src.parallelized as pll
 
 
 def query_taxid(term_to_search):
@@ -172,27 +173,6 @@ def query_rank_local(str_taxid):
     ENCORE EN CHANTIER...
     """
     return taxfoo.get_taxid_rank(str_taxid)
-    
-
-def prllel_rk_search(tupl_enum_taxids, query_rank_func):
-    """
-    To perform parallel local taxonomic rank search
-    """
-    idx, taxid = tupl_enum_taxids
-    #print(taxid)
-    
-    return ( "clust_" + str(idx), query_rank_func(int(taxid)) )
-
-
-def parse_BLAST(enum_iter):
-    """
-    Tiny function, mostly useful for parallelization actually
-    """
-    idx, blast_res = enum_iter
-    readID = blast_res.query.split()[0]
-    print("\n\nCLUSTER", idx, " | ", "QUERY =", readID)
-    
-    return ( idx, dict_from_BLASTres(blast_res, 0) )
 
 
 def look_for_alt(tupl_blast_res, nb_alt, my_df):
@@ -257,20 +237,6 @@ def handle_strain(sp_name, rank):
     
     else:
         return (sp_name, rank)
-
-
-def parall_FP_search(tupl_blast_res_and_idx, my_df, taxo_cutoff):
-    """
-    """
-    idx_arg, blast_res = tupl_blast_res_and_idx
-    df_index = "clust_" + str(idx_arg)
-    name_df = my_df.loc[df_index, "topHit"]
-    rank_df = my_df.loc[df_index, "rank"]
-    
-    if in_zymo(name_df, rank_df, taxo_cutoff, taxo_levels) == 'FP':
-        return ('FP', df_index, blast_res)
-    
-    return ["NOT_FP"]
     
 
 
@@ -280,7 +246,8 @@ if __name__ == "__main__":
     taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
                    'genus', 'species', 'subspecies'] + ["strain"]   
     ARGS = docopt(__doc__, version='0.1')
-    input_fq_path, input_fq_base = cA.check_input_fq(ARGS["--inputFqFile"])
+    input_fq_path, input_fq_base = cA.check_infile(ARGS["--inputFqFile"],
+                                                   ('fastq', 'fq'))[0:2]
     TO_CLUST_FILE = ARGS["--clustFile"]
     NB_THREADS = cA.check_input_nb(ARGS["--threads"])
     NB_MIN_BY_CLUST = cA.check_input_nb(ARGS["--minMemb"]) # Needed later
@@ -360,35 +327,37 @@ if __name__ == "__main__":
             os.remove(pb_filename)
         
         # GET TAXIDs AND OTHER INFORMATION:    
-        for enum_iterable in enumerate(blast_records):
-            #if enum_iterable[0] == 65:
-            if True:
-                idx, to_df = parse_BLAST(enum_iterable)
+        for idx, blast_res in enumerate(blast_records):
+            print("\n\nCLUSTER", idx, " | ", "QUERY =", 
+                  blast_res.query.split()[0])
+            
+            to_df = dict_from_BLASTres(blast_res, 0) # First hit first
+            keys_to_df = to_df.keys()
+            
+            if "problems" in keys_to_df: # Something went wrong somewhere
+                print("PROBLEM! -->", to_df["problems"])
+                with open(pb_filename, 'a') as pb_log_file:
+                    pb_log_file.write("clust_" + str(idx) + " | " + 
+                                      "QUERY: " + to_df["readID"] + " | " + 
+                                      to_df["problems"] + '\n')
+            
+            else:
+                # We can store informations about the top hit:
                 keys_to_df = to_df.keys()
+                idx_df = "clust_" + str(idx)
                 
-                if "problems" in keys_to_df: # Something went wrong somewhere
-                    print("PROBLEM! -->", to_df["problems"])
-                    with open(pb_filename, 'a') as pb_log_file:
-                        pb_log_file.write("clust_" + str(idx) + " | " + 
-                                          "QUERY: " + to_df["readID"] + " | " + 
-                                          to_df["problems"] + '\n')
-                
-                else:
-                    # We can store informations about the top hit:
-                    keys_to_df = to_df.keys()
-                    idx_df = "clust_" + str(idx)
-                    
-                    for key_to_df in keys_to_df:
-                        df_hits.loc[idx_df, key_to_df] = to_df[key_to_df]
+                for key_to_df in keys_to_df:
+                    df_hits.loc[idx_df, key_to_df] = to_df[key_to_df]
         
         res_handle.close()
         
         # GET TAXONOMIC RANKS ASSOCIATED WITH EACH FOUND TAXID:
         #global local_taxo_search
         query_rk = query_rank_remote # Pointer to function
-        local_taxo_search = True
+        local_taxo_search = False
         
         if local_taxo_search:
+            print("Requesting taxonomic ranks locally...")
             import src.ncbi_taxdump_utils as taxo_utils
 
             nodes_path = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019" + 
@@ -399,21 +368,24 @@ if __name__ == "__main__":
             taxfoo = taxo_utils.NCBI_TaxonomyFoo()
             taxfoo.load_nodes_dmp(nodes_path)
             taxfoo.load_names_dmp(names_path)
-            query_rk = query_rank_local # Pointer to function changed
+            query_rk = query_rank_local # Pointer to function changed   
         
-        # Serial version:    
-        #list_ranks = []
-        #for tupl_taxids in enumerate(df_hits["taxid"]):
-        #    list_ranks.append(prllel_rk_search(tupl_taxids, query_rk))
-        
-        # Parallelized version:
-        partial_rk_search = partial(prllel_rk_search, 
-                                    query_rank_func=query_rk) 
-        pool_parsing = mp.Pool(int(NB_THREADS))
-        list_ranks = pool_parsing.map(partial_rk_search, 
-                                      enumerate(df_hits["taxid"]))
-        pool_parsing.close()
-        
+            # Parallelized local taxo rank search:
+            partial_rk_search = partial(pll.rk_search, 
+                                        query_rank_func=query_rk) 
+            pool_parsing = mp.Pool(int(NB_THREADS))
+            list_ranks = pool_parsing.map(partial_rk_search, 
+                                          enumerate(df_hits["taxid"]))
+            pool_parsing.close()
+            
+        else:
+            print("Requesting taxonomic ranks remotely...")
+            # Serial remote taxo rank search:    
+            list_ranks = []
+            for tupl_taxids in enumerate(df_hits["taxid"]):
+                list_ranks.append(pll.rk_search(tupl_taxids, query_rk))
+            
+        # Add it to the dataFrame:
         for tupl_rak in list_ranks:
             current_df_idx, current_rk = tupl_rak
             df_hits.loc[current_df_idx, "rank"] = current_rk
@@ -437,7 +409,7 @@ if __name__ == "__main__":
         res_handle = open(out_xml_file)
         blast_records = NCBIXML.parse(res_handle)
         #list_FP_tmp = []
-        func_parallel = partial(parall_FP_search, my_df=df_hits,
+        func_parallel = partial(pll.FP_search, my_df=df_hits,
                                 taxo_cutoff=taxonomic_level_cutoff )
         pool_searchFP = mp.Pool(int(NB_THREADS))
         list_FP_tmp = pool_searchFP.map(func_parallel, enumerate(blast_records))
