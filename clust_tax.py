@@ -19,7 +19,7 @@ Options:
   -c --clustFile=clust       input txt file detailling the clusters
   -m --minMemb=min_memb      minimum number of members within a cluster [default: 250]
   -a --altHits=alt_hits      number of alternative BLAST hits to look for [default: 0]
-  -l --taxoCut=taxo_cutoff   cutoff for the taxonomic level [default: None]
+  -l --taxoCut=taxo_cutoff   cutoff for the taxonomic level [default: none]
   -t --threads=nb_threads    number of threads to use [default: 10]
   
 Remark: The  cutoff for the taxonomic level becomes mandatory when more than 1
@@ -36,7 +36,7 @@ from Bio import Entrez, SeqIO
 from Bio.Blast.Applications import NcbiblastxCommandline
 from Bio.Blast import NCBIXML
 from docopt import docopt
-from src.shared_fun import handle_strain, in_zymo
+#from src.shared_fun import handle_strain, in_zymo
 import src.check_args as check
 import src.parallelized as pll
 
@@ -75,15 +75,16 @@ def annot_from_title(title):
     fetch_res = fetch_handle.read()
     fetch_handle.close()
     
-    regex_taxid = re.compile("(:?\/db_xref=\"taxon:)([0-9]+)") # Regex for taxid
+    # Regex for taxid:
+    regex_taxid = re.compile("(:?\/db_xref=\"taxon:)([0-9]+)") 
+    # Regex for the ScientificName of the organism: 
     regex_organism = re.compile("(:?ORGANISM\s+)(.*)")
-     # Needed to get the taxonomy, even on several lines
+    # Needed to get the taxonomy, even on several lines
     #regex_taxo = re.compile(, flags=re.DOTALL)
     # Not working on multiline taxonomy:
     regex_taxo = re.compile("(:?ORGANISM.*\n\s+)(.*)") 
     
     match_taxid = regex_taxid.search(fetch_res)
-    # Regex for the ScientificName of the organism: 
     match_organism = regex_organism.search(fetch_res)
     match_taxo = regex_taxo.search(fetch_res)
     
@@ -112,18 +113,6 @@ def annot_from_title(title):
         taxid = query_taxid(' '.join(organism.split()[0:2]))
         
     return (taxid, organism, taxonomy)
-
-
-def query_taxonomy(str_taxid):
-    """
-    Given a taxid to fetch from the taxonomy db, this function returns the 
-    the object with all taxonomic info
-    """
-    fetch_handle = Entrez.efetch(db="Taxonomy", id=str_taxid)
-    res_fetch = Entrez.read(fetch_handle)
-    fetch_handle.close()
-
-    return res_fetch[0]
     
 
 def dict_from_BLASTres(blast_res, idx_to_take):
@@ -150,7 +139,6 @@ def dict_from_BLASTres(blast_res, idx_to_take):
     dict_res["taxid"] = taxid_hit
     dict_res["taxo"] = taxo_hit
     
-    #tax_record = query_taxonomy(taxid_hit)    
     return dict_res
 
 
@@ -158,6 +146,7 @@ def query_rank_remote(str_taxid):
     """
     Given a taxid fetch the taxonomic rank querying (remotely) the Taxonomy db
     """
+    print("SALUTUU", str_taxid)
     fetch_handle = Entrez.efetch(db="Taxonomy", id=str_taxid)
     res_fetch = Entrez.read(fetch_handle)
     fetch_handle.close()
@@ -252,10 +241,11 @@ if __name__ == "__main__":
     NB_THREADS = check.input_nb(ARGS["--threads"])
     NB_MIN_BY_CLUST = check.input_nb(ARGS["--minMemb"]) # Needed later
     NB_ALT = int(check.input_nb(ARGS["--altHits"]))
-    taxonomic_level_cutoff = check.taxo_cutoff(ARGS["--taxoCut"], taxo_levels)
+    taxonomic_level_cutoff = check.acceptable_str(ARGS["--taxoCut"], 
+                                                  taxo_levels + ['none'])
     
     # CHECK ARGS FOR ALTERNATIVE HITS AND CUTOFF:
-    if NB_ALT == 1 and taxonomic_level_cutoff == "None":
+    if NB_ALT == 1 and taxonomic_level_cutoff == "none":
         print("ERROR! As you want alternative hits, you have to specify a "
               "cutoff for the taxonomic level\n")
         sys.exit(2)
@@ -353,7 +343,7 @@ if __name__ == "__main__":
         # GET TAXONOMIC RANKS ASSOCIATED WITH EACH FOUND TAXID:
         #global local_taxo_search
         query_rk = query_rank_remote # Pointer to function
-        local_taxo_search = False
+        local_taxo_search = True
         
         if local_taxo_search:
             print("Requesting taxonomic ranks locally...")
@@ -409,7 +399,8 @@ if __name__ == "__main__":
         blast_records = NCBIXML.parse(res_handle)
         #list_FP_tmp = []
         func_parallel = partial(pll.FP_search, my_df=df_hits,
-                                taxo_cutoff=taxonomic_level_cutoff )
+                                taxo_cutoff=taxonomic_level_cutoff,
+                                taxo_levels=taxo_levels)
         pool_searchFP = mp.Pool(int(NB_THREADS))
         list_FP_tmp = pool_searchFP.map(func_parallel, enumerate(blast_records))
         pool_searchFP.close()

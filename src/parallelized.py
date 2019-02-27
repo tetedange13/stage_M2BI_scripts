@@ -6,6 +6,9 @@ Contains all functions used to parallelise processes
 """
 
 
+from src.shared_fun import handle_strain, in_zymo
+
+
 # FROM CLUST_TAX.PY:
 def rk_search(tupl_enum_taxids, query_rank_func):
     """
@@ -17,7 +20,7 @@ def rk_search(tupl_enum_taxids, query_rank_func):
     return ( "clust_" + str(idx), query_rank_func(int(taxid)) )
 
 
-def FP_search(tupl_blast_res_and_idx, my_df, taxo_cutoff):
+def FP_search(tupl_blast_res_and_idx, my_df, taxo_cutoff, taxo_levels):
     """
     """
     idx_arg, blast_res = tupl_blast_res_and_idx
