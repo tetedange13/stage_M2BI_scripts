@@ -14,7 +14,7 @@ def infile(infile_path, list_acceptable_ext):
     Check if everything's fine with the fq or fa file given as input
     """
     if not os.path.isfile(infile_path):
-        print("ERROR! Wrong specified input fastq file")
+        print("ERROR! Specified input file does not exit")
         sys.exit(2)
     else:
         head_infile, tail_infile = os.path.split(infile_path)
@@ -43,19 +43,6 @@ def input_nb(input_nb):
         sys.exit(2)
     
     return input_nb
-    
-
-def taxo_cutoff(input_cutoff, list_taxo):
-    """
-    Check if a the cutoff for taxonomic level given as argument is valid
-    """
-    cutoff = input_cutoff.lower()
-    if cutoff in list_taxo + ["none"]:
-        return input_cutoff
-    else:
-        print("ERROR! You must enter a valid cutoff for taxonomic level")
-        print("Must be in:", list_taxo, '\n')
-        sys.exit(2)
 
 
 def bool_type(rep):
@@ -74,16 +61,17 @@ def bool_type(rep):
     else:
         print("Enter a boolean type (True, T, False, F) !")
         sys.exit(2)
-        
-        
-def soft(trim, list_softs):
+
+
+def acceptable_str(input_str, list_acceptable):
     """
-    Check if a suitable name of soft has been given as argument
+    Check if a string given by the user is valid, i.e. belongs to the list of
+    acceptable values
     """
-    trim = trim.lower()
-    if trim in ["no"] + list_softs:
-        return trim
+    in_str = input_str.lower()
+    if in_str in list_acceptable:
+        return in_str
     else:
-        print("Enter a valid soft name or 'no' (default) !")
-        sys.exit(2)
-        
+        print("ERROR! String given as parameter not valid. Should be in:",
+              list_acceptable)
+        sys.exit(2)        
