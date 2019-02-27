@@ -32,7 +32,9 @@ def decompose_SAMflag(str_SAMflag):
 # MAIN:
 if __name__ == "__main__":
     # ARGUMENTS:
-    to_report_csv = "cDNA_run1_sampl50k_memb250.csv"
+    to_report_csv = "cDNA_run1_sampl50k_memb5.csv"
+    taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
+                   'genus', 'species', 'subspecies'] + ["strain"] 
     taxo_cutoff = "genus"
     df_hits = pd.read_csv(to_report_csv, sep='\t', index_col=0)
 
@@ -59,7 +61,7 @@ if __name__ == "__main__":
         if float(e_val) < cutoff_e_val:
             res = in_zymo(df_hits.loc[clust, "topHit"], 
                           df_hits.loc[clust, "rank"], 
-                          taxo_cutoff)
+                          taxo_cutoff, taxo_levels)
             
 
             if res == "FP":
@@ -70,7 +72,7 @@ if __name__ == "__main__":
                 if alt_index in rownames_df:
                     res_alt = in_zymo(df_hits.loc[alt_index, "topHit"], 
                                       df_hits.loc[alt_index, "rank"], 
-                                      taxo_cutoff)
+                                      taxo_cutoff, taxo_levels)
                     if res_alt != 'FP':
                         print("FOUND:", df_hits.loc[alt_index, "topHit"], 
                               " | ", "RANK:", df_hits.loc[alt_index, "rank"]) 
