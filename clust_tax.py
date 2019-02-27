@@ -36,7 +36,6 @@ from Bio import Entrez, SeqIO
 from Bio.Blast.Applications import NcbiblastxCommandline
 from Bio.Blast import NCBIXML
 from docopt import docopt
-#from src.shared_fun import handle_strain, in_zymo
 import src.check_args as check
 import src.parallelized as pll
 
@@ -79,8 +78,6 @@ def annot_from_title(title):
     regex_taxid = re.compile("(:?\/db_xref=\"taxon:)([0-9]+)") 
     # Regex for the ScientificName of the organism: 
     regex_organism = re.compile("(:?ORGANISM\s+)(.*)")
-    # Needed to get the taxonomy, even on several lines
-    #regex_taxo = re.compile(, flags=re.DOTALL)
     # Not working on multiline taxonomy:
     regex_taxo = re.compile("(:?ORGANISM.*\n\s+)(.*)") 
     
@@ -259,7 +256,6 @@ if __name__ == "__main__":
     START_TIME = t.time()
     
     if not os.path.isfile(out_xml_file):
-    #if True:
         # GENERATE 1 FASTA FILE PER CLUSTER (with CARNAC-LR's dedicated script):
         to_CARNAC_to_fasta = (path_apps + "CARNAC-LR_git93dd640/scripts/" +
                               "CARNAC_to_fasta.py")
@@ -300,11 +296,9 @@ if __name__ == "__main__":
     # PARSING BLAST OUTPUT, TO EXTRACT TAXID:
     Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
     report_filename = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".csv"
-    #global pb_filename
     pb_filename = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".log"
     
     if not os.path.isfile(report_filename):
-    #if True:
         print("PARSING BLAST OUTPUT...")
 
         PARSING_TIME = t.time()
@@ -341,7 +335,6 @@ if __name__ == "__main__":
         res_handle.close()
         
         # GET TAXONOMIC RANKS ASSOCIATED WITH EACH FOUND TAXID:
-        #global local_taxo_search
         query_rk = query_rank_remote # Pointer to function
         local_taxo_search = True
         
@@ -394,13 +387,13 @@ if __name__ == "__main__":
     if NB_ALT > 0:# and len(dict_problems['FP']) > 0: # If there are some FP
         print("Looking for alternative BLAST hits (with EXACT same " +
               "score) for FP...") 
-        #if os.path.isfile(report_filename): # list_TP does not already exist
+
         res_handle = open(out_xml_file)
         blast_records = NCBIXML.parse(res_handle)
-        #list_FP_tmp = []
         func_parallel = partial(pll.FP_search, my_df=df_hits,
                                 taxo_cutoff=taxonomic_level_cutoff,
                                 taxo_levels=taxo_levels)
+                                
         pool_searchFP = mp.Pool(int(NB_THREADS))
         list_FP_tmp = pool_searchFP.map(func_parallel, enumerate(blast_records))
         pool_searchFP.close()
@@ -421,17 +414,12 @@ if __name__ == "__main__":
         with open(pb_filename, 'r') as pb_log_file:
             problems_list = pb_log_file.read().splitlines()
         
-        #dict_problems = {'FP':[], 'NO_BLAST_HIT':[]}
         dict_problems = {'NO_BLAST_HIT':[]}
         for problem in problems_list:
             splitted_problm = problem.split(" | ")
             problm_name = splitted_problm[-1]
             clust_name = splitted_problm[0]
-            
-            #if problm_name == 'FP':
-            #    dict_problems['FP'].append(clust_name)
-     
-            #elif problm_name == "NO_BLAST_HIT": # Plus emmerdant a gerer ca..
+
             if problm_name == "NO_BLAST_HIT": # Plus emmerdant a gerer ca..
                 dict_problems['NO_BLAST_HIT'].append(clust_name)
             
