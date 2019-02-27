@@ -37,7 +37,7 @@ from Bio.Blast.Applications import NcbiblastxCommandline
 from Bio.Blast import NCBIXML
 from docopt import docopt
 from src.shared_fun import handle_strain, in_zymo
-import src.check_args as cA
+import src.check_args as check
 import src.parallelized as pll
 
 
@@ -246,14 +246,13 @@ if __name__ == "__main__":
     taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
                    'genus', 'species', 'subspecies'] + ["strain"]   
     ARGS = docopt(__doc__, version='0.1')
-    input_fq_path, input_fq_base = cA.check_infile(ARGS["--inputFqFile"],
-                                                   ('fastq', 'fq'))[0:2]
+    input_fq_path, input_fq_base = check.infile(ARGS["--inputFqFile"],
+                                                ('fastq', 'fq'))[0:2]
     TO_CLUST_FILE = ARGS["--clustFile"]
-    NB_THREADS = cA.check_input_nb(ARGS["--threads"])
-    NB_MIN_BY_CLUST = cA.check_input_nb(ARGS["--minMemb"]) # Needed later
-    NB_ALT = int(cA.check_input_nb(ARGS["--altHits"]))
-    taxonomic_level_cutoff = cA.check_input_taxo_cutoff(ARGS["--taxoCut"],
-                                                        taxo_levels)
+    NB_THREADS = check.input_nb(ARGS["--threads"])
+    NB_MIN_BY_CLUST = check.input_nb(ARGS["--minMemb"]) # Needed later
+    NB_ALT = int(check.input_nb(ARGS["--altHits"]))
+    taxonomic_level_cutoff = check.taxo_cutoff(ARGS["--taxoCut"], taxo_levels)
     
     # CHECK ARGS FOR ALTERNATIVE HITS AND CUTOFF:
     if NB_ALT == 1 and taxonomic_level_cutoff == "None":
@@ -379,7 +378,7 @@ if __name__ == "__main__":
             pool_parsing.close()
             
         else:
-            print("Requesting taxonomic ranks remotely...")
+            print("\nRequesting taxonomic ranks remotely...")
             # Serial remote taxo rank search:    
             list_ranks = []
             for tupl_taxids in enumerate(df_hits["taxid"]):

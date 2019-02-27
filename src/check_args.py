@@ -9,7 +9,7 @@ Contains all functions linked with checking of arguments given as input
 import os, sys
 
 
-def check_infile(infile_path, list_acceptable_ext):
+def infile(infile_path, list_acceptable_ext):
     """
     Check if everything's fine with the fq or fa file given as input
     """
@@ -31,7 +31,7 @@ def check_infile(infile_path, list_acceptable_ext):
                     infile_ext)
             
             
-def check_input_nb(input_nb):
+def input_nb(input_nb):
     """
     Check if a integer given as argument is valid
     """
@@ -45,7 +45,7 @@ def check_input_nb(input_nb):
     return input_nb
     
 
-def check_input_taxo_cutoff(input_cutoff, list_taxo):
+def taxo_cutoff(input_cutoff, list_taxo):
     """
     Check if a the cutoff for taxonomic level given as argument is valid
     """
@@ -58,7 +58,7 @@ def check_input_taxo_cutoff(input_cutoff, list_taxo):
         sys.exit(2)
 
 
-def check_bool_type(rep):
+def bool_type(rep):
     """
     Check if the answer is boolean type.
     Args:
@@ -76,7 +76,7 @@ def check_bool_type(rep):
         sys.exit(2)
         
         
-def check_soft(trim, list_softs):
+def soft(trim, list_softs):
     """
     Check if a suitable name of soft has been given as argument
     """
