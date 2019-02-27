@@ -21,9 +21,10 @@ Remarks:
 2) This file should be formated like that: 'seqid\tGI'
 """
 
-import sys, os, gzip
+import sys, os, gzip, re
 import os.path as osp
 import subprocess as sub
+import time as t
 import multiprocessing as mp
 from Bio import Entrez
 from functools import partial
@@ -42,8 +43,9 @@ def accList_to_dict(to_accList, separator):
         for line in accList_file:
             seq_id, gi = line.rstrip('\n').split()
             
-            if gi not in accDict.keys():
-                accDict[gi] = seq_id
+            # if gi not in accDict.keys(): # Handle duplicate GI..
+            if True:
+                accDict[seq_id] = gi
             else:
                 #print("ERROR with dict conversion\n")
                 continue
@@ -51,27 +53,6 @@ def accList_to_dict(to_accList, separator):
             
     return accDict
 
-def chunker_list(big_list, nb_chunks):
-    return (big_list[i::nb_chunks] for i in range(nb_chunks))
-    
-def cut_list_in_chunks(big_list, nb_chunks):
-    """
-    Yield successive n-sized chunks from l.
-    
-    From: https://stackoverflow.com/questions/312443/ \
-    how-do-you-split-a-list-into-evenly-sized-chunks
-    """
-    len_big_list = 257333726
-    for i in range(0, len_big_list, nb_chunks):
-        yield big_list[i:i + nb_chunks] 
-    
-def test_pll(chunk_acc2gi, list_accessions):
-    for line in chunk_acc2gi:
-        _, acc_nb, taxid, _ = line.split('\t')
-    
-        if acc_nb in list_accessions:
-            print(acc_nb, taxid)
-            return (acc_nb, taxid)
     
 def query_taxid(term_to_search):
     """
@@ -93,57 +74,35 @@ def query_taxid(term_to_search):
         return taxid[0]
         
         
-def annot_from_title(title):
+def annot_from_title(gi_str):
     """
     Query the 'nucleotide' db to get the 'annotations' section associated
     with the GenBank entry corresponding to the GI contained in the 'title'
     of a BLAST result 
-    """
-    type_id, gi_hit = title.split('|')[0:2]
-    assert(type_id == 'gi') # If it is not the GI, we have a problem
-   
-    fetch_handle = Entrez.efetch(db="nucleotide", id=gi_hit,
+    """  
+    fetch_handle = Entrez.efetch(db="nucleotide", id=gi_str,
                                  rettype='gb', retmode="text")
     fetch_res = fetch_handle.read()
     fetch_handle.close()
     
-    regex_taxid = re.compile("(:?\/db_xref=\"taxon:)([0-9]+)") # Regex for taxid
-    regex_organism = re.compile("(:?ORGANISM\s+)(.*)")
-     # Needed to get the taxonomy, even on several lines
-    #regex_taxo = re.compile(, flags=re.DOTALL)
-    # Not working on multiline taxonomy:
-    regex_taxo = re.compile("(:?ORGANISM.*\n\s+)(.*)") 
-    
+    # Regex for taxid  :
+    regex_taxid = re.compile("(:?\/db_xref=\"taxon:)([0-9]+)")  
     match_taxid = regex_taxid.search(fetch_res)
-    # Regex for the ScientificName of the organism: 
-    match_organism = regex_organism.search(fetch_res)
-    match_taxo = regex_taxo.search(fetch_res)
     
     # If we got the ScientficName, but not the taxid:
-    if match_organism and not match_taxid:
+    if match_taxid:
+        taxid = match_taxid.group(2)
+    
+    else:
         print("Taxid NOT contented within this GenBank entry !") 
         print("   --> Requesting it on the NCBI Taxonomy db")
-        organism = match_organism.group(2)
         taxid = query_taxid(organism)
-        taxonomy = match_taxo.group(2)
-    
-    elif match_taxid and match_organism:
-        taxid = match_taxid.group(2)
-        # We keep the whole ScientificName (not just "Genus species"):
-        organism = match_organism.group(2) 
-        taxonomy = match_taxo.group(2)
-        
-    else:
-        print("PB REGEX")
-        sys.exit()
     
     # Case where the taxid CANNOT be queried with the given ScientificName  
-    if taxid == "TAXO_NOT_FOUND":
-        print("The ScientificName doesn't correspond to any taxid")
-        print("    --> Querying the taxid with only 'Genus species'")
-        taxid = query_taxid(' '.join(organism.split()[0:2]))
+    if taxid == "TAXO_NOT_FOUND" or taxid == "SEVERAL_TAXIDS":
+        return "PROBLEM TAXID SEARCH"
         
-    return (taxid, organism, taxonomy)
+    return taxid
     
     
 def map_headers_to_taxid(dirOutput, in_fa_file, taxa_id):
@@ -185,10 +144,10 @@ if __name__ == "__main__":
     
     #if list_gi_path != "none": # GETTING TAXIDS FROM NAME OR GIs:
     else:
+        Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
         id_type = "gi"
         
         if id_type == "sp_name":
-            Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
             with open(dirIn_db + "Zymo_spList.txt", 'r') as spList_file:
                 list_sp = spList_file.read().splitlines()
 
@@ -208,50 +167,41 @@ if __name__ == "__main__":
                     map_headers_to_taxid(dirOut, input_fa_file, taxid)
 
         elif id_type == "gi":
-            to_gz_acc2taxid = (to_dbs + "nt_db/taxo_18feb19/" +
-                              "nucl_gb.accession2taxid.gz")
             separ = ' ' # Change the seperator if infile has different format
-            dict_acc = accList_to_dict(list_gi_path, separ)
-            list_acc = sorted(dict_acc.keys())
-            seqid2map_file = open(to_seqid2map, 'w')
-
-            # Open gz file in "read-text" mode (option "rt"):    
-            with gzip.open(to_gz_acc2taxid, 'rt') as acc2taxid_gz:
-                acc2taxid_gz.readline() # Skip header
-                salut = acc2taxid_gz.read().splitlines()
-                #salut = [ (line.split('\t')[1] + '\t' + line.split('\t')[2]) for line in acc2taxid_gz]
-                print("LIST LOADED")
-                chunks_acc2taxid = chunker_list(salut, NB_THREADS)
-                
-                # Parallel version:
-                print("TOTO")
-                pll_getTaxid = partial(test_pll, list_accessions=list_acc)
-                pool_getTaxid = mp.Pool(NB_THREADS)
-                pool_getTaxid.map(pll_getTaxid, chunks_acc2taxid)
-                pool_getTaxid.close()
-                print("FINISHED")
-                
-                sys.exit()
+            #dict_acc = accList_to_dict(list_gi_path, separ)
+            #list_acc = sorted(dict_acc.keys())
+            #set_acc = dict_acc.values()
+            TAXID_START_TIME = t.time
+            dict_memory = {} # To remember already queried accession numbers
+            #seqid2map_file = open(to_seqid2map, 'w')
             
-                for toto in salut:
-                    print(toto)
-                    sys.exit()
+            if osp.isfile(to_seqid2map):
+                os.remove(to_seqid2map)
             
-                #print(acc2taxid_gz.readline())
-                #print(acc2taxid_gz.readline())
-                #sys.exit()
-                #for line in acc2taxid_gz:
+            with open(list_gi_path, 'r') as list_gi_file:
+                #compt = 0
+                for line in list_gi_file:
+                    #compt += 1
+                    seq_id, acc_nb = line.rstrip('\n').split(separ)
                     
-                #    _, acc_nb, taxid, _ = line.split('\t')
-                    #print(acc_nb) ; sys.exit()
+                    if acc_nb not in dict_memory.keys():
+                        print("QUERYING", acc_nb, "FOR TAXID")
+                        taxid = annot_from_title(acc_nb)
+                        dict_memory[acc_nb] = taxid
+                    else:
+                        print("ACCESSION NUMBER ALREADY QUERIED")
+                        taxid = dict_memory[acc_nb]
                     
-                #    if acc_nb in list_acc:
-                #        seqid2map_file.write(dict_acc[acc_nb] + '\t' + taxid)
-                #        print("FOUND!", acc_nb, dict_acc[acc_nb],taxid)
-                #        sys.exit()
-                #        break
+                    # In any case, we write the file
+                    with open(to_seqid2map, 'a') as seqid2map_file:
+                        seqid2map_file.write(seq_id + '\t' + taxid + '\n')
+                    
+                    #if compt > 10:
+                    #    sys.exit()
             
-            seqid2map_file.close()
+            
+            #seqid2map_file.close()
+            print("TOTAL TAXID SEARCH RUNTIME:", t.time() - TAXID_START_TIME)
             sys.exit()
             
                 
