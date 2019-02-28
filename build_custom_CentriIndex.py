@@ -30,6 +30,7 @@ from Bio import Entrez
 from functools import partial
 from Bio.Blast import NCBIXML
 from docopt import docopt
+from urllib.error import HTTPError
 import src.check_args as check
 
 
@@ -133,7 +134,7 @@ if __name__ == "__main__":
     
     #global seqid2taxid_file
     #seqid2taxid_file = dirOut + "seqid2taxid.map"
-    to_seqid2map = osp.join(dirOut + "seqid2taxid.map")
+    to_seqid2map = osp.join(dirOut, "seqid2taxid.map")
     
     if not osp.isfile(to_seqid2map) and list_gi_path == "none":
         print("ERROR! As 'dirOut/seqid2taxid.map' could not be found, you " +
@@ -176,17 +177,34 @@ if __name__ == "__main__":
             #seqid2map_file = open(to_seqid2map, 'w')
             
             if osp.isfile(to_seqid2map):
-                os.remove(to_seqid2map)
+                print("Found existing seqid2acc file! Loading it...")
+                with open(to_seqid2map, 'r') as existing_seqid2acc:
+                    for line in existing_seqid2acc:
+                        splitted_line = line.rstrip('\n').split('\t')
+                        existing_acc_nb, existing_taxid = splitted_line
+                        dict_memory[existing_acc_nb] = existing_taxid
+                # Save file:
+                os.rename(to_seqid2map, osp.join(dirOut, 
+                                                 "saved_seqid2taxid.map"))
             
+            #print(dict_memory) ; sys.exit()
+
             with open(list_gi_path, 'r') as list_gi_file:
                 #compt = 0
                 for line in list_gi_file:
+                    t.sleep(1) # Make sure not too many requests to NCBI
                     #compt += 1
                     seq_id, acc_nb = line.rstrip('\n').split(separ)
                     
                     if acc_nb not in dict_memory.keys():
                         print("QUERYING", acc_nb, "FOR TAXID")
-                        taxid = annot_from_title(acc_nb)
+
+                        try:
+                            taxid = annot_from_title(acc_nb)
+                        except HTTPError:
+                            t.sleep(20) # Wait if 502 HTTP error from NCBI
+                            taxid = annot_from_title(acc_nb)
+                                
                         dict_memory[acc_nb] = taxid
                     else:
                         print("ACCESSION NUMBER ALREADY QUERIED")
