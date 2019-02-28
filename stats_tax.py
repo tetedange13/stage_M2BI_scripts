@@ -7,6 +7,7 @@
 
 import sys, os
 import pandas as pd
+import time as t
 from src.shared_fun import handle_strain, in_zymo
 
 
@@ -32,11 +33,38 @@ def decompose_SAMflag(str_SAMflag):
 # MAIN:
 if __name__ == "__main__":
     # ARGUMENTS:
-    to_report_csv = "cDNA_run1_sampl50k_memb5.csv"
+    #to_report_csv = "cDNA_run1_sampl50k_memb5.csv"
+    to_report_csv = "test_16S_primLEN_mapped.csv"
     taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
                    'genus', 'species', 'subspecies'] + ["strain"] 
     taxo_cutoff = "genus"
-    df_hits = pd.read_csv(to_report_csv, sep='\t', index_col=0)
+
+    SAM_MODE = True
+    if SAM_MODE:
+      START_CSV_PARSING = t.time()
+      with open(to_report_csv, 'r') as my_csv:
+          dict_csv = {}
+
+          for line in my_csv:
+            splitted_line = line.rstrip('\n').split('\t')
+            readID, SAM_flag, target, MAPQ = splitted_line
+            dict_csv[readID] = {"targets":[target], "MAPQ":[MAPQ]}
+
+            
+            if 2048 in decompose_SAMflag(SAM_flag):
+              # We supposed that primary is already in the keys
+              dict_csv[readID]["targets"].append(target)
+              dict_csv[readID]["MAPQ"].append(MAPQ)
+
+              #print(dict_csv) ; sys.exit()
+
+      #df_hits = pd.read_csv(to_report_csv, sep='\t', index_col=0, header=None)
+      #print(dict_csv) 
+      print("PARSING TIME:", str(t.time() - START_CSV_PARSING))
+      sys.exit()
+
+    else:
+      df_hits = pd.read_csv(to_report_csv, sep='\t', index_col=0, header=0)
 
     # CALCULATION OF STATISTICS:
     cutoff_e_val = 0.00001 # 10^-5
