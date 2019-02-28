@@ -31,7 +31,7 @@ def infile(infile_path, list_acceptable_ext):
                     infile_ext)
             
             
-def input_nb(input_nb):
+def input_nb(input_nb, param_name=""):
     """
     Check if a integer given as argument is valid
     """
@@ -39,7 +39,8 @@ def input_nb(input_nb):
         int(input_nb)
         
     except ValueError:
-        print("ERROR! You should give an integer here")
+        print("ERROR! You should give an integer for the parameter:", 
+              param_name)
         sys.exit(2)
     
     return input_nb
