@@ -30,6 +30,7 @@ import sys, os, re
 import Bio
 import pandas as pd
 import time as t
+import os.path as osp
 from functools import partial
 import multiprocessing as mp
 from Bio import Entrez, SeqIO
@@ -251,15 +252,17 @@ if __name__ == "__main__":
               "alternative BLAST hit (it largely enough most of the time)\n")
         sys.exit(2)
     
-    out_xml_file = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".xml" # Needed later
     path_apps = "/home/sheldon/Applications/"
+    # Needed later:
+    out_xml_file = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".xml" 
+    out_clust_fa = "tmp_clust_memb" + NB_MIN_BY_CLUST + "/"
     START_TIME = t.time()
     
-    if not os.path.isfile(out_xml_file):
+    if not osp.isfile(out_xml_file):
         # GENERATE 1 FASTA FILE PER CLUSTER (with CARNAC-LR's dedicated script):
         to_CARNAC_to_fasta = (path_apps + "CARNAC-LR_git93dd640/scripts/" +
                               "CARNAC_to_fasta.py")
-        out_clust_fa = "tmp_clust_memb" + NB_MIN_BY_CLUST + "/"
+        
         
         cmd_clust_to_fasta = ("python3 " + to_CARNAC_to_fasta + " " +
                               TO_CLUST_FILE + " " + input_fq_path + " " + 
@@ -288,7 +291,6 @@ if __name__ == "__main__":
         print("BLAST query against NCBI db for 1 read by cluster...")
         os.system(cmd_pick_one + " | " + str(cmd_BLAST))
         
-        #os.system("rm -r " + out_clust_fa) # Cleaning
         print("BLAST query finished !")
         print("TOTAL TIME FOR THE BLAST QUERY:", t.time() - BLAST_TIME, '\n')
     
@@ -298,7 +300,7 @@ if __name__ == "__main__":
     report_filename = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".csv"
     pb_filename = input_fq_base + "_memb" + NB_MIN_BY_CLUST + ".log"
     
-    if not os.path.isfile(report_filename):
+    if not osp.isfile(report_filename):
         print("PARSING BLAST OUTPUT...")
 
         PARSING_TIME = t.time()
@@ -306,7 +308,7 @@ if __name__ == "__main__":
         res_handle = open(out_xml_file)
         blast_records = NCBIXML.parse(res_handle)
         
-        if os.path.isfile(pb_filename):
+        if osp.isfile(pb_filename):
             os.remove(pb_filename)
         
         # GET TAXIDs AND OTHER INFORMATION:    
@@ -372,8 +374,6 @@ if __name__ == "__main__":
             current_df_idx, current_rk = tupl_rak
             df_hits.loc[current_df_idx, "rank"] = current_rk
         
-        # Results saved to a report file:
-        df_hits.to_csv(report_filename, sep='\t')
         print("\nTOTAL TIME FOR PARSING THE BLAST RESULTS:", 
               t.time() - PARSING_TIME, '\n')
         
@@ -403,14 +403,12 @@ if __name__ == "__main__":
         for tuple_blast_res in list_FP:
             look_for_alt(tuple_blast_res, NB_ALT, df_hits)
 
-        print("Search for alternative hits for FP finished !\n")     
-        # We have to re-write the new report file, with problems solved:u
-        df_hits.to_csv(report_filename, sep='\t')
+        print("Search for alternative hits for FP finished !\n")
     
     
     # DEAL WITH THE DIFFERENT PROBLEMS ENCOUNTERED:
     print("Solving the encountered problems...")
-    if os.path.isfile(pb_filename): # Check if there are problems to solve
+    if osp.isfile(pb_filename): # Check if there are problems to solve
         with open(pb_filename, 'r') as pb_log_file:
             problems_list = pb_log_file.read().splitlines()
         
@@ -434,6 +432,19 @@ if __name__ == "__main__":
     else:
         print("NO problems to solve")
     
-    
+
+    # Add length associated with each cluster:
+    with open(out_clust_fa + "size_clusts.log") as size_clusts_file:
+        for line in size_clusts_file:
+            clust_idx, size_clust = line.rstrip('\n').split('\t')
+            df_hits.loc[clust_idx, "nb_memb"] = size_clust
+
+    # Results saved to a report file:
+    df_hits.to_csv(report_filename, sep='\t')
+
+    #os.system("rm -r " + out_clust_fa) # Cleaning
+
+    for salut in df_hits.index:
+        print(df_hits.loc[salut, :])
     print("\n\nTOTAL RUNTIME:", t.time() - START_TIME)  
       
