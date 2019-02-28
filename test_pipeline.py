@@ -10,7 +10,7 @@ Options:
   -h --help                  help
   --version                  version of the script
   -i --inputFqFile=input_fq  input fastq file
-  -d --db=database           name of the datababse to use [default: none]
+  -d --db=database           name of the database to use [default: Zymo]
   -T --trim=trimming         use Porechop to trim reads [default: no]
   -C --chim=chimera          chimera detection using yacrd [default: no]
   -D --deter=determination   taxonomic determination step [default: no]
@@ -20,12 +20,14 @@ Arguments:
     trimming: 'porechop' or 'no' (default)
     chimera: 'yacrd' or 'no' (default)
     determination: 'minimap2', 'margin', 'centri', or 'no' (default)
+    database: 'rrn' or 'Zymo'
 """
 
 import os
 import sys
 import subprocess as sub
 import time as t
+import os.path as osp
 from docopt import docopt
 import src.check_args as check
         
@@ -39,17 +41,18 @@ if __name__ == "__main__":
     ARGS = docopt(__doc__, version='0.1')
     tuple_check_fq = check.infile(ARGS["--inputFqFile"], ('fq', 'fastq'))
     in_fq_path, in_fq_base, _, tail_input_fq, in_fq_ext = tuple_check_fq
+    DB_NAME = check.acceptable_str(ARGS["--db"], ["rrn", "zymo"])
     TRIM = check.acceptable_str(ARGS["--trim"], ["porechop", "no"])
     CHIM = check.acceptable_str(ARGS["--chim"], ["yacrd", "no"])
     DETER = check.acceptable_str(ARGS["--deter"], 
                                  ["minimap2", "margin", "centri", "no"])
-    nb_threads = check.input_nb(ARGS["--threads"])   
+    nb_threads = check.input_nb(ARGS["--threads"], "'-t number of threads'")   
 
                 
     #Common variables/params:
     # To databases directory:
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
-    db_name = "Zymo"
+    
     path_apps = "/home/sheldon/Applications/"
     path_proj = "/projets/metage_ONT_2019/"
     ref_fa_path = (path_proj + "databases/Zymo_genomes-ZR160406/" + 
@@ -103,7 +106,7 @@ if __name__ == "__main__":
                    trmd_file_path + " " + trmd_file_path)
     
     if CHIM == "yacrd":
-        if not os.path.isfile(overlapped_file + '.paf'): # 1st need to ovlp
+        if not osp.isfile(overlapped_file + '.paf'): # 1st need to ovlp
             OVLP_TIME = t.time()
             
             ovlp_log = open(overlapped_file + ".log", 'w')
@@ -139,7 +142,7 @@ if __name__ == "__main__":
         log_yacrd.close()
                      
         # Move the yacrd output fq file to the dirOut_yacrd directory:
-        os.rename(dirOut_porechop + os.path.splitext(trimmed_file)[0] + 
+        os.rename(dirOut_porechop + osp.splitext(trimmed_file)[0] + 
                   flag_ext, dirOut_yacrd + in_fq_base + flag_ext)           
         
     else:
@@ -189,11 +192,12 @@ if __name__ == "__main__":
         dirOut_minimap = path_proj + "3-deter_minimap2/"
         args_minimap2_map = "--secondary=no -t" + nb_threads + " -x map-ont "
         to_minimap_idxes = to_dbs + "minimap2_idxes/"
-        root_minimap_outfiles = dirOut_minimap + in_fq_base + "_to" + db_name
+        root_minimap_outfiles = (dirOut_minimap + in_fq_base + "_to" + 
+                                 DB_NAME.capitalize())
         cmd_minimap = (to_minimap2 + "minimap2 " + args_minimap2_map + "-a " +
-                       to_minimap_idxes + db_name + ".mmi " + 
+                       to_minimap_idxes + DB_NAME + ".mmi " + 
                        in_fq_path)
-        
+        #print(cmd_minimap) ; sys.exit()
         START_MINIMAP = t.time()
         log_minimap = open(root_minimap_outfiles + ".log", 'w')
         with open(root_minimap_outfiles + ".sam", 'w') as minimap_SAM:
@@ -283,4 +287,4 @@ if __name__ == "__main__":
     path_to_lordfast = path_apps + "lordfast-0.0.10/lordfast"
     #cmd_lordfast = (path_to_lordfast + "--search " + refgen.fa " --seq " +
     #                reads.fastq + " > map.sam")
-    
+        
