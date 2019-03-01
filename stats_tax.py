@@ -2,13 +2,17 @@
 
 
 """
+Big supposition is that the SAM file does not contain secondary alignments
 """
 
 
 import sys, os
+import os.path as osp
 import pandas as pd
 import time as t
+import subprocess as sub
 from src.shared_fun import handle_strain, in_zymo
+import src.check_args as check
 
 
 def to_full_name(header):
@@ -34,14 +38,34 @@ def decompose_SAMflag(str_SAMflag):
 if __name__ == "__main__":
     # ARGUMENTS:
     #to_report_csv = "cDNA_run1_sampl50k_memb5.csv"
-    to_report_csv = "test_16S_primLEN_mapped.csv"
-    taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
-                   'genus', 'species', 'subspecies'] + ["strain"] 
+    infile_path = "test_16S_primLEN_mapped.csv"
+    to_infile, _, _, _, ext_infile = check.infile(to_infile, 
+                                                  ["csv", "tsv", "sam"])
     taxo_cutoff = "genus"
 
-    SAM_MODE = True
+    # Common variables:
+    to_apps = "/home/sheldon/Applications/"
+    taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
+                   'genus', 'species', 'subspecies'] + ["strain"] 
+
+    
+    print(ext_infile) ; sys.exit()
+
+    SAM_MODE = False
+    if ext_infile == "sam":
+      SAM_MODE = True
+
     if SAM_MODE:
+      to_samtools = to_apps + "samtools_0.1.19/samtools"
+
+      cmd_get_mapped = (to_samtools + " view -S -F 4 " + to_infile +
+                        " | awk '{print $1,$2,$3,$4}'")
+
+      # Run process and get
+      with open()
+      sub.Popen(cmd_get_mapped.split(), stdout=sub.PIPE).communicate()
       START_CSV_PARSING = t.time()
+      
       with open(to_report_csv, 'r') as my_csv:
           dict_csv = {}
 
@@ -51,7 +75,7 @@ if __name__ == "__main__":
             dict_csv[readID] = {"targets":[target], "MAPQ":[MAPQ]}
 
             
-            if 2048 in decompose_SAMflag(SAM_flag):
+            if 2048 in decompose_SAMflag(SAM_flag): # Suppose that NO secondary
               # We supposed that primary is already in the keys
               dict_csv[readID]["targets"].append(target)
               dict_csv[readID]["MAPQ"].append(MAPQ)
@@ -61,6 +85,10 @@ if __name__ == "__main__":
       #df_hits = pd.read_csv(to_report_csv, sep='\t', index_col=0, header=None)
       #print(dict_csv) 
       print("PARSING TIME:", str(t.time() - START_CSV_PARSING))
+
+      for readID in dict_csv:
+        if len(dict_csv[readID]["targets"]) # Chimeric alignment
+
       sys.exit()
 
     else:
