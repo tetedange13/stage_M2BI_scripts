@@ -21,11 +21,12 @@ Remarks:
 2) This file should be formated like that: 'seqid\tGI'
 """
 
-import sys, os, gzip, re
+import sys, os, gzip, re, csv
 import os.path as osp
 import subprocess as sub
 import time as t
 import multiprocessing as mp
+import itertools as ittls
 from Bio import Entrez
 from functools import partial
 from Bio.Blast import NCBIXML
@@ -104,8 +105,34 @@ def annot_from_title(gi_str):
         return "PROBLEM TAXID SEARCH"
         
     return taxid
-    
-    
+
+
+def keyfunc(row):
+    # `row` is one row of the CSV file.
+    # replace this with the name column.
+    return row[0]
+
+def worker2(chunk):
+    return len(chunk)
+
+
+def pll_taxid_mapping(chunk, set_accession):
+    """
+    """
+    # `chunk` will be a list of CSV rows all with the same name column
+    # replace this with your real computation
+    to_return = []
+    for line in chunk:
+        _, acc_nb, taxid, _ = line.rstrip('\n').split('\t')
+
+        if acc_nb in set_accession:
+            to_return.append((acc_nb, taxid))
+            
+    if to_return: #List not empty
+        return to_return
+    #return (None, )
+
+
 def map_headers_to_taxid(dirOutput, in_fa_file, taxa_id):
     """
     Very very basic function to map headers against taxid 
@@ -134,9 +161,9 @@ if __name__ == "__main__":
     
     #global seqid2taxid_file
     #seqid2taxid_file = dirOut + "seqid2taxid.map"
-    to_seqid2map = osp.join(dirOut, "seqid2taxid.map")
+    to_seqid2taxid = osp.join(dirOut, "seqid2taxid")
     
-    if not osp.isfile(to_seqid2map) and list_gi_path == "none":
+    if not osp.isfile(to_seqid2taxid) and list_gi_path == "none":
         print("ERROR! As 'dirOut/seqid2taxid.map' could not be found, you " +
               "need to specify a file containing the gi of the species " + 
               "contained in your database")
@@ -144,7 +171,7 @@ if __name__ == "__main__":
     
     
     #if list_gi_path != "none": # GETTING TAXIDS FROM NAME OR GIs:
-    else:
+    if not osp.isfile(to_seqid2taxid):
         Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
         id_type = "gi"
         
@@ -167,77 +194,112 @@ if __name__ == "__main__":
                 with open(dirIn_db + sp_fasta, 'r') as input_fa_file:
                     map_headers_to_taxid(dirOut, input_fa_file, taxid)
 
+
         elif id_type == "gi":
             separ = ' ' # Change the seperator if infile has different format
             #dict_acc = accList_to_dict(list_gi_path, separ)
             #list_acc = sorted(dict_acc.keys())
             #set_acc = dict_acc.values()
             TAXID_START_TIME = t.time
-            dict_memory = {} # To remember already queried accession numbers
-            #seqid2map_file = open(to_seqid2map, 'w')
-            
-            if osp.isfile(to_seqid2map):
-                print("Found existing seqid2acc file! Loading it...")
-                with open(to_seqid2map, 'r') as existing_seqid2acc:
-                    for line in existing_seqid2acc:
-                        splitted_line = line.rstrip('\n').split('\t')
-                        existing_acc_nb, existing_taxid = splitted_line
-                        dict_memory[existing_acc_nb] = existing_taxid
-                # Save file:
-                os.rename(to_seqid2map, osp.join(dirOut, 
-                                                 "saved_seqid2taxid.map"))
-            
-            #print(dict_memory) ; sys.exit()
+            #seqid2map_file = open(to_seqid2taxid, 'w')
 
+            # Get set
             with open(list_gi_path, 'r') as list_gi_file:
-                #compt = 0
-                for line in list_gi_file:
-                    t.sleep(1) # Make sure not too many requests to NCBI
-                    #compt += 1
-                    seq_id, acc_nb = line.rstrip('\n').split(separ)
-                    
-                    if acc_nb not in dict_memory.keys():
-                        print("QUERYING", acc_nb, "FOR TAXID")
+               set_acc = {line.rstrip('\n').split()[1] for line in list_gi_file}
+            nb_to_find, nb_found = len(set_acc), 0
+            
+            to_acc2taxid = osp.join(dirOut, "acc2taxid")
+            # if osp.isfile(to_acc2seqid):
+            #     print("Found existing acc2taxid file! Loading it...")
+            #     with open(to_acc2seqid, 'r') as existing_acc2taxid:
+            #         for line in existing_acc2taxid:
+            #             # splitted_line = line.rstrip('\n').split('\t')
+            #             # existing_seqid, existing_taxid = splitted_line
+            #             existing_acc_nb, _ = line.rstrip('\n').split('\t')
+            #             # dict_memory[existing_seqid] = existing_taxid
+            #             set_acc.remove(existing_acc_nb)
 
-                        try:
-                            taxid = annot_from_title(acc_nb)
-                        except HTTPError:
-                            t.sleep(20) # Wait if 502 HTTP error from NCBI
-                            taxid = annot_from_title(acc_nb)
-                                
-                        dict_memory[acc_nb] = taxid
+            nb_found = nb_to_find - len(set_acc)
+
+                # Save file:
+                #os.rename(to_seqid2taxid, osp.join(dirOut, 
+                #                                 "saved_seqid2taxid.map"))
+  
+
+            pool = mp.Pool(NB_THREADS)
+            to_gz_acc2taxid = (to_dbs + "nt_db/taxo_18feb19/" +
+                               "nucl_gb.accession2taxid.gz")
+            #nb_line_gz = 257333727
+            size_chunks = 1000000
+            results = []
+            with gzip.open(to_gz_acc2taxid, 'rt') as acc2taxid_gz:
+            #with open("test.map", 'r') as acc2taxid_gz:
+                acc2taxid_gz.readline() # Skip header
+                #reader = csv.reader(acc2taxid_gz)
+                #chunks = ittls.groupby(reader)
+                worker = partial(pll_taxid_mapping, set_accession=set_acc)
+                print("\nMapping taxids against accession numbers...")
+
+                while True:
+                    groups = [list(ittls.islice(acc2taxid_gz, size_chunks)) for i in range(NB_THREADS)]
+
+                    # As soon as 1st element not an empty list
+                    # (if the 1st one IS empty, the following will beb too)
+                    if groups[0]: 
+                        result = pool.imap(worker, groups)
+                        results.extend(result)
+                        #break
                     else:
-                        print("ACCESSION NUMBER ALREADY QUERIED")
-                        taxid = dict_memory[acc_nb]
-                    
-                    # In any case, we write the file
-                    with open(to_seqid2map, 'a') as seqid2map_file:
-                        seqid2map_file.write(seq_id + '\t' + taxid + '\n')
-                    
-                    #if compt > 10:
-                    #    sys.exit()
+                        print("TOUT CONSOMME")
+                        break
+            pool.close()
+
+            dict_acc2taxid = {} # To convert accession number to taxid
+            with open(to_acc2taxid, 'w') as toto:
+                for res in results:
+                    if res: # If res different from 'None'
+                        for found_acc_nb, found_taxid in res:
+                            dict_acc2taxid[found_acc_nb] = found_taxid
+                            nb_found += 1
+                            toto.write(found_acc_nb + '\t' + found_taxid + '\n')
+
+            print("FOUND:", nb_found)
+            print("TO_FIND:", nb_to_find, '\n')
+            #assert(nb_found == nb_to_find)
+
+            # Write seqid2taxid file:
+            to_seqid2taxid = osp.join(dirOut, "seqid2taxid_test")
+            problems = open("problems_taxid_mapping.txt")
+
+            with open(list_gi_path, 'r') as list_gi_file, \
+                 open(to_seqid2taxid, 'w') as seqid2taxid_file:
+                for line in list_gi_file:
+                    seqid, acc_nb = line.rstrip('\n').split()
+
+                    if 
+                    seqid2taxid_file.write(seqid + '\t' + 
+                                           dict_acc2taxid[acc_nb] + '\n')
             
-            
-            #seqid2map_file.close()
+            problems
             print("TOTAL TAXID SEARCH RUNTIME:", t.time() - TAXID_START_TIME)
+            
+            # Get list of taxids to give to 'centrifuge-download':
+            set_taxids = list(dict_acc2taxid.values())
             sys.exit()
-            
-                
-            
-    
-    
-    set_taxids = set()
-    with open(to_seqid2map, 'r') as taxids_file:
-        for line in taxids_file:
-            set_taxids.add(line.split()[1])
-    list_taxids = list(set_taxids)
+         
+
+    else:                
+        # Get list of taxids to give to 'centrifuge-download':
+        if osp.isfile(to_seqid2taxid):
+        with open(to_seqid2taxid, 'r') as seqid2taxid_file:
+            set_taxids = {line.split()[1] for line in seqid2taxid_file}
 
     
-    # GETTING DUMP FILES:
+    # GET TAXONOMY FILES:
     if not (osp.isfile(dirOut+"nodes.dmp") and osp.isfile(dirOut+"names.dmp")):
         print("\nGenerating taxonomic tree and names...")
         os.system("centrifuge-download -o " + dirOut + " -t " + 
-                  ','.join(list_taxids) + " taxonomy")
+                  ','.join(list(set_taxids)) + " taxonomy")
         print("Done !\n")
     
     else:
