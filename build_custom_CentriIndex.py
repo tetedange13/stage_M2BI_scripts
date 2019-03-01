@@ -200,7 +200,7 @@ if __name__ == "__main__":
             #dict_acc = accList_to_dict(list_gi_path, separ)
             #list_acc = sorted(dict_acc.keys())
             #set_acc = dict_acc.values()
-            TAXID_START_TIME = t.time
+            TAXID_START_TIME = t.time()
             #seqid2map_file = open(to_seqid2taxid, 'w')
 
             # Get set
@@ -209,16 +209,6 @@ if __name__ == "__main__":
             nb_to_find, nb_found = len(set_acc), 0
             
             to_acc2taxid = osp.join(dirOut, "acc2taxid")
-            # if osp.isfile(to_acc2seqid):
-            #     print("Found existing acc2taxid file! Loading it...")
-            #     with open(to_acc2seqid, 'r') as existing_acc2taxid:
-            #         for line in existing_acc2taxid:
-            #             # splitted_line = line.rstrip('\n').split('\t')
-            #             # existing_seqid, existing_taxid = splitted_line
-            #             existing_acc_nb, _ = line.rstrip('\n').split('\t')
-            #             # dict_memory[existing_seqid] = existing_taxid
-            #             set_acc.remove(existing_acc_nb)
-
             nb_found = nb_to_find - len(set_acc)
 
                 # Save file:
@@ -226,12 +216,11 @@ if __name__ == "__main__":
                 #                                 "saved_seqid2taxid.map"))
   
 
-            pool = mp.Pool(NB_THREADS)
             to_gz_acc2taxid = (to_dbs + "nt_db/taxo_18feb19/" +
-                               "nucl_gb.accession2taxid.gz")
-            #nb_line_gz = 257333727
+                               "nucl_wgs.accession2taxid.gz")
             size_chunks = 1000000
             results = []
+            pool = mp.Pool(NB_THREADS)
             with gzip.open(to_gz_acc2taxid, 'rt') as acc2taxid_gz:
             #with open("test.map", 'r') as acc2taxid_gz:
                 acc2taxid_gz.readline() # Skip header
@@ -269,28 +258,39 @@ if __name__ == "__main__":
 
             # Write seqid2taxid file:
             to_seqid2taxid = osp.join(dirOut, "seqid2taxid_test")
-            problems = open("problems_taxid_mapping.txt")
+            found_acc_numbers = dict_acc2taxid.keys()
+            set_problems = set()
 
             with open(list_gi_path, 'r') as list_gi_file, \
                  open(to_seqid2taxid, 'w') as seqid2taxid_file:
                 for line in list_gi_file:
                     seqid, acc_nb = line.rstrip('\n').split()
 
-                    if 
-                    seqid2taxid_file.write(seqid + '\t' + 
-                                           dict_acc2taxid[acc_nb] + '\n')
+                    if acc_nb in found_acc_numbers:
+                        seqid2taxid_file.write(seqid + '\t' + 
+                                               dict_acc2taxid[acc_nb] + '\n')
+                    else:
+                        set_problems.add(acc_nb)
             
-            problems
+            if set_problems: # If set not empty
+                with open("problematic_acc_numbers.txt", 'w') as problems:
+                    for problematic_acc_nb in set_problems:
+                        problems.write(problematic_acc_nb + '\n')
+                        
+                # We remove the incomplete seq2taxid file:
+                os.remove(to_seqid2taxid)
+
+
             print("TOTAL TAXID SEARCH RUNTIME:", t.time() - TAXID_START_TIME)
-            
+            sys.exit()
+
             # Get list of taxids to give to 'centrifuge-download':
             set_taxids = list(dict_acc2taxid.values())
-            sys.exit()
+            
          
 
     else:                
         # Get list of taxids to give to 'centrifuge-download':
-        if osp.isfile(to_seqid2taxid):
         with open(to_seqid2taxid, 'r') as seqid2taxid_file:
             set_taxids = {line.split()[1] for line in seqid2taxid_file}
 
