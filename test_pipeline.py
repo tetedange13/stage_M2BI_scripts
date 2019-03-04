@@ -55,8 +55,8 @@ if __name__ == "__main__":
     
     path_apps = "/home/sheldon/Applications/"
     path_proj = "/projets/metage_ONT_2019/"
-    ref_fa_path = (path_proj + "databases/Zymo_genomes-ZR160406/" + 
-                   "Zymo_genomes-ZR160406.fa")
+    # ref_fa_path = (path_proj + "databases/Zymo_genomes-ZR160406/" + 
+    #                "Zymo_genomes-ZR160406.fa")
     
     #print("Processing " + tail_input_fq, '\n')
     
@@ -213,14 +213,13 @@ if __name__ == "__main__":
     
     elif DETER == "centri":
         # Classification using centrifuge:
-        path_to_idx = to_dbs + "p_compressed/"
+        to_Centri_idxes = to_dbs + "Centri_idxes/"
         #path_to_idx = path_proj + "centri_idx-Zymo/"
         #name_idx_centri = "Zymo"
-        name_idx_centri = "p_compressed"
         dirOut_centri = path_proj + "3-deter_Centri/"
         
         cmd_centri = ("centrifuge -t -p " + nb_threads + " -q " + 
-                      file_to_map + " -x " + path_to_idx + name_idx_centri +
+                      file_to_map + " -x " + to_Centri_idxes + DB_NAME +
                       " --report-file " + dirOut_centri + in_fq_base + 
                       "_centriReport.tsv")
         #print(cmd_centri) ; sys.exit()
@@ -245,7 +244,7 @@ if __name__ == "__main__":
                   carnac_filout + "_CARNAC.txt -t " + 
                   nb_threads)
     
-    proceed = True
+    proceed = False
     if proceed:
         CARNAC_TIME = t.time()
         os.system(cmd_carnac_convert)
