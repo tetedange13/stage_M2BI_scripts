@@ -32,59 +32,9 @@ from functools import partial
 from Bio.Blast import NCBIXML
 from docopt import docopt
 from urllib.error import HTTPError
+import src.remote
 import src.check_args as check
 import src.parallelized as pll
-
-    
-def query_taxid(term_to_search):
-    """
-    Given a term to search the taxonomy db, this function return the taxid
-    (if one can be found)
-    """
-    search_handle = Entrez.esearch(db="Taxonomy", term=term_to_search)
-    res_search = Entrez.read(search_handle)
-    search_handle.close()
-    
-    taxid = res_search["IdList"]
-    nb_taxid = len(taxid)
-
-    if nb_taxid == 0: # No results found for the "term" specified
-        return "TAXO_NOT_FOUND"
-    elif nb_taxid > 1: # More than 1 taxid ("term" not enough precise ?)
-        return "SEVERAL_TAXIDS"    
-    else:
-        return taxid[0]
-        
-        
-def annot_from_title(gi_str):
-    """
-    Query the 'nucleotide' db to get the 'annotations' section associated
-    with the GenBank entry corresponding to the GI contained in the 'title'
-    of a BLAST result 
-    """  
-    fetch_handle = Entrez.efetch(db="nucleotide", id=gi_str,
-                                 rettype='gb', retmode="text")
-    fetch_res = fetch_handle.read()
-    fetch_handle.close()
-    
-    # Regex for taxid  :
-    regex_taxid = re.compile("(:?\/db_xref=\"taxon:)([0-9]+)")  
-    match_taxid = regex_taxid.search(fetch_res)
-    
-    # If we got the ScientficName, but not the taxid:
-    if match_taxid:
-        taxid = match_taxid.group(2)
-    
-    else:
-        print("Taxid NOT contented within this GenBank entry !") 
-        print("   --> Requesting it on the NCBI Taxonomy db")
-        taxid = query_taxid(organism)
-    
-    # Case where the taxid CANNOT be queried with the given ScientificName  
-    if taxid == "TAXO_NOT_FOUND" or taxid == "SEVERAL_TAXIDS":
-        return "PROBLEM TAXID SEARCH"
-        
-    return taxid
 
 
 def map_headers_to_taxid(dirOutput, in_fa_file, taxa_id):
@@ -124,8 +74,7 @@ if __name__ == "__main__":
         sys.exit(2)
     
     
-    #if list_gi_path != "none": # GETTING TAXIDS FROM NAME OR GIs:
-    if not osp.isfile(to_seqid2taxid):
+    if not osp.isfile(to_seqid2taxid): # GETTING TAXIDS FROM NAME OR GIs:
         Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
         id_type = "gi"
         
@@ -134,18 +83,13 @@ if __name__ == "__main__":
                 list_sp = spList_file.read().splitlines()
 
             list_taxids = []
-            for sp_fasta in list_sp:
-                sp_noFasta = osp.splitext(sp_fasta)[0]
-                print("Getting taxid of", sp_noFasta)
-                
-                search_handle = Entrez.esearch(db="taxonomy", term=sp_noFasta)
-                search_results = Entrez.read(search_handle)
-                search_handle.close()
-                
-                taxid = search_results['IdList'][0]
+            for sp_name in list_sp:
+                print("Getting taxid of", sp_name)
+
+                taxid = remote.query_taxid(sp_name)
                 list_taxids.append(taxid)
                 
-                with open(dirIn_db + sp_fasta, 'r') as input_fa_file:
+                with open(dirIn_db + sp_name + '.fasta', 'r') as input_fa_file:
                     map_headers_to_taxid(dirOut, input_fa_file, taxid)
 
 
@@ -222,13 +166,14 @@ if __name__ == "__main__":
                 os.remove(to_seqid2taxid)
 
                 # We solve the problems by querying remotely the taxids
+                # remote.solve("problematic_acc_numbers.txt")
 
 
             print("TOTAL TAXID SEARCH RUNTIME:", t.time() - TAXID_START_TIME)
-            sys.exit()
+            # sys.exit()
 
             # Get list of taxids to give to 'centrifuge-download':
-            set_taxids = list(dict_acc2taxid.values())
+            set_taxids = dict_acc2taxid.values()
             
          
 
