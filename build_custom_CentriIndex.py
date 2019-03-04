@@ -33,27 +33,7 @@ from Bio.Blast import NCBIXML
 from docopt import docopt
 from urllib.error import HTTPError
 import src.check_args as check
-
-
-def accList_to_dict(to_accList, separator):
-    """
-    Convert a file into a dict {acc_number:sequence_ID}
-    """
-    accDict = {}
-    
-    with open(to_accList, 'r') as accList_file:
-        for line in accList_file:
-            seq_id, gi = line.rstrip('\n').split()
-            
-            # if gi not in accDict.keys(): # Handle duplicate GI..
-            if True:
-                accDict[seq_id] = gi
-            else:
-                #print("ERROR with dict conversion\n")
-                continue
-                #sys.exit(2)
-            
-    return accDict
+import src.parallelized as pll
 
     
 def query_taxid(term_to_search):
@@ -105,32 +85,6 @@ def annot_from_title(gi_str):
         return "PROBLEM TAXID SEARCH"
         
     return taxid
-
-
-def keyfunc(row):
-    # `row` is one row of the CSV file.
-    # replace this with the name column.
-    return row[0]
-
-def worker2(chunk):
-    return len(chunk)
-
-
-def pll_taxid_mapping(chunk, set_accession):
-    """
-    """
-    # `chunk` will be a list of CSV rows all with the same name column
-    # replace this with your real computation
-    to_return = []
-    for line in chunk:
-        _, acc_nb, taxid, _ = line.rstrip('\n').split('\t')
-
-        if acc_nb in set_accession:
-            to_return.append((acc_nb, taxid))
-            
-    if to_return: #List not empty
-        return to_return
-    #return (None, )
 
 
 def map_headers_to_taxid(dirOutput, in_fa_file, taxa_id):
@@ -196,37 +150,25 @@ if __name__ == "__main__":
 
 
         elif id_type == "gi":
-            separ = ' ' # Change the seperator if infile has different format
-            #dict_acc = accList_to_dict(list_gi_path, separ)
-            #list_acc = sorted(dict_acc.keys())
-            #set_acc = dict_acc.values()
             TAXID_START_TIME = t.time()
-            #seqid2map_file = open(to_seqid2taxid, 'w')
 
             # Get set
             with open(list_gi_path, 'r') as list_gi_file:
                set_acc = {line.rstrip('\n').split()[1] for line in list_gi_file}
+
             nb_to_find, nb_found = len(set_acc), 0
-            
             to_acc2taxid = osp.join(dirOut, "acc2taxid")
             nb_found = nb_to_find - len(set_acc)
-
-                # Save file:
-                #os.rename(to_seqid2taxid, osp.join(dirOut, 
-                #                                 "saved_seqid2taxid.map"))
-  
-
+            
+            # Parallel local taxid mapping:
             to_gz_acc2taxid = (to_dbs + "nt_db/taxo_18feb19/" +
                                "nucl_wgs.accession2taxid.gz")
             size_chunks = 1000000
             results = []
             pool = mp.Pool(NB_THREADS)
             with gzip.open(to_gz_acc2taxid, 'rt') as acc2taxid_gz:
-            #with open("test.map", 'r') as acc2taxid_gz:
                 acc2taxid_gz.readline() # Skip header
-                #reader = csv.reader(acc2taxid_gz)
-                #chunks = ittls.groupby(reader)
-                worker = partial(pll_taxid_mapping, set_accession=set_acc)
+                worker = partial(pll.taxid_mapping, set_accession=set_acc)
                 print("\nMapping taxids against accession numbers...")
 
                 while True:
@@ -237,10 +179,10 @@ if __name__ == "__main__":
                     if groups[0]: 
                         result = pool.imap(worker, groups)
                         results.extend(result)
-                        #break
                     else:
                         print("TOUT CONSOMME")
                         break
+
             pool.close()
 
             dict_acc2taxid = {} # To convert accession number to taxid
@@ -254,17 +196,16 @@ if __name__ == "__main__":
 
             print("FOUND:", nb_found)
             print("TO_FIND:", nb_to_find, '\n')
-            #assert(nb_found == nb_to_find)
 
             # Write seqid2taxid file:
-            to_seqid2taxid = osp.join(dirOut, "seqid2taxid_test")
+            to_seqid2taxid = osp.join(dirOut, "seqid2taxid")
             found_acc_numbers = dict_acc2taxid.keys()
             set_problems = set()
 
             with open(list_gi_path, 'r') as list_gi_file, \
                  open(to_seqid2taxid, 'w') as seqid2taxid_file:
                 for line in list_gi_file:
-                    seqid, acc_nb = line.rstrip('\n').split()
+                    seqid, acc_nb = line.rstrip('\n').split('\t')
 
                     if acc_nb in found_acc_numbers:
                         seqid2taxid_file.write(seqid + '\t' + 
@@ -279,6 +220,8 @@ if __name__ == "__main__":
                         
                 # We remove the incomplete seq2taxid file:
                 os.remove(to_seqid2taxid)
+
+                # We solve the problems by querying remotely the taxids
 
 
             print("TOTAL TAXID SEARCH RUNTIME:", t.time() - TAXID_START_TIME)

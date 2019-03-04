@@ -33,3 +33,18 @@ def FP_search(tupl_blast_res_and_idx, my_df, taxo_cutoff, taxo_levels):
     
     return ["NOT_FP"]
     
+
+def taxid_mapping(chunk, set_accession):
+    """
+    """
+    # `chunk` will be a list of CSV rows all with the same name column
+    # replace this with your real computation
+    to_return = []
+    for line in chunk:
+        _, acc_nb, taxid, _ = line.rstrip('\n').split('\t')
+
+        if acc_nb in set_accession:
+            to_return.append((acc_nb, taxid))
+            
+    if to_return: #List not empty
+        return to_return
