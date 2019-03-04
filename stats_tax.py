@@ -2,7 +2,17 @@
 
 
 """
-Big supposition is that the SAM file does not contain secondary alignments
+Mapping statistics computation
+
+Usage:
+  main.py (-i <inFile>)
+  
+Options:
+  -h --help                  help
+  --version                  version of the script
+  -i --inFile=input_file     input file
+  
+Remark: Big supposition is that the SAM file does not contain secondary alignments
 """
 
 
@@ -11,6 +21,7 @@ import os.path as osp
 import pandas as pd
 import time as t
 import subprocess as sub
+from docopt import docopt
 from src.shared_fun import handle_strain, in_zymo
 import src.check_args as check
 
@@ -37,9 +48,10 @@ def decompose_SAMflag(str_SAMflag):
 # MAIN:
 if __name__ == "__main__":
     # ARGUMENTS:
+    ARGS = docopt(__doc__, version='0.1')
     #to_report_csv = "cDNA_run1_sampl50k_memb5.csv"
-    infile_path = "test_16S_primLEN_mapped.csv"
-    to_infile, _, _, _, ext_infile = check.infile(to_infile, 
+    # infile_path = "test_16S_primLEN_mapped.csv"
+    to_infile, _, _, _, ext_infile = check.infile(ARGS["--inFile"], 
                                                   ["csv", "tsv", "sam"])
     taxo_cutoff = "genus"
 
@@ -49,36 +61,37 @@ if __name__ == "__main__":
                    'genus', 'species', 'subspecies'] + ["strain"] 
 
     
-    print(ext_infile) ; sys.exit()
-
     SAM_MODE = False
-    if ext_infile == "sam":
+    if ext_infile == ".sam":
       SAM_MODE = True
 
     if SAM_MODE:
+      print("SAM MODE !\n")
       to_samtools = to_apps + "samtools_0.1.19/samtools"
 
       cmd_get_mapped = (to_samtools + " view -S -F 4 " + to_infile +
-                        " | awk '{print $1,$2,$3,$4}'")
-
+                        " | awk '{print $1,$2,$3,$5,$9}'")
+      # print(cmd_get_mapped);sys.exit()
       # Run process and get
-      with open()
-      sub.Popen(cmd_get_mapped.split(), stdout=sub.PIPE).communicate()
+      to_report_csv = "salut.csv"
+      with open(to_report_csv, 'w') as csv_to_write:
+        sub.Popen(cmd_get_mapped.split(), stdout=csv_to_write).communicate()
+      sys.exit()
       START_CSV_PARSING = t.time()
-      
       with open(to_report_csv, 'r') as my_csv:
           dict_csv = {}
 
           for line in my_csv:
             splitted_line = line.rstrip('\n').split('\t')
             readID, SAM_flag, target, MAPQ = splitted_line
-            dict_csv[readID] = {"targets":[target], "MAPQ":[MAPQ]}
-
+            #dict_csv[readID] = {"targets":[target], "MAPQ":[MAPQ]}
+            dict_csv[readID] = {"targets":target, "MAPQ":MAPQ}
             
-            if 2048 in decompose_SAMflag(SAM_flag): # Suppose that NO secondary
+            if 2048 in decompose_SAMflag(SAM_flag): #or 256 in decompose_SAMflag(SAM_flag): # Suppose that NO secondary
               # We supposed that primary is already in the keys
-              dict_csv[readID]["targets"].append(target)
-              dict_csv[readID]["MAPQ"].append(MAPQ)
+              continue # We skîp supplementary alignments
+              #dict_csv[readID]["targets"].append(target)
+              #dict_csv[readID]["MAPQ"].append(MAPQ)
 
               #print(dict_csv) ; sys.exit()
 
@@ -87,7 +100,8 @@ if __name__ == "__main__":
       print("PARSING TIME:", str(t.time() - START_CSV_PARSING))
 
       for readID in dict_csv:
-        if len(dict_csv[readID]["targets"]) # Chimeric alignment
+        pass
+        # if len(dict_csv[readID]["targets"]) # Chimeric alignment
 
       sys.exit()
 
