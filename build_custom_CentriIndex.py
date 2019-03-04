@@ -16,12 +16,12 @@ Options:
   -t --threads=nb_threads  number of threads to use [default: 10]
   
 Remarks: 
-1) The "-a" parameter becomes mandatory if no file called 'seqid2taxid.map' 
+1) The "-a" parameter becomes mandatory if no file called 'seqid2taxid' 
 (mapping sequences IDs with taxids) could be found in 'dirOut/'
 2) This file should be formated like that: 'seqid\tGI'
 """
 
-import sys, os, gzip, re, csv
+import sys, os, gzip, re
 import os.path as osp
 import subprocess as sub
 import time as t
@@ -29,9 +29,7 @@ import multiprocessing as mp
 import itertools as ittls
 from Bio import Entrez
 from functools import partial
-from Bio.Blast import NCBIXML
 from docopt import docopt
-from urllib.error import HTTPError
 import src.remote
 import src.check_args as check
 import src.parallelized as pll
@@ -62,13 +60,10 @@ if __name__ == "__main__":
     NB_THREADS = 15
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     #dirIn_db = "/projets/metage_ONT_2019/databases/Zymo_genomes-ZR160406/"
-    
-    #global seqid2taxid_file
-    #seqid2taxid_file = dirOut + "seqid2taxid.map"
     to_seqid2taxid = osp.join(dirOut, "seqid2taxid")
-    
+
     if not osp.isfile(to_seqid2taxid) and list_gi_path == "none":
-        print("ERROR! As 'dirOut/seqid2taxid.map' could not be found, you " +
+        print("ERROR! As 'dirOut/seqid2taxid' could not be found, you " +
               "need to specify a file containing the gi of the species " + 
               "contained in your database")
         sys.exit(2)
@@ -79,7 +74,9 @@ if __name__ == "__main__":
         id_type = "gi"
         
         if id_type == "sp_name":
-            with open(dirIn_db + "Zymo_spList.txt", 'r') as spList_file:
+            print("MARCHE PAS POUR L'INSTANT !\n")
+            # sys.exit(2)
+            with open(list_gi_path, 'r') as spList_file:
                 list_sp = spList_file.read().splitlines()
 
             list_taxids = []
@@ -177,11 +174,12 @@ if __name__ == "__main__":
             
          
 
-    else:                
+    else:
+        print("FOUND seqid2taxid FILE")
         # Get list of taxids to give to 'centrifuge-download':
         with open(to_seqid2taxid, 'r') as seqid2taxid_file:
-            set_taxids = {line.split()[1] for line in seqid2taxid_file}
-
+            set_taxids = {line.rstrip('\n').split('\t')[1] for line in seqid2taxid_file}
+        #sys.exit()
     
     # GET TAXONOMY FILES:
     if not (osp.isfile(dirOut+"nodes.dmp") and osp.isfile(dirOut+"names.dmp")):
@@ -191,17 +189,17 @@ if __name__ == "__main__":
         print("Done !\n")
     
     else:
-        print("All taxonomic files have been found !\n")
+        print("All taxonomic files have been found in", dirOut, "!\n")
     
     
     # BUILDING INDEX
     path_to_centriBuild = ("/home/sheldon/Applications/centrifuge-master21" +
                                "jan19/build/bin/centrifuge-build")
+    db_name = "rrn"
     cmd_centriBuild = (path_to_centriBuild + " -p 7 --conversion-table " + 
-                       dirOut + "seqid2taxid.map " + "--taxonomy-tree " + 
+                       dirOut + "seqid2taxid " + "--taxonomy-tree " + 
                        dirOut + "nodes.dmp --name-table " + dirOut + 
-                       "names.dmp " + dirIn_db + "Zymo_genomes-ZR160406.fa " + 
-                       dirOut + "Zymo")
+                       "names.dmp " + input_db_path + " " + dirOut + db_name)
     print("Building centrifuge index...")
     with open(dirOut + "centri-build.log", 'w') as centriBuild_log:
         sub.Popen(cmd_centriBuild.split(), stdout=centriBuild_log).communicate()
@@ -209,16 +207,3 @@ if __name__ == "__main__":
     print("Index building finished !")
     print("A log file can be found in", dirOut, '\n')
     
-
-
-# TRASHES:
-#search = Entrez.efetch(id = taxid, db = "taxonomy", retmode = "xml")
-#data = Entrez.read(search)
-#search.close()
-#lineage = {d['Rank']:d['ScientificName'] for d in data[0]['LineageEx'] if d['Rank'] in ['phylum']}
-#for d in data[0]['LineageEx']:
-#    print(d)
-#print(lineage)
-
-#print(search.read())
-
