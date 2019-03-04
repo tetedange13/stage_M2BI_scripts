@@ -36,11 +36,13 @@ def query_taxid(term_to_search):
         return taxid[0]
         
         
-def annot_from_title(gi_str):
+def taxid_from_gb_entry(gi_str):
     """
-    Query the 'nucleotide' db to get the 'annotations' section associated
-    with the GenBank entry corresponding to the GI contained in the 'title'
-    of a BLAST result 
+    Fetch the GenBank entry using the GI of a sequence, read the entry and 
+    parse it with regex, to get the taxid and the ScientificName of the 
+    organism
+    If the taxid cannot be found, the "Taxonomy" db of NCBI is (e-)searched
+    using the ScientificName, to get the taxid 
     """  
     fetch_handle = Entrez.efetch(db="nucleotide", id=gi_str,
                                  rettype='gb', retmode="text")
@@ -67,23 +69,50 @@ def annot_from_title(gi_str):
     return taxid
 
 
-# MAIN:
-if __name__ == "__main__":
+def solve(to_problems_file):
+    """
+    For potential use in another part of the project, as an imported func
+    """
     Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
     acc2taxid_file = open("acc2taxid", 'a')
 
-    with open("problematic_acc_numbers.txt", 'r') as problems:
+    with open(to_problems_file, 'r') as problems:
         for line in problems:
             t.sleep(1) # Make sure not too many requests to NCBI
             acc_nb = line.rstrip('\n')
 
             try:
-                taxid = annot_from_title(acc_nb)
+                taxid = taxid_from_gb_entry(acc_nb)
             except HTTPError:
                 t.sleep(20) # Wait if 502 HTTP error from NCBI
-                taxid = annot_from_title(acc_nb)
+                taxid = taxid_from_gb_entry(acc_nb)
 
             acc2taxid_file.write(acc_nb + '\t' + taxid + '\n')
             #sys.exit()
 
     acc2taxid_file.close()
+
+
+# MAIN:
+if __name__ == "__main__":
+    solve("problematic_acc_numbers.txt")
+    
+    # Je le garde, au cas où:
+    # to_acc2taxid = "acc2taxid"
+    # dict_acc2taxid = {}
+
+    # with open(to_acc2taxid) as acc2taxid_file:
+    #     for line in acc2taxid_file:
+    #         acc_nb, taxid = line.rstrip('\n').split('\t')
+    #         dict_acc2taxid[acc_nb] = taxid
+
+    # list_gi_path = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/" +
+    #                 "metage_ONT_2019/rrn_8feb19/seqIDs_GIs.txt")
+    # to_seqid2taxid = "seqid2taxid"
+
+    # with open(to_seqid2taxid, 'w') as seqid2taxid_file, \
+    #      open(list_gi_path, 'r') as list_gi_file:
+    #      for line in list_gi_file:
+    #         seqid, acc_nb = line.rstrip('\n').split('\t')
+    #         seqid2taxid_file.write(seqid + '\t' + dict_acc2taxid[acc_nb] + 
+    #                                '\n')
