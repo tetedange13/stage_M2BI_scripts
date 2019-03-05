@@ -65,17 +65,13 @@ if __name__ == "__main__":
     #dirIn_db = "/projets/metage_ONT_2019/databases/Zymo_genomes-ZR160406/"
     to_seqid2taxid = osp.join(dirOut, "seqid2taxid")
     conv_headers_Zymo = {
-    "Salmonella_enterica_complete_genome 4.760Mb":"Salmonella enterica",
-    ("CP015447.2 Staphylococcus aureus strain M92 " +
-        "chromosome, complete genome"):"Staphylococcus aureus",
-    "Pseudomonas_aeruginosa_complete_genome 6,792Mb":"Pseudomonas aeruginosa",
-    "Lactobacillus_fermentum_complete_genome 1.905Mb": ("Lactobacillus " +
-        "fermentum"),
-    ("CP017251.1 Escherichia coli strain NADC 5570/86-24/6564" +
-        ", complete sequence"):"Escherichia coli",
+    "Salmonella_enterica_complete_genome":"Salmonella enterica",
+    "CP015447.2":"Staphylococcus aureus",
+    "Pseudomonas_aeruginosa_complete_genome":"Pseudomonas aeruginosa",
+    "Lactobacillus_fermentum_complete_genome":"Lactobacillus fermentum",
+    "CP017251.1":"Escherichia coli",
     "LM1":"Listeria monocytogenes",
-    "CP015998.1 Enterococcus faecalis strain AMB05 genome":("Enterococcus " +
-        "faecalis"),
+    "CP015998.1":"Enterococcus faecalis",
     "BS.pilon.polished.v3.ST170922":"Bacillus subtilis",
     "SC":"Saccharomyces cerevisiae",
     "CN":"Cryptococcus neoformans"
@@ -90,12 +86,11 @@ if __name__ == "__main__":
     
     
     if not osp.isfile(to_seqid2taxid): # GETTING TAXIDS FROM NAME OR GIs:
+        print("Mapping taxids to seqids...")
         Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
         id_type = "sp_name"
         
         if id_type == "sp_name":
-            print("MARCHE PAS POUR L'INSTANT !\n")
-            # sys.exit(2)
             with open(list_gi_path, 'r') as headers_file:
                 list_headers = headers_file.read().splitlines()
 
@@ -115,12 +110,13 @@ if __name__ == "__main__":
                                            '\n')
 
                 else:
-                    sp_name = conv_headers_Zymo[header]
+                    splitted_header = header.split()[0]
+                    sp_name = conv_headers_Zymo[splitted_header]
                     taxid = remote.query_taxid(sp_name)
-                    seqid2taxid_file.write(header + '\t' + taxid + '\n')
+                    seqid2taxid_file.write(splitted_header + '\t' + taxid + 
+                                           '\n')
 
             seqid2taxid_file.close()
-            sys.exit()
 
 
         elif id_type == "gi":
@@ -203,16 +199,16 @@ if __name__ == "__main__":
             # sys.exit()
 
             # Get list of taxids to give to 'centrifuge-download':
-            set_taxids = dict_acc2taxid.values()
-            
-         
+            # set_taxids = dict_acc2taxid.values()
+
 
     else:
         print("FOUND seqid2taxid FILE")
-        # Get list of taxids to give to 'centrifuge-download':
-        with open(to_seqid2taxid, 'r') as seqid2taxid_file:
-            set_taxids = {line.rstrip('\n').split('\t')[1] for line in seqid2taxid_file}
-        #sys.exit()
+
+    # Get list of taxids to give to 'centrifuge-download':
+    with open(to_seqid2taxid, 'r') as seqid2taxid_file:
+        set_taxids = {line.rstrip('\n').split('\t')[1] for line in seqid2taxid_file}
+
     
     # GET TAXONOMY FILES:
     if not (osp.isfile(dirOut+"nodes.dmp") and osp.isfile(dirOut+"names.dmp")):
