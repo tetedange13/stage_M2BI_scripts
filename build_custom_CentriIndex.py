@@ -33,6 +33,7 @@ from docopt import docopt
 import src.remote
 import src.check_args as check
 import src.parallelized as pll
+import src.remote as remote
 
 
 def map_headers_to_taxid(dirOutput, in_fa_file, taxa_id):
@@ -58,9 +59,28 @@ if __name__ == "__main__":
     dirOut = ARGS["--dirOut"]                            
     list_gi_path = ARGS["--accList"]
     NB_THREADS = 15
+
+    # Common variables:
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     #dirIn_db = "/projets/metage_ONT_2019/databases/Zymo_genomes-ZR160406/"
     to_seqid2taxid = osp.join(dirOut, "seqid2taxid")
+    conv_headers_Zymo = {
+    "Salmonella_enterica_complete_genome 4.760Mb":"Salmonella enterica",
+    ("CP015447.2 Staphylococcus aureus strain M92 " +
+        "chromosome, complete genome"):"Staphylococcus aureus",
+    "Pseudomonas_aeruginosa_complete_genome 6,792Mb":"Pseudomonas aeruginosa",
+    "Lactobacillus_fermentum_complete_genome 1.905Mb": ("Lactobacillus " +
+        "fermentum"),
+    ("CP017251.1 Escherichia coli strain NADC 5570/86-24/6564" +
+        ", complete sequence"):"Escherichia coli",
+    "LM1":"Listeria monocytogenes",
+    "CP015998.1 Enterococcus faecalis strain AMB05 genome":("Enterococcus " +
+        "faecalis"),
+    "BS.pilon.polished.v3.ST170922":"Bacillus subtilis",
+    "SC":"Saccharomyces cerevisiae",
+    "CN":"Cryptococcus neoformans"
+    }
+
 
     if not osp.isfile(to_seqid2taxid) and list_gi_path == "none":
         print("ERROR! As 'dirOut/seqid2taxid' could not be found, you " +
@@ -71,23 +91,36 @@ if __name__ == "__main__":
     
     if not osp.isfile(to_seqid2taxid): # GETTING TAXIDS FROM NAME OR GIs:
         Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
-        id_type = "gi"
+        id_type = "sp_name"
         
         if id_type == "sp_name":
             print("MARCHE PAS POUR L'INSTANT !\n")
             # sys.exit(2)
-            with open(list_gi_path, 'r') as spList_file:
-                list_sp = spList_file.read().splitlines()
+            with open(list_gi_path, 'r') as headers_file:
+                list_headers = headers_file.read().splitlines()
 
-            list_taxids = []
-            for sp_name in list_sp:
-                print("Getting taxid of", sp_name)
+            seqid2taxid_file = open(to_seqid2taxid, 'w')
+            dict_seqid2taxid = {}
+            for header in list_headers:
+                start_header = header[0:2]
+                if start_header == "SC" or start_header == "CN":
+                # Saccharomyces_cerevisiae or Cryptococcus_neoformans
+                    if start_header not in dict_seqid2taxid.keys():
+                        sp_name = conv_headers_Zymo[start_header]
+                        queried_taxid = remote.query_taxid(sp_name)
+                        dict_seqid2taxid[start_header] = queried_taxid
 
-                taxid = remote.query_taxid(sp_name)
-                list_taxids.append(taxid)
-                
-                with open(dirIn_db + sp_name + '.fasta', 'r') as input_fa_file:
-                    map_headers_to_taxid(dirOut, input_fa_file, taxid)
+                    seqid2taxid_file.write(header + '\t' + 
+                                           dict_seqid2taxid[start_header] + 
+                                           '\n')
+
+                else:
+                    sp_name = conv_headers_Zymo[header]
+                    taxid = remote.query_taxid(sp_name)
+                    seqid2taxid_file.write(header + '\t' + taxid + '\n')
+
+            seqid2taxid_file.close()
+            sys.exit()
 
 
         elif id_type == "gi":
