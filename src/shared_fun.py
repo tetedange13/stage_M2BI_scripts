@@ -25,7 +25,7 @@ def handle_strain(sp_name, rank):
         return (sp_name, rank)
         
 
-def in_zymo(sp_name, sp_rank, taxo_level_cutoff, list_taxo):
+def in_zymo(sp_name, sp_rank, taxo_level_cutoff):
     """
     Given the rank of a BLAST hit and a sublist of taxonomic levels, deducted
     from the cutoff (for the taxonomic level),  returns a string in 
@@ -38,7 +38,7 @@ def in_zymo(sp_name, sp_rank, taxo_level_cutoff, list_taxo):
                  'Lactobacillus fermentum', 'Enterococcus faecalis',
                  'Pseudomonas aeruginosa', 'Salmonella enterica']
     list_euk = ['Cryptococcus neoformans', 'Saccharomyces cerevisiae']                  
-    sublist_taxo = list_taxo[list_taxo.index(taxo_level_cutoff): ]
+    sublist_taxo = taxo_levels[taxo_levels.index(taxo_level_cutoff): ]
     
     # We handle the issues associated with 'strains'
     new_name, rew_rank = handle_strain(sp_name, sp_rank)
@@ -53,3 +53,7 @@ def in_zymo(sp_name, sp_rank, taxo_level_cutoff, list_taxo):
     
     else:
         return 'FN'
+
+global taxo_levels 
+taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
+               'genus', 'species', 'subspecies'] + ["strain"]

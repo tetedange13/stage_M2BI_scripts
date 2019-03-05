@@ -39,6 +39,7 @@ from Bio.Blast import NCBIXML
 from docopt import docopt
 import src.check_args as check
 import src.parallelized as pll
+import src.shared_fun as shared
 
 
 def query_taxid(term_to_search):
@@ -230,8 +231,6 @@ def handle_strain(sp_name, rank):
 # MAIN:
 if __name__ == "__main__":
     # COMMON VARIABLES AND PATHES:
-    taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
-                   'genus', 'species', 'subspecies'] + ["strain"]   
     ARGS = docopt(__doc__, version='0.1')
     input_fq_path, input_fq_base = check.infile(ARGS["--inputFqFile"],
                                                 ('fastq', 'fq'))[0:2]
@@ -240,7 +239,7 @@ if __name__ == "__main__":
     NB_MIN_BY_CLUST = check.input_nb(ARGS["--minMemb"]) # Needed later
     NB_ALT = int(check.input_nb(ARGS["--altHits"]))
     taxonomic_level_cutoff = check.acceptable_str(ARGS["--taxoCut"], 
-                                                  taxo_levels + ['none'])
+                                                  shared.taxo_levels + ['none'])
     
     # CHECK ARGS FOR ALTERNATIVE HITS AND CUTOFF:
     if NB_ALT == 1 and taxonomic_level_cutoff == "none":
@@ -391,8 +390,7 @@ if __name__ == "__main__":
         res_handle = open(out_xml_file)
         blast_records = NCBIXML.parse(res_handle)
         func_parallel = partial(pll.FP_search, my_df=df_hits,
-                                taxo_cutoff=taxonomic_level_cutoff,
-                                taxo_levels=taxo_levels)
+                                taxo_cutoff=taxonomic_level_cutoff)
                                 
         pool_searchFP = mp.Pool(int(NB_THREADS))
         list_FP_tmp = pool_searchFP.map(func_parallel, enumerate(blast_records))
@@ -442,9 +440,6 @@ if __name__ == "__main__":
     # Results saved to a report file:
     df_hits.to_csv(report_filename, sep='\t')
 
-    #os.system("rm -r " + out_clust_fa) # Cleaning
-
-    for salut in df_hits.index:
-        print(df_hits.loc[salut, :])
+    os.system("rm -r " + out_clust_fa) # Cleaning
     print("\n\nTOTAL RUNTIME:", t.time() - START_TIME)  
       
