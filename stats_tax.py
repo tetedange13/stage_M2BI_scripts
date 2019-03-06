@@ -26,27 +26,54 @@ from docopt import docopt
 from src.shared_fun import handle_strain, in_zymo
 import src.check_args as check
 import src.shared_fun as shared
+import sklearn.metrics as skm
 
 
-def to_full_name(header):
-    converter = {"BS":"Bacillus subtilis", "SA":"Staphylococcus aureus",
-                 "EF":"Enterococcus faecalis", "LB":"Lactobacillus fermentum", 
-                 "LM":"Listeria monocytogenes",  "PA":"Pseudomonas aeruginosa", 
-                 "SE":"Salmonella enterica", "EC":"Escherichia coli", 
-                 "CN":"Cryptococcus neoformans", 
-                 "SC":"Saccharomyces cerevisiae"}
-    return converter[header[0:2]]
-       
+def dict_stats_to_vectors(dict_res):
+  """
+  Convert a 
+  """
+  vec_pred, vec_true = [], []
 
-def decompose_SAMflag(str_SAMflag):
-    """
-    Inspired from: http://broadinstitute.github.io/picard/explain-flags.html
-    """
-    list_2powers = [2**idx for idx in range(12)]
-    
-    return [power for power in list_2powers if int(str_SAMflag) & power]
-    
-   
+  for res in dict_res:
+    if res == 'TP':
+      vec_true.extend([True]*dict_res[res]) # Positive in reality
+      vec_pred.extend([True]*dict_res[res]) # Well predicted positive
+    elif res == 'TN':
+      vec_true.extend([False]*dict_res[res]) # Negative in reality
+      vec_pred.extend([False]*dict_res[res]) # Well predicted negative
+    elif res == 'FN':
+      vec_true.extend([True]*dict_res[res]) # Positive in reality
+      vec_pred.extend([False]*dict_res[res]) # But predicted negative
+    else: # if res == 'FP':
+      vec_true.extend([False]*dict_res[res]) # Negative in reality
+      vec_pred.extend([True]*dict_res[res]) # But predicted positive
+
+  return (vec_true, vec_pred)
+
+
+def calc_recall(dict_res):
+  # Sensitivity, hit rate, recall, or true positive rate
+  # TPR = TP/(TP+FN)
+  # Specificity or true negative rate
+  # TNR = TN/(TN+FP) 
+  # Precision or positive predictive value
+  # PPV = TP/(TP+FP)
+  # Negative predictive value
+  # NPV = TN/(TN+FN)
+  # Fall out or false positive rate
+  # FPR = FP/(FP+TN)
+  # False negative rate
+  # FNR = FN/(TP+FN)
+  # False discovery rate
+  # FDR = FP/(TP+FP)
+  # Overall accuracy
+  # ACC = (TP+TN)/(TP+FP+FN+TN)
+
+  # return dict_res['TP']/(dict_res['TP'] + dict_res['FP'])
+  return dict_res['TP']/(dict_res['TP'] + dict_res['FN'])
+
+
 
 # MAIN:
 if __name__ == "__main__":
@@ -73,6 +100,9 @@ if __name__ == "__main__":
     elif "toRrn" in infile_base:
       print("DB GUESSED: rrn")
       to_seqid2taxid = to_dbs + "Centri_idxes/rrn/seqid2taxid"
+    elif "toSilva" in infile_base:
+      print("DB GUESSED: SILVA")
+      to_seqid2taxid = to_dbs + "Centri_idxes/SILVA/seqid2taxid"
     else:
       print("Unkown database !\n")
       sys.exit(2)
@@ -115,22 +145,36 @@ if __name__ == "__main__":
       START_SAM_PARSING = t.time()
       compt_alignments = 0
       input_samfile = pys.AlignmentFile(to_infile, "r")
+      # print(input_samfile.references);sys.exit()
 
-
-      for alignment in input_samfile.fetch(until_eof=True):
-        if alignment.is_unmapped:
-          dict_stats['FN'] += 1 # Count unmapped = 'FN'
-        else:
-          if alignment.is_supplementary or alignment.is_secondary:
+      my_set = set()
+      for alignment in input_samfile.fetch(until_eof=True):        
+        if alignment.is_supplementary or alignment.is_secondary:
+            print(alignment.query_name);sys.exit()
             continue # We skip secondary or supplementary alignments
 
+        else:
+          compt_alignments += 1
+          if alignment.is_unmapped:
+            dict_stats['FN'] += 1 # Count unmapped = 'FN'
+
           else:
-            compt_alignments += 1
-            if alignment.mapping_quality >= mapq_cutoff:
-              current_taxid = dict_seqid2taxid[alignment.reference_name]
+
+            if alignment.mapping_quality >= mapq_cutoff: #and alignment.template_length > une_certaine_valeur
+              ref_name = alignment.reference_name
+              my_set.add(ref_name)
+              #if re_name in ref_name:
+              #  print(ref_name)
+              # ref_name = alignment.reference_name.split()[0]
+              current_taxid = dict_seqid2taxid[ref_name]
               assert(current_taxid) # If taxid not 'None'
               sp_name = taxfoo.get_taxid_name(current_taxid)
               current_rank = taxfoo.get_taxid_rank(current_taxid)
+              if "SC" in alignment.reference_name:
+                pass
+                #print(in_zymo(sp_name, current_rank, taxo_cutoff))
+                #print(alignment.__str__());sys.exit()
+              
               assert(sp_name) # Not 'None'
               assert(current_rank) # Not 'None'
               res = in_zymo(sp_name, current_rank, taxo_cutoff)
@@ -141,76 +185,25 @@ if __name__ == "__main__":
       input_samfile.close()
       print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
       sum_stats = sum(dict_stats.values())
-      print(dict_stats)
+      print(sorted(dict_stats.items()))
       print("TOT ALIGNMENTS:", compt_alignments, " | ", "SUM STATS:", 
             sum_stats)
       assert(sum_stats == compt_alignments)
+
+      y_true, y_pred = dict_stats_to_vectors(dict_stats)
+      print("SENSITIVITY:", round(skm.recall_score(y_true, y_pred), 4))
+      print("PRECISION:", round(skm.precision_score(y_true, y_pred), 4))
+      print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
+      # print(skm.classification_report(y_true, y_pred))
+      print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
       sys.exit()
-
-      to_samtools = to_apps + "samtools_0.1.19/samtools"
-
-      # cmd_get_mapped = (to_samtools + " view -S -F 4 " + to_infile +
-      #                   " | awk '{print $1,$2,$3,$5,$9}'")
-
-      to_report_csv = "tmp.csv"
-      if not osp.isfile(to_report_csv):
-        cmd_get_mapped = to_samtools + " view -S -F 4 " + to_infile
-        cmd_count_unmapped = (to_samtools + " view -S -f 4 " + to_infile + 
-                              " | wc -l")
-
-        # Run process and get
-        
-        print("Writting new SAM file with mapped reads only and count",
-              "unmapped reads...")
-        START_WRITTING = t.time()
-        with open(to_report_csv, 'w') as csv_to_write:
-          sub.Popen(cmd_get_mapped.split(), stdout=csv_to_write).communicate()
-        
-        nb_unmapped = sub.Popen(cmd_count_unmapped.split(), 
-                                stdout=sub.PIPE).communicate()[0]
-        print()
-        print("WRITTING AND COUNTING TIME:", str(t.time() - START_WRITTING))
-
-      # EXTRACT INFO FROM SAM:
-      print("Extracting information from SAM file...")
-      START_CSV_PARSING = t.time()
-      with open(to_report_csv, 'r') as my_csv:
-          dict_csv = {}
-
-          for line in my_csv:
-            splitted_line = line.rstrip('\n').split('\t')[0:9]
-            readID, SAM_flag, target, _, MAPQ, _, _, _, tlen = splitted_line
-            #dict_csv[readID] = {"targets":[target], "MAPQ":[MAPQ]}
-            if readID not in dict_csv.keys():
-              dict_csv[readID] = {"targets":target, "MAPQ":MAPQ, 
-                                  "len_align":tlen}
-            
-            
-            else:
-              if 2048 in decompose_SAMflag(SAM_flag): #or 256 in decompose_SAMflag(SAM_flag): # Suppose that NO secondary
-              # We suppose that primary is already in the keys
-                continue # We skîp supplementary alignments
-                #dict_csv[readID]["targets"].append(target)
-                #dict_csv[readID]["MAPQ"].append(MAPQ)
-
-      #df_hits = pd.read_csv(to_report_csv, sep='\t', index_col=0, header=None)
-      #print(dict_csv)  
-      print("PARSING TIME:", str(t.time() - START_CSV_PARSING))
-      os.remove(to_report_csv)
-      sys.exit()
-
-      # for readID in dict_csv:
-        # pass
-        # if len(dict_csv[readID]["targets"]) # Chimeric alignment
-
       
 
-    else:
-      df_hits = pd.read_csv(to_report_csv, sep='\t', index_col=0, header=0)
+    # else:
+    #   df_hits = pd.read_csv(to_report_csv, sep='\t', index_col=0, header=0)
 
     # CALCULATION OF STATISTICS:
     cutoff_e_val = 0.00001 # 10^-5
-    # dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
     dict_str = {'TN': "Assigned et un de nos Euk",
                 'TP': "Assigned et une de nos bactos !",
                 'FN': "Not assigned ! (cutoff plus bas dans l'arbre)",
