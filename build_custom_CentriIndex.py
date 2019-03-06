@@ -58,7 +58,7 @@ if __name__ == "__main__":
                                  ('fa', 'fasta', 'fq', 'fastq'))[0]
     dirOut = ARGS["--dirOut"]                            
     list_gi_path = ARGS["--accList"]
-    NB_THREADS = 15
+    NB_THREADS = int(check.input_nb(ARGS["-threads-"]))
 
     # Common variables:
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
@@ -209,7 +209,7 @@ if __name__ == "__main__":
     with open(to_seqid2taxid, 'r') as seqid2taxid_file:
         set_taxids = {line.rstrip('\n').split('\t')[1] for line in seqid2taxid_file}
 
-    
+
     # GET TAXONOMY FILES:
     if not (osp.isfile(dirOut+"nodes.dmp") and osp.isfile(dirOut+"names.dmp")):
         print("\nGenerating taxonomic tree and names...")
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     # BUILDING INDEX
     path_to_centriBuild = ("/home/sheldon/Applications/centrifuge-master21" +
                                "jan19/build/bin/centrifuge-build")
-    db_name = "rrn"
+    db_name = "silva"
     cmd_centriBuild = (path_to_centriBuild + " -p 7 --conversion-table " + 
                        dirOut + "seqid2taxid " + "--taxonomy-tree " + 
                        dirOut + "nodes.dmp --name-table " + dirOut + 
