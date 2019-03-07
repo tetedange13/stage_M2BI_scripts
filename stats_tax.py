@@ -27,11 +27,63 @@ from src.shared_fun import handle_strain, in_zymo
 import src.check_args as check
 import src.shared_fun as shared
 import sklearn.metrics as skm
+import src.remote as remote
 
+
+def eval_align(ref_name, dict_conv_seqid2taxid, taxonomic_cutoff):
+  """
+  """
+  current_taxid = dict_conv_seqid2taxid[ref_name]
+  sp_name = taxfoo.get_taxid_name(current_taxid)
+  
+  if not sp_name:
+    to_problems_file = "problematic_ref_names.txt"
+    if osp.isfile(to_problems_file):
+      with open(to_problems_file, 'r') as problems:
+        set_taxids = {line.rstrip('\n').split('\t')[1] for line in problems}
+    else:
+      set_taxids = set()
+
+    if str(current_taxid) not in set_taxids:
+      queried_taxid = remote.query_taxid(ref_name) # Try remotely
+      if queried_taxid == "TAXO_NOT_FOUND": # Still not working
+        with open(to_problems_file, 'a') as problems:
+          problems.write(ref_name + '\t' + str(current_taxid) + '\n')
+        print("PROBLEM with:", ref_name, "of associated taxid:", current_taxid)
+        return None
+      else:
+        print("LE REMOTE A MARCHE !")
+        sp_name = taxfoo.get_taxid_name(queried_taxid)
+
+    else:
+      return None
+
+  assert(sp_name) # Not 'None'
+  current_rank = taxfoo.get_taxid_rank(current_taxid)
+  assert(current_rank) # Not 'None'
+
+  return in_zymo(sp_name, current_rank, taxonomic_cutoff)
+
+
+def handle_suppl(list_align_obj, dict_conv_seqid2taxid):
+  """
+  Take an alignment that has been found to be supplementary
+  """
+  set_taxid_target = set()
+  for alignment in list_align_obj:
+    taxid_target = dict_conv_seqid2taxid[alignment.reference_name]
+    assert(taxid_target) # If taxid not 'None'
+    set_taxid_target.add(taxid_target)
+  
+  # Different target name, but corresponding to the same taxid ?
+  if len(set_taxid_target) == 1: 
+    return alignment.reference_name # Any target name is OK
+  return False
 
 def dict_stats_to_vectors(dict_res):
   """
-  Convert a 
+  Generate 2 vectors (for predicted and true values), based on the values of
+  'TP', 'FP' etc contained in the dict_res given as arg
   """
   vec_pred, vec_true = [], []
 
@@ -121,12 +173,13 @@ if __name__ == "__main__":
       else:
         mapq_cutoff = int(check.input_nb(num_cutoff, "-c cutoff (MAPQ here)"))
 
-      # To dump files:
+      # Path to dump files:
       nodes_path = to_dbs + "nt_db/taxo_18feb19/nodes.dmp"
       names_path = to_dbs + "nt_db/taxo_18feb19/names.dmp"
       
       print("Loading taxonomic Python module...")
       import src.ncbi_taxdump_utils as taxo_utils
+      global taxfoo
       taxfoo = taxo_utils.NCBI_TaxonomyFoo()
       taxfoo.load_nodes_dmp(nodes_path)
       taxfoo.load_names_dmp(names_path)
@@ -147,48 +200,72 @@ if __name__ == "__main__":
       input_samfile = pys.AlignmentFile(to_infile, "r")
       # print(input_samfile.references);sys.exit()
 
-      my_set = set()
-      for alignment in input_samfile.fetch(until_eof=True):        
-        if alignment.is_supplementary or alignment.is_secondary:
-            print(alignment.query_name);sys.exit()
-            continue # We skip secondary or supplementary alignments
-
-        else:
-          compt_alignments += 1
-          if alignment.is_unmapped:
+      dict_gethered = {}
+      dict_count = {"unmapped":0, "suppl_entries":0, "goods":0, "mapped":0}
+      for alignment in input_samfile.fetch(until_eof=True):
+        if alignment.is_unmapped:
+            dict_count["unmapped"] += 1
             dict_stats['FN'] += 1 # Count unmapped = 'FN'
+        else:
+          if alignment.is_supplementary:
+            dict_count["suppl_entries"] += 1
+            dict_gethered[alignment.query_name].append(alignment)
 
           else:
-
-            if alignment.mapping_quality >= mapq_cutoff: #and alignment.template_length > une_certaine_valeur
-              ref_name = alignment.reference_name
-              my_set.add(ref_name)
-              #if re_name in ref_name:
-              #  print(ref_name)
-              # ref_name = alignment.reference_name.split()[0]
-              current_taxid = dict_seqid2taxid[ref_name]
-              assert(current_taxid) # If taxid not 'None'
-              sp_name = taxfoo.get_taxid_name(current_taxid)
-              current_rank = taxfoo.get_taxid_rank(current_taxid)
-              if "SC" in alignment.reference_name:
-                pass
-                #print(in_zymo(sp_name, current_rank, taxo_cutoff))
-                #print(alignment.__str__());sys.exit()
+            #if alignment.query_name in dict_gethered.keys():
+              #print(alignment.__str__)
+              #print(dict_gethered[alignment.query_name].__str__)
+              #sys.exit()
+            assert(alignment.query_name not in dict_gethered.keys())
+            dict_gethered[alignment.query_name] = [alignment]
+            dict_count["goods"] += 1
+            
               
-              assert(sp_name) # Not 'None'
-              assert(current_rank) # Not 'None'
-              res = in_zymo(sp_name, current_rank, taxo_cutoff)
-              dict_stats[res] += 1
-            else:
-              dict_stats['FN'] += 1
-
       input_samfile.close()
       print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
-      sum_stats = sum(dict_stats.values())
+
+
+      # Handling supplementaries:
+      print("\nHandling supplementary alignments...")
+      # # Check if all lists have length >= 2:
+      # assert(all(map(lambda a_list:len(a_list) > 1, dict_gethered.values())))
+
+      list_res_suppl_handling = []
+      for query_name in dict_gethered:
+        dict_count["mapped"] += 1
+        align_list = dict_gethered[query_name]
+
+        if len(align_list) > 1: # supplementary allignment
+          res_suppl_handling = handle_suppl(align_list, dict_seqid2taxid)
+          list_res_suppl_handling.append(res_suppl_handling)
+
+        else: # Normal linear case
+          align_obj = align_list[0]
+          if align_obj.is_secondary: # We skip secondary
+            pass
+          elif align_obj.mapping_quality >= mapq_cutoff: #and align_obj.template_length > cutoff:
+            # ref_name = alignment.reference_name
+            # ref_name = alignment.reference_name.split()[0]
+            res_eval = eval_align(align_obj.reference_name, dict_seqid2taxid, 
+                                  taxo_cutoff)
+            #dict_stats[res_eval] += 1
+          else:
+            dict_stats['FN'] += 1
+
+      nb_evaluated_suppl = len(list_res_suppl_handling)
+      print("TOTAL EVALUATED (grouped) SUPPL:", nb_evaluated_suppl)
+      mergeable_suppl = [elem for elem in list_res_suppl_handling if elem]
+      print("MERGEABLE SUPPL:", len(mergeable_suppl))    
+      print("REST (not mergeable):", nb_evaluated_suppl - len(mergeable_suppl))
+      print(dict_count)
+      sys.exit()
+
+      total_suppl_entries = dict_count["suppl_entries"] + nb_evaluated_suppl
+      sum_stats, sum_counts = sum(dict_stats.values()),sum(dict_count.values())
       print(sorted(dict_stats.items()))
-      print("TOT ALIGNMENTS:", compt_alignments, " | ", "SUM STATS:", 
-            sum_stats)
-      assert(sum_stats == compt_alignments)
+      #print("TOT ALIGNMENTS:", sum_counts, " | ", "SUM STATS:", 
+      #      sum_stats)
+      #assert(sum_stats == dict_count["mapped"] + dict_count["unmapped"])
 
       y_true, y_pred = dict_stats_to_vectors(dict_stats)
       print("SENSITIVITY:", round(skm.recall_score(y_true, y_pred), 4))
