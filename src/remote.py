@@ -16,14 +16,23 @@ from Bio import Entrez
 from urllib.error import HTTPError
 
 
+Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
+
+
 def query_taxid(term_to_search):
     """
     Given a term to search the taxonomy db, this function return the taxid
     (if one can be found)
     """
-    search_handle = Entrez.esearch(db="Taxonomy", term=term_to_search)
-    res_search = Entrez.read(search_handle)
-    search_handle.close()
+    try:
+        search_handle = Entrez.esearch(db="Taxonomy", term=term_to_search)
+        res_search = Entrez.read(search_handle)
+        search_handle.close()
+    except HTTPError:
+        t.sleep(20) # Wait if 502 HTTP error from NCBI
+        search_handle = Entrez.esearch(db="Taxonomy", term=term_to_search)
+        res_search = Entrez.read(search_handle)
+        search_handle.close()
     
     taxid = res_search["IdList"]
     nb_taxid = len(taxid)
