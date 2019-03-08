@@ -37,6 +37,7 @@ def eval_align(ref_name, dict_conv_seqid2taxid, taxonomic_cutoff):
   sp_name = taxfoo.get_taxid_name(current_taxid)
   
   if not sp_name:
+    #print(ref_name, "HAS A PROBLEM !");sys.exit()
     to_problems_file = "problematic_ref_names.txt"
     if osp.isfile(to_problems_file):
       with open(to_problems_file, 'r') as problems:
@@ -105,22 +106,14 @@ def dict_stats_to_vectors(dict_res):
 
 
 def calc_recall(dict_res):
-  # Sensitivity, hit rate, recall, or true positive rate
-  # TPR = TP/(TP+FN)
-  # Specificity or true negative rate
-  # TNR = TN/(TN+FP) 
-  # Precision or positive predictive value
-  # PPV = TP/(TP+FP)
-  # Negative predictive value
-  # NPV = TN/(TN+FN)
-  # Fall out or false positive rate
-  # FPR = FP/(FP+TN)
-  # False negative rate
-  # FNR = FN/(TP+FN)
-  # False discovery rate
-  # FDR = FP/(TP+FP)
-  # Overall accuracy
-  # ACC = (TP+TN)/(TP+FP+FN+TN)
+  # Sensitivity, hit rate, recall, or true positive rate: TPR = TP/(TP+FN)
+  # Specificity or true negative rate: TNR = TN/(TN+FP) 
+  # Precision or positive predictive value: PPV = TP/(TP+FP)
+  # Negative predictive value: NPV = TN/(TN+FN)
+  # Fall out or false positive rate: FPR = FP/(FP+TN)
+  # False negative rate: FNR = FN/(TP+FN)
+  # False discovery rate: FDR = FP/(TP+FP)
+  # Overall accuracy: ACC = (TP+TN)/(TP+FP+FN+TN)
 
   # return dict_res['TP']/(dict_res['TP'] + dict_res['FP'])
   return dict_res['TP']/(dict_res['TP'] + dict_res['FN'])
@@ -144,20 +137,6 @@ if __name__ == "__main__":
     # taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
     #                'genus', 'species', 'subspecies'] + ["strain"] 
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
-
-    # Guess the database used:
-    if "toZymo" in infile_base:
-      print("DB GUESSED: Zymo")
-      to_seqid2taxid = to_dbs + "Centri_idxes/Zymo/seqid2taxid"
-    elif "toRrn" in infile_base:
-      print("DB GUESSED: rrn")
-      to_seqid2taxid = to_dbs + "Centri_idxes/rrn/seqid2taxid"
-    elif "toSilva" in infile_base:
-      print("DB GUESSED: SILVA")
-      to_seqid2taxid = to_dbs + "Centri_idxes/SILVA/seqid2taxid"
-    else:
-      print("Unkown database !\n")
-      sys.exit(2)
     
     # Guess the "mode":
     SAM_MODE = False
@@ -166,6 +145,20 @@ if __name__ == "__main__":
 
     if SAM_MODE:
       print("SAM MODE !\n")
+
+      # Guess the database used:
+      if "toZymo" in infile_base:
+        print("DB GUESSED: Zymo")
+        to_seqid2taxid = to_dbs + "Centri_idxes/Zymo/seqid2taxid"
+      elif "toRrn" in infile_base:
+        print("DB GUESSED: rrn")
+        to_seqid2taxid = to_dbs + "Centri_idxes/rrn/seqid2taxid"
+      elif "toSilva" in infile_base:
+        print("DB GUESSED: SILVA")
+        to_seqid2taxid = to_dbs + "Centri_idxes/SILVA/seqid2taxid"
+      else:
+        print("Unkown database !\n")
+        sys.exit(2)
 
       # Set MAPQ cutoff:
       if num_cutoff == 'none':
@@ -198,7 +191,6 @@ if __name__ == "__main__":
       START_SAM_PARSING = t.time()
       compt_alignments = 0
       input_samfile = pys.AlignmentFile(to_infile, "r")
-      # print(input_samfile.references);sys.exit()
 
       dict_gethered = {}
       dict_count = {"unmapped":0, "suppl_entries":0, "goods":0, "mapped":0}
@@ -212,13 +204,8 @@ if __name__ == "__main__":
             dict_gethered[alignment.query_name].append(alignment)
 
           else:
-            #if alignment.query_name in dict_gethered.keys():
-              #print(alignment.__str__)
-              #print(dict_gethered[alignment.query_name].__str__)
-              #sys.exit()
             assert(alignment.query_name not in dict_gethered.keys())
             dict_gethered[alignment.query_name] = [alignment]
-            dict_count["goods"] += 1
             
               
       input_samfile.close()
@@ -248,99 +235,115 @@ if __name__ == "__main__":
             # ref_name = alignment.reference_name.split()[0]
             res_eval = eval_align(align_obj.reference_name, dict_seqid2taxid, 
                                   taxo_cutoff)
-            #dict_stats[res_eval] += 1
+            # if res_eval == "TN": print("TNNNNEEG:", align_obj.reference_name, dict_seqid2taxid[align_obj.reference_name])
+            dict_stats[res_eval] += 1
+            dict_count["goods"] += 1
           else:
             dict_stats['FN'] += 1
 
+
+      # Print results of suppl handling:
+      print(dict_count)
       nb_evaluated_suppl = len(list_res_suppl_handling)
       print("TOTAL EVALUATED (grouped) SUPPL:", nb_evaluated_suppl)
       mergeable_suppl = [elem for elem in list_res_suppl_handling if elem]
       print("MERGEABLE SUPPL:", len(mergeable_suppl))    
       print("REST (not mergeable):", nb_evaluated_suppl - len(mergeable_suppl))
-      print(dict_count)
-      sys.exit()
+      print()
 
       total_suppl_entries = dict_count["suppl_entries"] + nb_evaluated_suppl
       sum_stats, sum_counts = sum(dict_stats.values()),sum(dict_count.values())
       print(sorted(dict_stats.items()))
       #print("TOT ALIGNMENTS:", sum_counts, " | ", "SUM STATS:", 
       #      sum_stats)
-      #assert(sum_stats == dict_count["mapped"] + dict_count["unmapped"])
+      tot_counted = (dict_count["mapped"] + dict_count["unmapped"] - 
+                     nb_evaluated_suppl)
+      assert(sum_stats == tot_counted)
+      dict_to_convert = dict_stats
 
-      y_true, y_pred = dict_stats_to_vectors(dict_stats)
-      print("SENSITIVITY:", round(skm.recall_score(y_true, y_pred), 4))
-      print("PRECISION:", round(skm.precision_score(y_true, y_pred), 4))
-      print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
-      # print(skm.classification_report(y_true, y_pred))
-      print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
-      sys.exit()
+
+    else:
+      df_hits = pd.read_csv(to_infile, sep='\t', index_col=0, header=0)
+      dict_stats_propag = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
+
+      # CALCULATION OF STATISTICS:
+      cutoff_e_val = 0.00001 # 10^-5
+      dict_str = {'TN': "Assigned et un de nos Euk",
+                  'TP': "Assigned et une de nos bactos !",
+                  'FN': "Not assigned ! (cutoff plus bas dans l'arbre)",
+                  'FP': "Assigned, mais appartient pas à la Zymo"}
       
+      rownames_df = df_hits.index
+      rows_clust = [rowname for rowname in rownames_df if "clust" in rowname]
 
-    # else:
-    #   df_hits = pd.read_csv(to_report_csv, sep='\t', index_col=0, header=0)
+      for clust in rows_clust:
+          splitted_remarks = df_hits.loc[clust, "remarks"].split()
+          e_val  = splitted_remarks[-1]
+          score = splitted_remarks[-2]
+          
+          print("\n", clust, " | ", "E-VAL:", e_val, " | ", "SCORE:", score)   
+          print("NAME:", df_hits.loc[clust, "topHit"], " | ", 
+                "RANK:", df_hits.loc[clust, "rank"])
+          
+          if float(e_val) < cutoff_e_val:
+              res = in_zymo(df_hits.loc[clust, "topHit"], 
+                            df_hits.loc[clust, "rank"], 
+                            taxo_cutoff)
+              
+              dict_stats_propag[res] += df_hits.loc[clust, "nb_memb"]
+              # if res == "FP":
+              if False:
+                  # Look for alternative hits:
+                  print("Not within the Zymo --> Look for alternative hit!")
 
-    # CALCULATION OF STATISTICS:
-    cutoff_e_val = 0.00001 # 10^-5
-    dict_str = {'TN': "Assigned et un de nos Euk",
-                'TP': "Assigned et une de nos bactos !",
-                'FN': "Not assigned ! (cutoff plus bas dans l'arbre)",
-                'FP': "Assigned, mais appartient pas à la Zymo"}
-    
-    rownames_df = df_hits.index
-    rows_clust = [rowname for rowname in rownames_df if "clust" in rowname]
-
-    for clust in rows_clust:
-        splitted_remarks = df_hits.loc[clust, "remarks"].split()
-        e_val  = splitted_remarks[-1]
-        score = splitted_remarks[-2]
-        
-        print("\n", clust, " | ", "E-VAL:", e_val, " | ", "SCORE:", score)   
-        print("NAME:", df_hits.loc[clust, "topHit"], " | ", 
-              "RANK:", df_hits.loc[clust, "rank"])
-        
-        if float(e_val) < cutoff_e_val:
-            res = in_zymo(df_hits.loc[clust, "topHit"], 
-                          df_hits.loc[clust, "rank"], 
-                          taxo_cutoff)
-            
-
-            if res == "FP":
-                # Look for alternative hits:
-                print("Not within the Zymo --> Look for alternative hit!")
-
-                alt_index = "alt_" + clust.split('_')[1] + "_1"
-                if alt_index in rownames_df:
-                    res_alt = in_zymo(df_hits.loc[alt_index, "topHit"], 
-                                      df_hits.loc[alt_index, "rank"], 
-                                      taxo_cutoff)
-                    if res_alt != 'FP':
-                        print("FOUND:", df_hits.loc[alt_index, "topHit"], 
-                              " | ", "RANK:", df_hits.loc[alt_index, "rank"]) 
-                        remarks_alt = df_hits.loc[alt_index, "remarks"]
-                        splitted_remarks_alt = remarks_alt.split()
-                        print(alt_index, " | ", "E-VAL:", 
-                              splitted_remarks_alt[-1], " | ", "SCORE:", 
-                              splitted_remarks_alt[-2])        
-                    else:
-                        print("The alternative is still a FP")
-                        
-                    dict_stats[res_alt] += 1
-                    print(dict_str[res_alt])
-                        
-                else:
-                    print("NO alternative hit available")
-                    dict_stats[res] += 1 
-                    
-            
-            else:
-                print(dict_str[res])
-                dict_stats[res] += 1    
-        
-        
-        else: # Not assigned because of the e_val cutoff
-            print("Not assigned because of the e_val cutoff")
-            dict_stats['FN'] += 1     
-    
-    print(dict_stats)
+                  alt_index = "alt_" + clust.split('_')[1] + "_1"
+                  if alt_index in rownames_df:
+                      res_alt = in_zymo(df_hits.loc[alt_index, "topHit"], 
+                                        df_hits.loc[alt_index, "rank"], 
+                                        taxo_cutoff)
+                      if res_alt != 'FP':
+                          print("FOUND:", df_hits.loc[alt_index, "topHit"], 
+                                " | ", "RANK:", df_hits.loc[alt_index, "rank"]) 
+                          remarks_alt = df_hits.loc[alt_index, "remarks"]
+                          splitted_remarks_alt = remarks_alt.split()
+                          print(alt_index, " | ", "E-VAL:", 
+                                splitted_remarks_alt[-1], " | ", "SCORE:", 
+                                splitted_remarks_alt[-2])        
+                      else:
+                          print("The alternative is still a FP")
+                          
+                      dict_stats[res_alt] += 1
+                      print(dict_str[res_alt])
+                          
+                  else:
+                      print("NO alternative hit available")
+                      dict_stats[res] += 1 
+                      
+              
+              else:
+                  # print(dict_str[res])
+                  dict_stats[res] += 1    
+          
+          
+          else: # Not assigned because of the e_val cutoff
+              print("Not assigned because of the e_val cutoff")
+              dict_stats['FN'] += 1     
+      
+      print()
+      print("AVANT PROPAG:", dict_stats)
+      print("APRES PROPAG:", dict_stats_propag)
+      assert(sum(dict_stats.values()) == len(rows_clust))
+      assert(sum(dict_stats_propag.values()) == sum(df_hits["nb_memb"]))
+      dict_to_convert = dict_stats_propag
 
 
+
+    # COMPUTE METRICS:
+    y_true, y_pred = dict_stats_to_vectors(dict_to_convert)
+    print("SENSITIVITY:", round(skm.recall_score(y_true, y_pred), 4))
+    print("PRECISION:", round(skm.precision_score(y_true, y_pred), 4))
+    print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
+    # print(skm.classification_report(y_true, y_pred))
+    print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
+    print("ACCURACY:", round(skm.accuracy_score(y_true, y_pred), 4))
+    print()
