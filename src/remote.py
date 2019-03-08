@@ -57,9 +57,12 @@ def taxid_from_gb_entry(gi_str):
                                  rettype='gb', retmode="text")
     fetch_res = fetch_handle.read()
     fetch_handle.close()
+    if not fetch_res:
+        print("GI NOT FOUND:", gi_str)
+        sys.exit()
     
-    # Regex for taxid  :
-    regex_taxid = re.compile("(:?\/db_xref=\"taxon:)([0-9]+)")  
+    # Regex for taxid:
+    regex_taxid = re.compile("(:?\/db_xref=\"taxon:)([0-9]+)")
     match_taxid = regex_taxid.search(fetch_res)
     
     # If we got the ScientficName, but not the taxid:
@@ -69,6 +72,13 @@ def taxid_from_gb_entry(gi_str):
     else:
         print("Taxid NOT contented within this GenBank entry !") 
         print("   --> Requesting it on the NCBI Taxonomy db")
+        
+        regex_organism = re.compile("(:?ORGANISM\s+)(.*)")
+        match_organism = regex_organism.search(fetch_res)
+        assert(match_organism)
+        
+        organism = match_organism.group(2)
+        assert(organism != "metagenome")
         taxid = query_taxid(organism)
     
     # Case where the taxid CANNOT be queried with the given ScientificName  
