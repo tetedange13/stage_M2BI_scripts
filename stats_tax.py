@@ -23,11 +23,10 @@ import time as t
 import subprocess as sub
 import pysam as pys
 from docopt import docopt
-from src.shared_fun import handle_strain, in_zymo
 import src.check_args as check
-import src.shared_fun as shared
 import sklearn.metrics as skm
 import src.remote as remote
+import matplotlib.pyplot as plt
 
 
 def eval_align(ref_name, dict_conv_seqid2taxid, taxonomic_cutoff):
@@ -105,7 +104,17 @@ def dict_stats_to_vectors(dict_res):
   return (vec_true, vec_pred)
 
 
-def calc_recall(dict_res):
+def calc_specificity(dict_res):
+  # Negative predictive value: NPV = TN/(TN+FN)
+  # FOR = 1 - NPV
+  try:
+    spe = dict_res['TN']/(dict_res['TN'] + dict_res['FP'])
+    return spe
+  except ZeroDivisionError:
+    return 'NA'
+
+
+def calc_FOR(dict_res):
   # Sensitivity, hit rate, recall, or true positive rate: TPR = TP/(TP+FN)
   # Specificity or true negative rate: TNR = TN/(TN+FP) 
   # Precision or positive predictive value: PPV = TP/(TP+FP)
@@ -116,7 +125,11 @@ def calc_recall(dict_res):
   # Overall accuracy: ACC = (TP+TN)/(TP+FP+FN+TN)
 
   # return dict_res['TP']/(dict_res['TP'] + dict_res['FP'])
-  return dict_res['TP']/(dict_res['TP'] + dict_res['FN'])
+  try:
+    spe = dict_res['FN']/(dict_res['TN'] + dict_res['FN'])
+    return spe
+  except ZeroDivisionError:
+    return 'NA'
 
 
 
@@ -166,16 +179,11 @@ if __name__ == "__main__":
       else:
         mapq_cutoff = int(check.input_nb(num_cutoff, "-c cutoff (MAPQ here)"))
 
-      # Path to dump files:
-      nodes_path = to_dbs + "nt_db/taxo_18feb19/nodes.dmp"
-      names_path = to_dbs + "nt_db/taxo_18feb19/names.dmp"
+      
       
       print("Loading taxonomic Python module...")
-      import src.ncbi_taxdump_utils as taxo_utils
-      global taxfoo
-      taxfoo = taxo_utils.NCBI_TaxonomyFoo()
-      taxfoo.load_nodes_dmp(nodes_path)
-      taxfoo.load_names_dmp(names_path)
+      import src.shared_fun as shared
+      tupl_sets_levels = shared.define(taxo_cutoff)      
       print("Taxonomic Python module loaded !\n")
 
 
@@ -218,6 +226,7 @@ if __name__ == "__main__":
       # assert(all(map(lambda a_list:len(a_list) > 1, dict_gethered.values())))
 
       list_res_suppl_handling = []
+      list_MAPQ = []
       for query_name in dict_gethered:
         dict_count["mapped"] += 1
         align_list = dict_gethered[query_name]
@@ -228,13 +237,20 @@ if __name__ == "__main__":
 
         else: # Normal linear case
           align_obj = align_list[0]
+          list_MAPQ.append(align_obj.mapping_quality)
           if align_obj.is_secondary: # We skip secondary
             pass
           elif align_obj.mapping_quality >= mapq_cutoff: #and align_obj.template_length > cutoff:
             # ref_name = alignment.reference_name
             # ref_name = alignment.reference_name.split()[0]
-            res_eval = eval_align(align_obj.reference_name, dict_seqid2taxid, 
-                                  taxo_cutoff)
+            #res_eval = eval_align(align_obj.reference_name, dict_seqid2taxid, 
+            #                      taxo_cutoff)
+            taxid = dict_seqid2taxid[align_obj.reference_name]
+            res_eval = shared.in_zymo(taxid, taxo_cutoff, tupl_sets_levels)
+            if res_eval == "TN":
+              print("\n\nSALUT")
+              print(shared.in_zymo(taxid, taxo_cutoff, tupl_sets_levels))
+              print(align_obj.reference_name);sys.exit()
             # if res_eval == "TN": print("TNNNNEEG:", align_obj.reference_name, dict_seqid2taxid[align_obj.reference_name])
             dict_stats[res_eval] += 1
             dict_count["goods"] += 1
@@ -242,8 +258,18 @@ if __name__ == "__main__":
             dict_stats['FN'] += 1
 
 
+      right_xlim = max(list_MAPQ)
+      # assert(all(map(lambda x: x<=left_xlim, list_MAPQ)))
+      plt.hist(list_MAPQ, bins=int(256/1), log=True)
+      plt.xlim((-1, right_xlim))
+      plt.show()
+      
       # Print results of suppl handling:
       print(dict_count)
+      tot_reads = dict_count["mapped"] + dict_count["unmapped"]
+      print("% UNMAPPED:", dict_count["unmapped"]/tot_reads*100)
+      print()
+
       nb_evaluated_suppl = len(list_res_suppl_handling)
       print("TOTAL EVALUATED (grouped) SUPPL:", nb_evaluated_suppl)
       mergeable_suppl = [elem for elem in list_res_suppl_handling if elem]
@@ -253,12 +279,11 @@ if __name__ == "__main__":
 
       total_suppl_entries = dict_count["suppl_entries"] + nb_evaluated_suppl
       sum_stats, sum_counts = sum(dict_stats.values()),sum(dict_count.values())
+      assert(sum_stats == tot_reads - nb_evaluated_suppl)
       print(sorted(dict_stats.items()))
       #print("TOT ALIGNMENTS:", sum_counts, " | ", "SUM STATS:", 
       #      sum_stats)
-      tot_counted = (dict_count["mapped"] + dict_count["unmapped"] - 
-                     nb_evaluated_suppl)
-      assert(sum_stats == tot_counted)
+      
       dict_to_convert = dict_stats
 
 
@@ -340,8 +365,14 @@ if __name__ == "__main__":
 
     # COMPUTE METRICS:
     y_true, y_pred = dict_stats_to_vectors(dict_to_convert)
-    print("SENSITIVITY:", round(skm.recall_score(y_true, y_pred), 4))
-    print("PRECISION:", round(skm.precision_score(y_true, y_pred), 4))
+    sensitivity = round(skm.recall_score(y_true, y_pred), 4)
+    NPV = 1 - calc_FOR(dict_to_convert)
+    precision = round(skm.precision_score(y_true, y_pred), 4)
+
+    print("SENSITIVITY:", sensitivity, " | ", "FNR:", 1 - sensitivity)
+    print("FOR:", 1 - NPV, " | ", "NPV:", NPV)
+    print("SPECIFICITY:", calc_specificity(dict_to_convert))
+    print("PRECISION:", precision, " | ", "FDR:", 1 - precision)
     print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
     # print(skm.classification_report(y_true, y_pred))
     print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
