@@ -4,55 +4,76 @@
 Aims to containing functions common to several scripts
 """
 
+import src.ncbi_taxdump_utils as taxo_utils
 
-def handle_strain(sp_name, rank):
+global taxfoo
+taxfoo = taxo_utils.NCBI_TaxonomyFoo()
+
+# Path to dump files:
+to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
+nodes_path = to_dbs + "nt_db/taxo_18feb19/nodes.dmp"
+names_path = to_dbs + "nt_db/taxo_18feb19/names.dmp"
+taxfoo.load_nodes_dmp(nodes_path)
+taxfoo.load_names_dmp(names_path)
+
+
+def define(taxonomic_cutoff):
     """
-    Deals with 'strain' issues (i.e. organism that have been detected beyond
-    the species level taxonomicly = 'no rank')
-    Cut the name of the organism to keep only the 'Genus species' form and
-    attributes the taxonomic level 'strain' to it  
     """
-    splitted_sp_name = sp_name.split()
-    
-    # Very likely a strain if name longer than 2:
-    if rank in ('no rank', 'subspecies') and len(splitted_sp_name) > 2: 
-        # We keep only the first 2 words and we change the rank value:
-        new_sp_name, new_rank_sp = " ".join(splitted_sp_name[0:2]), "strain"
-        
-        return (new_sp_name, new_rank_sp)
-    
-    else:
-        return (sp_name, rank)
+    # Define the species contained within the Zymo mock community:
+    dict_prok = {'Listeria monocytogenes':1639, 
+                 'Bacillus subtilis':1423, 
+                 'Staphylococcus aureus':1280, 
+                 'Escherichia coli':562, 
+                 'Lactobacillus fermentum':1613, 
+                 'Enterococcus faecalis':1351,
+                 'Pseudomonas aeruginosa':287, 
+                 'Salmonella enterica':28901
+                 }
+    dict_euk = {'Cryptococcus neoformans':5207, 
+                'Saccharomyces cerevisiae':4932
+                }
+
+    set_prok = set()
+    for prok_name in dict_prok:
+        lineage_prok = taxfoo.get_lineage_as_dict(dict_prok[prok_name])
+        prok_taxo_level = lineage_prok[taxonomic_cutoff]
+        assert(prok_taxo_level)
+        set_prok.add(prok_taxo_level)
+
+    set_euk = set()
+    for euk_name in dict_euk:
+        lineage_euk = taxfoo.get_lineage_as_dict(dict_euk[euk_name])
+        euk_taxo_level = lineage_euk[taxonomic_cutoff]
+        assert(euk_taxo_level)
+        set_euk.add(euk_taxo_level)
+
+    return (set_prok, set_euk)
         
 
-def in_zymo(sp_name, sp_rank, taxo_level_cutoff):
+def in_zymo(current_taxid, taxonomic_cutoff, tupl_sets):
     """
     Given the rank of a BLAST hit and a sublist of taxonomic levels, deducted
     from the cutoff (for the taxonomic level),  returns a string in 
     ('TP', 'FP', 'TN', 'FN').
     The name of the species is also requiered, to deal with 'strain' cases
     """
-    # Define the species contained within the Zymo mock community:
-    list_prok = ['Listeria monocytogenes', 'Bacillus subtilis', 
-                 'Staphylococcus aureus', 'Escherichia coli', 
-                 'Lactobacillus fermentum', 'Enterococcus faecalis',
-                 'Pseudomonas aeruginosa', 'Salmonella enterica']
-    list_euk = ['Cryptococcus neoformans', 'Saccharomyces cerevisiae']                  
-    sublist_taxo = taxo_levels[taxo_levels.index(taxo_level_cutoff): ]
-    
-    # We handle the issues associated with 'strains'
-    new_name, rew_rank = handle_strain(sp_name, sp_rank)
-    
-    if rew_rank in sublist_taxo: # Assigned
-        if new_name in list_prok:
-            return 'TP' # True Positive
-        elif new_name in list_euk:
-            return 'TN' # True Negative
-        else:
-            return 'FP' # False Positive
-    
-    else:
-        return 'FN'
+    print(taxfoo.get_taxid_name(current_taxid))
+    current_lineage = taxfoo.get_lineage_as_dict(current_taxid)
+    if taxonomic_cutoff not in current_lineage.keys():
+        return 'FP' # Taxo cutoff not in keys, so False Positive ?
+
+    current_taxo_level = current_lineage[taxonomic_cutoff]
+    assert(current_taxo_level)
+
+    set_levels_prok, set_levels_euk = tupl_sets
+    if current_taxo_level in set_levels_prok: # TP
+        return 'TP'
+    elif current_taxo_level in set_levels_euk: # TN
+        return 'TN'
+    else: # False Positive
+        return 'FP'
+
 
 global taxo_levels 
 taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
