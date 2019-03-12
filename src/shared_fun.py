@@ -17,7 +17,7 @@ taxfoo.load_nodes_dmp(nodes_path)
 taxfoo.load_names_dmp(names_path)
 
 
-def define(taxonomic_cutoff):
+def generate_sets_zymo(taxonomic_cutoff):
     """
     """
     # Define the species contained within the Zymo mock community:
@@ -28,11 +28,9 @@ def define(taxonomic_cutoff):
                  'Lactobacillus fermentum':1613, 
                  'Enterococcus faecalis':1351,
                  'Pseudomonas aeruginosa':287, 
-                 'Salmonella enterica':28901
-                 }
+                 'Salmonella enterica':28901}
     dict_euk = {'Cryptococcus neoformans':5207, 
-                'Saccharomyces cerevisiae':4932
-                }
+                'Saccharomyces cerevisiae':4932}
 
     set_prok = set()
     for prok_name in dict_prok:
@@ -58,7 +56,7 @@ def in_zymo(current_taxid, taxonomic_cutoff, tupl_sets):
     ('TP', 'FP', 'TN', 'FN').
     The name of the species is also requiered, to deal with 'strain' cases
     """
-    print(taxfoo.get_taxid_name(current_taxid))
+    # print(taxfoo.get_taxid_name(current_taxid), end='\t')
     current_lineage = taxfoo.get_lineage_as_dict(current_taxid)
     if taxonomic_cutoff not in current_lineage.keys():
         return 'FP' # Taxo cutoff not in keys, so False Positive ?
@@ -73,8 +71,3 @@ def in_zymo(current_taxid, taxonomic_cutoff, tupl_sets):
         return 'TN'
     else: # False Positive
         return 'FP'
-
-
-global taxo_levels 
-taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
-               'genus', 'species', 'subspecies'] + ["strain"]
