@@ -87,8 +87,7 @@ if __name__ == "__main__":
     
     if not osp.isfile(to_seqid2taxid): # GETTING TAXIDS FROM NAME OR GIs:
         print("Mapping taxids to seqids...")
-        Entrez.email = "felix.deslacs@gmail.com" # Config Entrez
-        id_type = "sp_name"
+        id_type = "gi"
         
         if id_type == "sp_name":
             with open(list_gi_path, 'r') as headers_file:
@@ -126,6 +125,7 @@ if __name__ == "__main__":
             with open(list_gi_path, 'r') as list_gi_file:
                set_acc = {line.rstrip('\n').split()[1] for line in list_gi_file}
 
+            print(set_acc);sys.exit()
             nb_to_find, nb_found = len(set_acc), 0
             to_acc2taxid = osp.join(dirOut, "acc2taxid")
             nb_found = nb_to_find - len(set_acc)
@@ -156,13 +156,14 @@ if __name__ == "__main__":
             pool.close()
 
             dict_acc2taxid = {} # To convert accession number to taxid
-            with open(to_acc2taxid, 'w') as toto:
+            with open(to_acc2taxid, 'w') as acc2taxid_file:
                 for res in results:
                     if res: # If res different from 'None'
                         for found_acc_nb, found_taxid in res:
                             dict_acc2taxid[found_acc_nb] = found_taxid
                             nb_found += 1
-                            toto.write(found_acc_nb + '\t' + found_taxid + '\n')
+                            acc2taxid_file.write(found_acc_nb + '\t' + 
+                                                 found_taxid + '\n')
 
             print("FOUND:", nb_found)
             print("TO_FIND:", nb_to_find, '\n')
