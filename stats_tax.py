@@ -22,11 +22,24 @@ import pandas as pd
 import time as t
 import subprocess as sub
 import pysam as pys
+import multiprocessing as mp
+from functools import partial
 from docopt import docopt
-import src.check_args as check
 import sklearn.metrics as skm
-import src.remote as remote
 import matplotlib.pyplot as plt
+import src.remote as remote
+import src.check_args as check
+import src.parallelized as pll
+
+
+def alignment_to_dict(align_obj):
+  """
+  Takes an alignment instance and return a dict containing the needed
+  attributes (only)
+  """
+  return {"mapq":align_obj.mapping_quality,
+          "ref_name": align_obj.reference_name,
+          "is_second":align_obj.is_secondary}
 
 
 def eval_align(ref_name, dict_conv_seqid2taxid, taxonomic_cutoff):
@@ -65,21 +78,6 @@ def eval_align(ref_name, dict_conv_seqid2taxid, taxonomic_cutoff):
   return in_zymo(sp_name, current_rank, taxonomic_cutoff)
 
 
-def handle_suppl(list_align_obj, dict_conv_seqid2taxid):
-  """
-  Take an alignment that has been found to be supplementary
-  """
-  set_taxid_target = set()
-  for alignment in list_align_obj:
-    taxid_target = dict_conv_seqid2taxid[alignment.reference_name]
-    assert(taxid_target) # If taxid not 'None'
-    set_taxid_target.add(taxid_target)
-  
-  # Different target name, but corresponding to the same taxid ?
-  if len(set_taxid_target) == 1: 
-    return alignment.reference_name # Any target name is OK
-  return False
-
 def dict_stats_to_vectors(dict_res):
   """
   Generate 2 vectors (for predicted and true values), based on the values of
@@ -105,8 +103,14 @@ def dict_stats_to_vectors(dict_res):
 
 
 def calc_specificity(dict_res):
+    # Sensitivity, hit rate, recall, or true positive rate: TPR = TP/(TP+FN)
+  # Specificity or true negative rate: TNR = TN/(TN+FP) 
+  # Precision or positive predictive value: PPV = TP/(TP+FP)
   # Negative predictive value: NPV = TN/(TN+FN)
-  # FOR = 1 - NPV
+  # Fall out or false positive rate: FPR = FP/(FP+TN)
+  # False negative rate: FNR = FN/(TP+FN)
+  # False discovery rate: FDR = FP/(TP+FP)
+  # Overall accuracy: ACC = (TP+TN)/(TP+FP+FN+TN)
   try:
     spe = dict_res['TN']/(dict_res['TN'] + dict_res['FP'])
     return spe
@@ -115,14 +119,8 @@ def calc_specificity(dict_res):
 
 
 def calc_FOR(dict_res):
-  # Sensitivity, hit rate, recall, or true positive rate: TPR = TP/(TP+FN)
-  # Specificity or true negative rate: TNR = TN/(TN+FP) 
-  # Precision or positive predictive value: PPV = TP/(TP+FP)
   # Negative predictive value: NPV = TN/(TN+FN)
-  # Fall out or false positive rate: FPR = FP/(FP+TN)
-  # False negative rate: FNR = FN/(TP+FN)
-  # False discovery rate: FDR = FP/(TP+FP)
-  # Overall accuracy: ACC = (TP+TN)/(TP+FP+FN+TN)
+  # FOR = 1 - NPV
 
   # return dict_res['TP']/(dict_res['TP'] + dict_res['FP'])
   try:
@@ -150,6 +148,11 @@ if __name__ == "__main__":
     # taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
     #                'genus', 'species', 'subspecies'] + ["strain"] 
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
+
+    print("Loading taxonomic Python module...")
+    import src.shared_fun as shared
+    tupl_sets_levels = shared.generate_sets_zymo(taxo_cutoff)      
+    print("Taxonomic Python module loaded !\n")
     
     # Guess the "mode":
     SAM_MODE = False
@@ -179,13 +182,6 @@ if __name__ == "__main__":
       else:
         mapq_cutoff = int(check.input_nb(num_cutoff, "-c cutoff (MAPQ here)"))
 
-      
-      
-      print("Loading taxonomic Python module...")
-      import src.shared_fun as shared
-      tupl_sets_levels = shared.define(taxo_cutoff)      
-      print("Taxonomic Python module loaded !\n")
-
 
       # To make correspond operon number and taxid:
       dict_seqid2taxid = {}
@@ -207,13 +203,14 @@ if __name__ == "__main__":
             dict_count["unmapped"] += 1
             dict_stats['FN'] += 1 # Count unmapped = 'FN'
         else:
+          dict_align = alignment_to_dict(alignment)
           if alignment.is_supplementary:
             dict_count["suppl_entries"] += 1
-            dict_gethered[alignment.query_name].append(alignment)
+            dict_gethered[alignment.query_name].append(dict_align)
 
           else:
             assert(alignment.query_name not in dict_gethered.keys())
-            dict_gethered[alignment.query_name] = [alignment]
+            dict_gethered[alignment.query_name] = [dict_align]
             
               
       input_samfile.close()
@@ -221,52 +218,49 @@ if __name__ == "__main__":
 
 
       # Handling supplementaries:
+      TOTO = t.time()
       print("\nHandling supplementary alignments...")
       # # Check if all lists have length >= 2:
       # assert(all(map(lambda a_list:len(a_list) > 1, dict_gethered.values())))
+      # ref_name = alignment.reference_name
+      # ref_name = alignment.reference_name.split()[0]
+
+      dict_count["mapped"] = len(dict_gethered.keys())
+      partial_func = partial(pll.SAM_taxo_cassif, 
+                             conv_seqid2taxid=dict_seqid2taxid, 
+                             cutoff_on_mapq=mapq_cutoff, 
+                             taxonomic_cutoff=taxo_cutoff, 
+                             tupl_sets=tupl_sets_levels)
+      my_pool = mp.Pool(15)
+      results = my_pool.map(partial_func, dict_gethered.values())
+      my_pool.close()
+
+      # Serial version:
+      # for query_name in dict_gethered:
+      #   results.append(pll_salut(dict_gethered[query_name], dict_seqid2taxid, 
+      #                   mapq_cutoff, taxo_cutoff, tupl_sets_levels))
+
 
       list_res_suppl_handling = []
       list_MAPQ = []
-      for query_name in dict_gethered:
-        dict_count["mapped"] += 1
-        align_list = dict_gethered[query_name]
+      for res_eval in results:
+        if res_eval[0] == 'suppl':
+          list_res_suppl_handling.append(res_eval[1])
+        else:
+          dict_stats[res_eval[0]] += 1
+          list_MAPQ.append(res_eval[1])
+      print("SUPPL HANDLING TIME:", t.time()-TOTO)
 
-        if len(align_list) > 1: # supplementary allignment
-          res_suppl_handling = handle_suppl(align_list, dict_seqid2taxid)
-          list_res_suppl_handling.append(res_suppl_handling)
-
-        else: # Normal linear case
-          align_obj = align_list[0]
-          list_MAPQ.append(align_obj.mapping_quality)
-          if align_obj.is_secondary: # We skip secondary
-            pass
-          elif align_obj.mapping_quality >= mapq_cutoff: #and align_obj.template_length > cutoff:
-            # ref_name = alignment.reference_name
-            # ref_name = alignment.reference_name.split()[0]
-            #res_eval = eval_align(align_obj.reference_name, dict_seqid2taxid, 
-            #                      taxo_cutoff)
-            taxid = dict_seqid2taxid[align_obj.reference_name]
-            res_eval = shared.in_zymo(taxid, taxo_cutoff, tupl_sets_levels)
-            if res_eval == "TN":
-              print("\n\nSALUT")
-              print(shared.in_zymo(taxid, taxo_cutoff, tupl_sets_levels))
-              print(align_obj.reference_name);sys.exit()
-            # if res_eval == "TN": print("TNNNNEEG:", align_obj.reference_name, dict_seqid2taxid[align_obj.reference_name])
-            dict_stats[res_eval] += 1
-            dict_count["goods"] += 1
-          else:
-            dict_stats['FN'] += 1
-
-
-      right_xlim = max(list_MAPQ)
-      # assert(all(map(lambda x: x<=left_xlim, list_MAPQ)))
-      plt.hist(list_MAPQ, bins=int(256/1), log=True)
-      plt.xlim((-1, right_xlim))
-      plt.show()
+      # right_xlim = max(list_MAPQ)
+      # # assert(all(map(lambda x: x<=left_xlim, list_MAPQ)))
+      # plt.hist(list_MAPQ, bins=int(256/1), log=True)
+      # plt.xlim((-1, right_xlim))
+      # plt.show()
       
       # Print results of suppl handling:
       print(dict_count)
       tot_reads = dict_count["mapped"] + dict_count["unmapped"]
+      print("TOT READS:", tot_reads)
       print("% UNMAPPED:", dict_count["unmapped"]/tot_reads*100)
       print()
 
@@ -311,43 +305,45 @@ if __name__ == "__main__":
                 "RANK:", df_hits.loc[clust, "rank"])
           
           if float(e_val) < cutoff_e_val:
-              res = in_zymo(df_hits.loc[clust, "topHit"], 
-                            df_hits.loc[clust, "rank"], 
-                            taxo_cutoff)
-              
-              dict_stats_propag[res] += df_hits.loc[clust, "nb_memb"]
-              # if res == "FP":
-              if False:
-                  # Look for alternative hits:
-                  print("Not within the Zymo --> Look for alternative hit!")
+            res = shared.in_zymo(df_hits.loc[clust, "taxid"], taxo_cutoff, 
+                                 tupl_sets_levels)
+            # res = in_zymo(df_hits.loc[clust, "topHit"], 
+            #               df_hits.loc[clust, "rank"], 
+            #               taxo_cutoff)
+            
+            dict_stats_propag[res] += df_hits.loc[clust, "nb_memb"]
+            # if res == "FP":
+            if False:
+                # Look for alternative hits:
+                print("Not within the Zymo --> Look for alternative hit!")
 
-                  alt_index = "alt_" + clust.split('_')[1] + "_1"
-                  if alt_index in rownames_df:
-                      res_alt = in_zymo(df_hits.loc[alt_index, "topHit"], 
-                                        df_hits.loc[alt_index, "rank"], 
-                                        taxo_cutoff)
-                      if res_alt != 'FP':
-                          print("FOUND:", df_hits.loc[alt_index, "topHit"], 
-                                " | ", "RANK:", df_hits.loc[alt_index, "rank"]) 
-                          remarks_alt = df_hits.loc[alt_index, "remarks"]
-                          splitted_remarks_alt = remarks_alt.split()
-                          print(alt_index, " | ", "E-VAL:", 
-                                splitted_remarks_alt[-1], " | ", "SCORE:", 
-                                splitted_remarks_alt[-2])        
-                      else:
-                          print("The alternative is still a FP")
-                          
-                      dict_stats[res_alt] += 1
-                      print(dict_str[res_alt])
-                          
-                  else:
-                      print("NO alternative hit available")
-                      dict_stats[res] += 1 
-                      
-              
-              else:
-                  # print(dict_str[res])
-                  dict_stats[res] += 1    
+                alt_index = "alt_" + clust.split('_')[1] + "_1"
+                if alt_index in rownames_df:
+                    res_alt = in_zymo(df_hits.loc[alt_index, "topHit"], 
+                                      df_hits.loc[alt_index, "rank"], 
+                                      taxo_cutoff)
+                    if res_alt != 'FP':
+                        print("FOUND:", df_hits.loc[alt_index, "topHit"], 
+                              " | ", "RANK:", df_hits.loc[alt_index, "rank"]) 
+                        remarks_alt = df_hits.loc[alt_index, "remarks"]
+                        splitted_remarks_alt = remarks_alt.split()
+                        print(alt_index, " | ", "E-VAL:", 
+                              splitted_remarks_alt[-1], " | ", "SCORE:", 
+                              splitted_remarks_alt[-2])        
+                    else:
+                        print("The alternative is still a FP")
+                        
+                    dict_stats[res_alt] += 1
+                    print(dict_str[res_alt])
+                        
+                else:
+                    print("NO alternative hit available")
+                    dict_stats[res] += 1 
+                    
+            
+            else:
+                # print(dict_str[res])
+                dict_stats[res] += 1    
           
           
           else: # Not assigned because of the e_val cutoff
@@ -370,11 +366,11 @@ if __name__ == "__main__":
     precision = round(skm.precision_score(y_true, y_pred), 4)
 
     print("SENSITIVITY:", sensitivity, " | ", "FNR:", 1 - sensitivity)
-    print("FOR:", 1 - NPV, " | ", "NPV:", NPV)
     print("SPECIFICITY:", calc_specificity(dict_to_convert))
     print("PRECISION:", precision, " | ", "FDR:", 1 - precision)
     print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
     # print(skm.classification_report(y_true, y_pred))
+    print("FOR:", 1 - NPV, " | ", "NPV:", NPV)
     print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
     print("ACCURACY:", round(skm.accuracy_score(y_true, y_pred), 4))
     print()
