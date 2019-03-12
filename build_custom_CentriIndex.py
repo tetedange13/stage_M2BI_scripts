@@ -58,7 +58,7 @@ if __name__ == "__main__":
                                  ('fa', 'fasta', 'fq', 'fastq'))[0]
     dirOut = ARGS["--dirOut"]                            
     list_gi_path = ARGS["--accList"]
-    NB_THREADS = int(check.input_nb(ARGS["-threads-"]))
+    NB_THREADS = int(check.input_nb(ARGS["--threads"]))
 
     # Common variables:
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
@@ -203,7 +203,7 @@ if __name__ == "__main__":
 
 
     else:
-        print("FOUND seqid2taxid FILE")
+        print("--> FOUND seqid2taxid file")
 
     # Get list of taxids to give to 'centrifuge-download':
     with open(to_seqid2taxid, 'r') as seqid2taxid_file:
@@ -213,12 +213,16 @@ if __name__ == "__main__":
     # GET TAXONOMY FILES:
     if not (osp.isfile(dirOut+"nodes.dmp") and osp.isfile(dirOut+"names.dmp")):
         print("\nGenerating taxonomic tree and names...")
-        os.system("centrifuge-download -o " + dirOut + " -t " + 
-                  ','.join(list(set_taxids)) + " taxonomy")
+        with open("toto.txt", 'w') as toto:
+            toto.write(','.join(list(set_taxids)))
+        
+        cmd_centriDl = ("centrifuge-download -v -o " + dirOut + " -t " + 
+                        ','.join(list(set_taxids)) + " taxonomy")
+        sub.Popen(cmd_centriDl.split(), shell=True)
         print("Done !\n")
     
     else:
-        print("All taxonomic files have been found in", dirOut, "!\n")
+        print("--> FOUND all taxonomic files in", dirOut, "!\n")
     
     
     # BUILDING INDEX
