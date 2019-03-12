@@ -5,14 +5,13 @@
 Mapping statistics computation
 
 Usage:
-  main.py (-i <inFile>) (-l <taxoCut>) [-c <numCut>]
+  main.py (-i <inFile>) (-l <taxoCut>)
   
 Options:
   -h --help                  help
   --version                  version of the script
   -i --inFile=input_file     input file
   -l --taxoCut=taxo_cutoff   cutoff for the taxonomic level [default: none]
-  -c --numCut=num_cutoff     cutoff on MAPQ (if SAM mode) or e-value (else) [default: none]
 """
 
 
@@ -37,9 +36,13 @@ def alignment_to_dict(align_obj):
   Takes an alignment instance and return a dict containing the needed
   attributes (only)
   """
+  ratio_len = align_obj.infer_query_length()/align_obj.infer_read_length()
   return {"mapq":align_obj.mapping_quality,
           "ref_name": align_obj.reference_name,
-          "is_second":align_obj.is_secondary}
+          "is_second":align_obj.is_secondary,
+          "ratio_len":round(ratio_len, 4)}
+          # "read_len":align_obj.infer_query_length()/align_obj.infer_read_length(),
+          # "align_len":align_obj.infer_query_length()}
 
 
 def eval_align(ref_name, dict_conv_seqid2taxid, taxonomic_cutoff):
@@ -139,7 +142,6 @@ if __name__ == "__main__":
     # infile_path = "test_16S_primLEN_mapped.csv"
     to_infile, infile_base, _, _, ext_infile = check.infile(ARGS["--inFile"], 
                                                          ["csv", "tsv", "sam"])
-    num_cutoff = ARGS["--numCut"]
     taxo_cutoff = ARGS["--taxoCut"]
 
     # Common variables:
@@ -176,12 +178,6 @@ if __name__ == "__main__":
         print("Unkown database !\n")
         sys.exit(2)
 
-      # Set MAPQ cutoff:
-      if num_cutoff == 'none':
-        mapq_cutoff = 0
-      else:
-        mapq_cutoff = int(check.input_nb(num_cutoff, "-c cutoff (MAPQ here)"))
-
 
       # To make correspond operon number and taxid:
       dict_seqid2taxid = {}
@@ -193,29 +189,63 @@ if __name__ == "__main__":
       # Start SAM file parsing:
       print("Extracting information from SAM file...")
       START_SAM_PARSING = t.time()
-      compt_alignments = 0
       input_samfile = pys.AlignmentFile(to_infile, "r")
 
       dict_gethered = {}
       dict_count = {"unmapped":0, "suppl_entries":0, "goods":0, "mapped":0}
+      dict_mapq = {}
+
       for alignment in input_samfile.fetch(until_eof=True):
         if alignment.is_unmapped:
             dict_count["unmapped"] += 1
             dict_stats['FN'] += 1 # Count unmapped = 'FN'
         else:
           dict_align = alignment_to_dict(alignment)
+          query_name = alignment.query_name
+
           if alignment.is_supplementary:
             dict_count["suppl_entries"] += 1
-            dict_gethered[alignment.query_name].append(dict_align)
+            dict_gethered[query_name].append(dict_align)
 
           else:
-            assert(alignment.query_name not in dict_gethered.keys())
-            dict_gethered[alignment.query_name] = [dict_align]
+            dict_mapq[query_name] = alignment.mapping_quality
+            assert(query_name not in dict_gethered.keys())
+            dict_gethered[query_name] = [dict_align]
             
               
       input_samfile.close()
       print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
 
+
+      # Removing reads with lowest MAPQ:
+      cutoff_mapq = 0.05  # 5%
+
+      print("\nRemoving the", int(cutoff_mapq*100), "% worst reads...")
+      sorted_by_mapq = sorted(dict_mapq.items(), key=lambda x: x[1])
+      inital_len_dict_gethered = len(sorted_by_mapq)
+      nb_to_remove = int(inital_len_dict_gethered*cutoff_mapq)
+      print("(represents theorically:", nb_to_remove, "reads)")
+
+      i, nb_removed = 0, 0
+      while nb_removed < nb_to_remove and i < inital_len_dict_gethered:
+        current_query_name = sorted_by_mapq[i][0]
+        if len(dict_gethered[current_query_name]) == 1: # NOT suppl
+          del dict_gethered[current_query_name]
+          nb_removed += 1
+        i += 1
+
+      if nb_removed < nb_to_remove:
+        print("WARNING: Couldn't remove enough alignments...")
+        print("(removed only", nb_removed)
+      
+      assert(inital_len_dict_gethered == len(dict_gethered) + nb_removed)
+
+      if nb_removed != nb_to_remove:
+        print("Number of alignments actually removed", nb_removed)
+      else:
+        print("Well removed the predicted number of alignments !")
+      print()
+      sys.exit()
 
       # Handling supplementaries:
       TOTO = t.time()
@@ -226,20 +256,19 @@ if __name__ == "__main__":
       # ref_name = alignment.reference_name.split()[0]
 
       dict_count["mapped"] = len(dict_gethered.keys())
-      partial_func = partial(pll.SAM_taxo_cassif, 
-                             conv_seqid2taxid=dict_seqid2taxid, 
-                             cutoff_on_mapq=mapq_cutoff, 
-                             taxonomic_cutoff=taxo_cutoff, 
-                             tupl_sets=tupl_sets_levels)
-      my_pool = mp.Pool(15)
-      results = my_pool.map(partial_func, dict_gethered.values())
-      my_pool.close()
+      # partial_func = partial(pll.SAM_taxo_classif, 
+      #                        conv_seqid2taxid=dict_seqid2taxid,
+      #                        taxonomic_cutoff=taxo_cutoff, 
+      #                        tupl_sets=tupl_sets_levels)
+      # my_pool = mp.Pool(15)
+      # results = my_pool.map(partial_func, dict_gethered.values())
+      # my_pool.close()
 
       # Serial version:
-      # for query_name in dict_gethered:
-      #   results.append(pll_salut(dict_gethered[query_name], dict_seqid2taxid, 
-      #                   mapq_cutoff, taxo_cutoff, tupl_sets_levels))
-
+      results = []
+      for query_name in dict_gethered:
+        results.append(pll.SAM_taxo_classif(dict_gethered[query_name], 
+                       dict_seqid2taxid, taxo_cutoff, tupl_sets_levels))
 
       list_res_suppl_handling = []
       list_MAPQ = []
@@ -247,6 +276,8 @@ if __name__ == "__main__":
         if res_eval[0] == 'suppl':
           list_res_suppl_handling.append(res_eval[1])
         else:
+          if res_eval[0] == 'FN':
+            print("RAISON:", res_eval[1]);sys.exit()
           dict_stats[res_eval[0]] += 1
           list_MAPQ.append(res_eval[1])
       print("SUPPL HANDLING TIME:", t.time()-TOTO)

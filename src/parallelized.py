@@ -19,19 +19,20 @@ def handle_suppl(list_align_obj, dict_conv_seqid2taxid):
     taxid_target = dict_conv_seqid2taxid[alignment["ref_name"]]
     assert(taxid_target) # If taxid not 'None'
     set_taxid_target.add(taxid_target)
-  
+
   # Different target name, but corresponding to the same taxid ?
   if len(set_taxid_target) == 1: 
     return alignment["ref_name"] # Any target name is OK
   return False
 
 
-def SAM_taxo_cassif(align_list, conv_seqid2taxid, cutoff_on_mapq, 
-                    taxonomic_cutoff, tupl_sets):
+def SAM_taxo_classif(align_list, conv_seqid2taxid, taxonomic_cutoff, tupl_sets):
   """
   Parallelized taxonomic classification, from a group (by readID) of mapped 
   reads
   """
+  cutoff_ratio = 0.9
+
   if len(align_list) > 1: # supplementary allignment
     # print(align_list);sys.exit()
     return ('suppl', handle_suppl(align_list, conv_seqid2taxid))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
@@ -39,21 +40,20 @@ def SAM_taxo_cassif(align_list, conv_seqid2taxid, cutoff_on_mapq,
 
   else: # Normal linear case
     align_dict = align_list[0]
-    mapq = align_dict["mapq"]
+    mapq, ratio_len = align_dict["mapq"], align_dict["ratio_len"]
+
     if align_dict["is_second"]: # We skip secondary
       pass
       
     else:
-      if mapq >= cutoff_on_mapq: #and align_obj.template_length > cutoff:
+      if ratio_len >= cutoff_ratio:
         # ref_name = alignment.reference_name
         # ref_name = alignment.reference_name.split()[0]
-        #res_eval = eval_align(align_obj.reference_name, dict_seqid2taxid, 
-        #                      taxo_cutoff)
         current_taxid = conv_seqid2taxid[align_dict["ref_name"]]
         return (shared.in_zymo(current_taxid, taxonomic_cutoff, tupl_sets), 
                 mapq)
       else:
-        return ('FN', mapq)
+        return ('FN', ratio_len)
 
 
 # FROM CLUST_TAX.PY:
