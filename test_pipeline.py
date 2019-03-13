@@ -20,7 +20,7 @@ Arguments:
     trimming: 'porechop' or 'no' (default)
     chimera: 'yacrd' or 'no' (default)
     determination: 'minimap2', 'margin', 'centri', or 'no' (default)
-    database: 'rrn' or 'Zymo'
+    database: 'GG', 'SILVA', rrn' or 'Zymo'
 """
 
 import os
@@ -41,7 +41,8 @@ if __name__ == "__main__":
     ARGS = docopt(__doc__, version='0.1')
     tuple_check_fq = check.infile(ARGS["--inputFqFile"], ('fq', 'fastq'))
     in_fq_path, in_fq_base, _, tail_input_fq, in_fq_ext = tuple_check_fq
-    DB_NAME = check.acceptable_str(ARGS["--db"], ["rrn", "zymo", "silva"])
+    DB_NAME = check.acceptable_str(ARGS["--db"], 
+                                   ["rrn", "zymo", "silva", "gg"])
     TRIM = check.acceptable_str(ARGS["--trim"], ["porechop", "no"])
     CHIM = check.acceptable_str(ARGS["--chim"], ["yacrd", "no"])
     DETER = check.acceptable_str(ARGS["--deter"], 
@@ -190,8 +191,8 @@ if __name__ == "__main__":
     
     elif DETER == "minimap2":
         dirOut_minimap = path_proj + "3-deter_minimap2/"
-        args_minimap2_map = "-K250M --secondary=no -t" + nb_threads + " -x map-ont "
-        # args_minimap2_map = "--secondary=no -t" + nb_threads + " -x map-ont "
+        # args_minimap2_map = "-K250M --secondary=no -t" + nb_threads + " -x map-ont "
+        args_minimap2_map = "--secondary=no -t" + nb_threads + " -x map-ont "
         to_minimap_idxes = to_dbs + "minimap2_idxes/"
         root_minimap_outfiles = (dirOut_minimap + in_fq_base + "_to" + 
                                  DB_NAME.capitalize())
