@@ -60,7 +60,7 @@ def taxid_from_gb_entry(gi_str):
         fetch_handle.close()
 
     except HTTPError:
-        print("ERROR! WRONG GI FOR REQUEST:", gi_str)
+        print("ERROR! HTTP 400 WITH GI:", gi_str)
         sys.exit()
     if not fetch_res:
         print("GI NOT FOUND:", gi_str)
