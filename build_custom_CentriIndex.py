@@ -204,6 +204,8 @@ if __name__ == "__main__":
                 dict_acc2taxid["CP006690"] = "1051650"
                 dict_acc2taxid["CDRP01002148"] = "562"
                 dict_acc2taxid["FOMU01000028"] = "321267"
+                dict_acc2taxid["CP001098"] = "373903"
+                dict_acc2taxid["LIGM01000002"] = "337330"
 
                 set_to_remote = set()
                 with open(to_need_remote, 'r') as need_remote_file:
@@ -211,7 +213,6 @@ if __name__ == "__main__":
                         currrent_acc_nb = line.rstrip('\n')
                         if currrent_acc_nb not in dict_acc2taxid.keys():
                             set_to_remote.add(currrent_acc_nb)
-                assert(set_to_remote)
 
                 print("REMAINING ONE QUERIED REMOTELY...")
                 for pb_acc_nb in set_to_remote:
@@ -221,7 +222,9 @@ if __name__ == "__main__":
                     with open(to_acc2taxid, 'a') as acc2taxid_file:
                         acc2taxid_file.write(pb_acc_nb + '\t' + 
                                              queried_taxid + '\n')
-
+                
+                print("REMOTE SEARCH FINISHED !\n")
+                sys.exit()
 
             
             # Write seqid2taxid file:
