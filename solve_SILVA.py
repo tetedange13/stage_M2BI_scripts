@@ -4,6 +4,8 @@
 import sys, os
 import os.path as osp
 import src.remote as remote
+import src.ncbi_taxdump_utils as taxo_utils
+
 
 def solve_headers(to_taxmap_file, to_headers_list_file):
     """
@@ -33,11 +35,73 @@ def solve_headers(to_taxmap_file, to_headers_list_file):
                 print("PROBLEM")
                 print(header)
                 sys.exit(2)
-                  
+      
+
+# def eval_align(ref_name, dict_conv_seqid2taxid, taxonomic_cutoff):
+def eval_align(current_taxid, ref_name, set_problems):
+    """
+    """
+    # current_taxid = dict_conv_seqid2taxid[ref_name]
+    sp_name = taxfoo.get_taxid_name(current_taxid)
+    set_problems = set()
+
+    if not sp_name:
+        # .add(ref_name, current_taxid)
+        print(ref_name, "HAS A PROBLEM !");sys.exit()
+
+        # to_problems_file = "problematic_ref_names.txt"
+        # if osp.isfile(to_problems_file):
+        #   with open(to_problems_file, 'r') as problems:
+        #     set_taxids = {line.rstrip('\n').split('\t')[1] for line in problems}
+        # else:
+        #   set_taxids = set()
+
+        # if str(current_taxid) not in set_taxids:
+        #     queried_taxid = remote.query_taxid(ref_name) # Try remotely
+        #     if queried_taxid == "TAXO_NOT_FOUND": # Still not working
+        #         with open(to_problems_file, 'a') as problems:
+        #             problems.write(ref_name + '\t' + str(current_taxid) + '\n')
+        #         print("PROBLEM with:", ref_name, "of associated taxid:", current_taxid)
+        #         return None
+        #     else:
+        #         print("LE REMOTE A MARCHE !")
+        #         sp_name = taxfoo.get_taxid_name(queried_taxid)
+
+        # else:
+        #   return None
+
+    # assert(sp_name) # Not 'None'
+    #current_rank = taxfoo.get_taxid_rank(current_taxid)
+    #assert(current_rank) # Not 'None'
+
+    #return in_zymo(sp_name, current_rank, taxonomic_cutoff)
+
 
 def solve_pb_taxids(to_old_seqid2taxid):
     """
     """
+    set_problems = set()
+    with open(to_old_seqid2taxid, 'r') as old_seqid2taxid, \
+         open("problems.txt", 'w') as pbs_file:
+        for line in old_seqid2taxid:
+            seqid, old_taxid = line.rstrip('\n').split('\t')
+
+            if not taxfoo.get_taxid_name(int(old_taxid)):
+                print(seqid, old_taxid, "HAS A PROBLEM !")
+
+                if old_taxid not in set_problems:
+                    pbs_file.write(seqid.split('.')[0] + ' ' + old_taxid + '\n')
+                    set_problems.add(old_taxid)
+                    # new_taxid = remote.taxid_from_gb_entry()
+                    # print(new_taxid);sys.exit()
+            # res_eval = eval_align(old_taxid, seqid)
+            # if res_eval:
+            #     list_evals.append(res_eval)
+            # dict_seqid2taxid[seqid] = old_taxid
+
+    print(len(set_problems))
+    sys.exit()
+
     to_toto = "tempo.txt"
     wrong2good_taxid = {}
     
@@ -88,5 +152,12 @@ if __name__ == "__main__":
     
     #solve_headers(to_dbs_SILVA + "taxmap_ncbi_ssu_ref_nr99_132.txt", 
     #              to_dbs_SILVA + "headers.txt")
+
+    global taxfoo
+    taxfoo = taxo_utils.NCBI_TaxonomyFoo()
+    nodes_path = to_dbs + "nt_db/taxo_18feb19/nodes.dmp"
+    names_path = to_dbs + "nt_db/taxo_18feb19/names.dmp"
+    taxfoo.load_nodes_dmp(nodes_path)
+    taxfoo.load_names_dmp(names_path)
     solve_pb_taxids(to_dbs + "Centri_idxes/SILVA/seqid2taxid")
     
