@@ -52,11 +52,16 @@ def taxid_from_gb_entry(gi_str):
     organism
     If the taxid cannot be found, the "Taxonomy" db of NCBI is (e-)searched
     using the ScientificName, to get the taxid 
-    """  
-    fetch_handle = Entrez.efetch(db="nucleotide", id=gi_str,
-                                 rettype='gb', retmode="text")
-    fetch_res = fetch_handle.read()
-    fetch_handle.close()
+    """
+    try:
+        fetch_handle = Entrez.efetch(db="nucleotide", id=gi_str,
+                                     rettype='gb', retmode="text")
+        fetch_res = fetch_handle.read()
+        fetch_handle.close()
+
+    except HTTPError:
+        print("ERROR! WRONG GI FOR REQUEST:", gi_str)
+        sys.exit()
     if not fetch_res:
         print("GI NOT FOUND:", gi_str)
         sys.exit()
