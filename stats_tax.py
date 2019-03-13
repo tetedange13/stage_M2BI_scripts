@@ -31,53 +31,38 @@ import src.check_args as check
 import src.parallelized as pll
 
 
+def soft_clipping_from_cigar(list_cigar_tupl):
+    """
+    """
+    start_soft_clip, end_soft_clip = list_cigar_tupl[0], list_cigar_tupl[-1]
+
+    nb_start_soft_clip, nb_end_soft_clip = 0, 0
+    if start_soft_clip[0] == 4:
+        nb_start_soft_clip = start_soft_clip[1]
+    if end_soft_clip[0] == 4:
+        nb_end_soft_clip = end_soft_clip[1]
+
+    return (nb_start_soft_clip, nb_end_soft_clip)
+
+
+
 def alignment_to_dict(align_obj):
     """
     Takes an alignment instance and return a dict containing the needed
     attributes (only)
+
+    With infer_read_length() method, hard-clipped bases are included in the 
+    counting
+    infer_query_length() method does NOT include them
     """
-    ratio_len = align_obj.infer_query_length()/align_obj.infer_read_length()
+    ratio_len = align_obj.query_length/align_obj.infer_read_length()
+    assert(ratio_len <= 1)
+
     return {"mapq":align_obj.mapping_quality,
             "ref_name": align_obj.reference_name,
-            "ratio_len":round(ratio_len, 4)}
+            "ratio_len":ratio_len}
             # "read_len":align_obj.infer_query_length()/align_obj.infer_read_length(),
             # "align_len":align_obj.infer_query_length()}
-
-
-def eval_align(ref_name, dict_conv_seqid2taxid, taxonomic_cutoff):
-    """
-    """
-    current_taxid = dict_conv_seqid2taxid[ref_name]
-    sp_name = taxfoo.get_taxid_name(current_taxid)
-
-    if not sp_name:
-        #print(ref_name, "HAS A PROBLEM !");sys.exit()
-        to_problems_file = "problematic_ref_names.txt"
-        if osp.isfile(to_problems_file):
-          with open(to_problems_file, 'r') as problems:
-            set_taxids = {line.rstrip('\n').split('\t')[1] for line in problems}
-        else:
-          set_taxids = set()
-
-        if str(current_taxid) not in set_taxids:
-            queried_taxid = remote.query_taxid(ref_name) # Try remotely
-            if queried_taxid == "TAXO_NOT_FOUND": # Still not working
-                with open(to_problems_file, 'a') as problems:
-                    problems.write(ref_name + '\t' + str(current_taxid) + '\n')
-                print("PROBLEM with:", ref_name, "of associated taxid:", current_taxid)
-                return None
-            else:
-                print("LE REMOTE A MARCHE !")
-                sp_name = taxfoo.get_taxid_name(queried_taxid)
-
-        else:
-          return None
-
-    # assert(sp_name) # Not 'None'
-    current_rank = taxfoo.get_taxid_rank(current_taxid)
-    assert(current_rank) # Not 'None'
-
-    return in_zymo(sp_name, current_rank, taxonomic_cutoff)
 
 
 def dict_stats_to_vectors(dict_res):
@@ -137,8 +122,6 @@ def calc_FOR(dict_res):
 if __name__ == "__main__":
     # ARGUMENTS:
     ARGS = docopt(__doc__, version='0.1')
-    #to_report_csv = "cDNA_run1_sampl50k_memb5.csv"
-    # infile_path = "test_16S_primLEN_mapped.csv"
     to_infile, infile_base, _, _, ext_infile = check.infile(ARGS["--inFile"], 
                                                          ["csv", "tsv", "sam"])
     taxo_cutoff = ARGS["--taxoCut"]
@@ -161,7 +144,7 @@ if __name__ == "__main__":
         SAM_MODE = True
 
     if SAM_MODE:
-        print("SAM MODE !\n")
+        print("SAM MODE !")
 
         # Guess the database used:
         if "toZymo" in infile_base:
@@ -176,7 +159,7 @@ if __name__ == "__main__":
         else:
             print("Unkown database !\n")
             sys.exit(2)
-
+        print()
 
         # To make correspond operon number and taxid:
         dict_seqid2taxid = {}
@@ -200,6 +183,7 @@ if __name__ == "__main__":
                 dict_stats['FN'] += 1 # Count unmapped = 'FN'
 
             else:
+                # print(soft_clipping_from_cigar(alignment.cigartuples))
                 if alignment.is_secondary:
                     pass # We skip secondary
                 else:
@@ -216,16 +200,17 @@ if __name__ == "__main__":
                 
         input_samfile.close()
         print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
-
+        dict_count["mapped"] = len(dict_gethered.keys())
 
         # Removing reads with lowest MAPQ:
-        # cutoff_mapq = 0.05  # 5%
-        cutoff_mapq = 0
+        # CUTOFF_ON_MAPQ = 0.1  # 10%
+        CUTOFF_ON_MAPQ = 0.05  # 5%
+        # CUTOFF_ON_MAPQ = 0
 
-        print("\nRemoving the", str(int(cutoff_mapq*100)) + "% worst reads...")
+        print("\nRemoving the", str(int(CUTOFF_ON_MAPQ*100)) + "% worst reads...")
         sorted_by_mapq = sorted(dict_mapq.items(), key=lambda x: x[1])
         inital_len_dict_gethered = len(sorted_by_mapq)
-        nb_to_remove = int(inital_len_dict_gethered*cutoff_mapq)
+        nb_to_remove = int(inital_len_dict_gethered*CUTOFF_ON_MAPQ)
         print("(represents theorically:", nb_to_remove, "reads)")
 
         i, nb_removed = 0, 0
@@ -246,15 +231,17 @@ if __name__ == "__main__":
         else:
             print("Well removed the predicted number of alignments !")
         print()
+        # dict_stats['FN'] += nb_removed
+
 
         # Handling supplementaries:
         TOTO = t.time()
-        # cutoff_on_ratio = 0.9
-        cutoff_on_ratio = 0
-        dict_count["mapped"] = len(dict_gethered.keys())
+        CUTOFF_ON_RATIO = 0.9
+        # CUTOFF_ON_RATIO = 0
+        
 
         print("\nHandling supplementary alignments...")
-        print("With cutoff on alignment length of:", )
+        print("Cutoff on alignment length of:", CUTOFF_ON_RATIO)
         # # Check if all lists have length >= 2:
         # assert(all(map(lambda a_list:len(a_list) > 1, dict_gethered.values())))
         # ref_name = alignment.reference_name
@@ -265,7 +252,7 @@ if __name__ == "__main__":
                                conv_seqid2taxid=dict_seqid2taxid,
                                taxonomic_cutoff=taxo_cutoff, 
                                tupl_sets=tupl_sets_levels,
-                               cutoff_ratio=cutoff_on_ratio)
+                               cutoff_ratio=CUTOFF_ON_RATIO)
         my_pool = mp.Pool(15)
         results = my_pool.map(partial_func, dict_gethered.values())
         my_pool.close()
@@ -275,27 +262,29 @@ if __name__ == "__main__":
         # for query_name in dict_gethered:
         #   results.append(pll.SAM_taxo_classif(dict_gethered[query_name], 
         #                  dict_seqid2taxid, taxo_cutoff, tupl_sets_levels, 
-        #                  cutoff_on_ratio))
+        #                  CUTOFF_ON_RATIO))
 
         # list_res_suppl_handling = []
-        list_MAPQ = []
+        list_MAPQ = [] # Contain only MAPQ of align that pass all filters
         for res_eval in results:
-            if res_eval[0] == 'suppl':
+            first_elem = res_eval[0]
+            if first_elem == 'suppl':
                 pass
                 # list_res_suppl_handling.append(res_eval[1])
             else:
-                if res_eval[0] == 'FN':
-                    print("RAISON:", res_eval[1]);sys.exit()
+                # if res_eval[0] == 'FN':
+                #     print("VAL RATIO:", res_eval[1]);sys.exit()
+                if first_elem != 'ratio':
                     dict_stats[res_eval[0]] += 1
                     list_MAPQ.append(res_eval[1])
         print("SUPPL HANDLING TIME:", t.time()-TOTO)
 
         # Display distribution of MAPQ:
-        right_xlim = max(list_MAPQ)
-        # assert(all(map(lambda x: x<=left_xlim, list_MAPQ)))
-        plt.hist(list_MAPQ, bins=int(256/1), log=True)
-        plt.xlim((-1, right_xlim))
-        plt.show()
+        # right_xlim = max(list_MAPQ)
+        # # assert(all(map(lambda x: x<=left_xlim, list_MAPQ)))
+        # plt.hist(list_MAPQ, bins=int(256/1), log=True)
+        # plt.xlim((-1, right_xlim))
+        # plt.show()
         
         # Print general counting results:
         print(dict_count)
@@ -306,19 +295,17 @@ if __name__ == "__main__":
 
         # Print results of suppl handling:
         # nb_evaluated_suppl = len(list_res_suppl_handling)
+        # total_suppl_entries = dict_count["suppl_entries"] + nb_evaluated_suppl
         # print("TOTAL EVALUATED (grouped) SUPPL:", nb_evaluated_suppl)
         # mergeable_suppl = [elem for elem in list_res_suppl_handling if elem]
         # print("MERGEABLE SUPPL:", len(mergeable_suppl))    
         # print("REST (not mergeable):", nb_evaluated_suppl - len(mergeable_suppl))
         # print()
 
-        total_suppl_entries = dict_count["suppl_entries"] + nb_evaluated_suppl
-        sum_stats, sum_counts = sum(dict_stats.values()),sum(dict_count.values())
-        assert(sum_stats == tot_reads - nb_evaluated_suppl)
-        print(sorted(dict_stats.items()))
-        #print("TOT ALIGNMENTS:", sum_counts, " | ", "SUM STATS:", 
-        #      sum_stats)
         
+        sum_stats, sum_counts = sum(dict_stats.values()),sum(dict_count.values())
+        # assert(sum_stats == tot_reads - nb_evaluated_suppl)
+        print(sorted(dict_stats.items()))
         dict_to_convert = dict_stats
 
 

@@ -33,13 +33,12 @@ def SAM_taxo_classif(align_list, conv_seqid2taxid, taxonomic_cutoff, tupl_sets,
     reads. Filter out of 
     """
     if len(align_list) > 1: # Chimeric alignment
-        return ('suppl')
+        return ('suppl', )
         # return ('suppl', handle_suppl(align_list, conv_seqid2taxid))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 
     else: # Normal linear case
         align_dict = align_list[0]
         mapq, ratio_len = align_dict["mapq"], align_dict["ratio_len"]
-
         if ratio_len >= cutoff_ratio:
             # ref_name = alignment.reference_name
             # ref_name = alignment.reference_name.split()[0]
@@ -47,7 +46,7 @@ def SAM_taxo_classif(align_list, conv_seqid2taxid, taxonomic_cutoff, tupl_sets,
             return (shared.in_zymo(current_taxid, taxonomic_cutoff, tupl_sets), 
                     mapq)
         else:
-            return ('FN', ratio_len)
+            return ('ratio', ratio_len)
 
 
 # FROM CLUST_TAX.PY:
@@ -82,10 +81,10 @@ def taxid_mapping(chunk, set_accession):
     # replace this with your real computation
     to_return = []
     for line in chunk:
-        _, acc_nb, taxid, _ = line.rstrip('\n').split('\t')
+        acc_nb, _, taxid, _ = line.rstrip('\n').split('\t')
 
         if acc_nb in set_accession:
             to_return.append((acc_nb, taxid))
-            
-    if to_return: #List not empty
+
+    if to_return:
         return to_return
