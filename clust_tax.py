@@ -40,6 +40,7 @@ from docopt import docopt
 import src.check_args as check
 import src.parallelized as pll
 import src.shared_fun as shared
+from src.ncbi_taxdump_utils import default_want_taxonomy
 
 
 def query_taxid(term_to_search):
@@ -239,7 +240,8 @@ if __name__ == "__main__":
     NB_MIN_BY_CLUST = check.input_nb(ARGS["--minMemb"]) # Needed later
     NB_ALT = int(check.input_nb(ARGS["--altHits"]))
     taxonomic_level_cutoff = check.acceptable_str(ARGS["--taxoCut"], 
-                                                  shared.taxo_levels + ['none'])
+                                                  default_want_taxonomy + 
+                                                  ['none'])
     
     # CHECK ARGS FOR ALTERNATIVE HITS AND CUTOFF:
     if NB_ALT == 1 and taxonomic_level_cutoff == "none":
@@ -270,6 +272,7 @@ if __name__ == "__main__":
         print("Generating 1 fasta file by cluster (with minimum", 
               NB_MIN_BY_CLUST, "members) ...")
         os.system(cmd_clust_to_fasta)
+        sys.exit()
         
         # GET 1 READ BY CLUSTER AND CONCATENATE ALL THEM (into the stream):
         BLAST_TIME = t.time()
