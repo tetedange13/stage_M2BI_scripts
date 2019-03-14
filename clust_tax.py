@@ -386,52 +386,52 @@ if __name__ == "__main__":
     
     
     # LOOKING FOR ALTERNATIVE BLAST HITS:
-    if NB_ALT > 0:# and len(dict_problems['FP']) > 0: # If there are some FP
-        print("Looking for alternative BLAST hits (with EXACT same " +
-              "score) for FP...") 
+    # if NB_ALT > 0:# and len(dict_problems['FP']) > 0: # If there are some FP
+    #     print("Looking for alternative BLAST hits (with EXACT same " +
+    #           "score) for FP...") 
 
-        res_handle = open(out_xml_file)
-        blast_records = NCBIXML.parse(res_handle)
-        func_parallel = partial(pll.FP_search, my_df=df_hits,
-                                taxo_cutoff=taxonomic_level_cutoff)
+    #     res_handle = open(out_xml_file)
+    #     blast_records = NCBIXML.parse(res_handle)
+    #     func_parallel = partial(pll.FP_search, my_df=df_hits,
+    #                             taxo_cutoff=taxonomic_level_cutoff)
                                 
-        pool_searchFP = mp.Pool(int(NB_THREADS))
-        list_FP_tmp = pool_searchFP.map(func_parallel, enumerate(blast_records))
-        pool_searchFP.close()
-        res_handle.close() 
+    #     pool_searchFP = mp.Pool(int(NB_THREADS))
+    #     list_FP_tmp = pool_searchFP.map(func_parallel, enumerate(blast_records))
+    #     pool_searchFP.close()
+    #     res_handle.close() 
     
-        list_FP = [tupl[1:3] for tupl in list_FP_tmp if tupl[0] == "FP"]
-        for tuple_blast_res in list_FP:
-            look_for_alt(tuple_blast_res, NB_ALT, df_hits)
+    #     list_FP = [tupl[1:3] for tupl in list_FP_tmp if tupl[0] == "FP"]
+    #     for tuple_blast_res in list_FP:
+    #         look_for_alt(tuple_blast_res, NB_ALT, df_hits)
 
-        print("Search for alternative hits for FP finished !\n")
+    #     print("Search for alternative hits for FP finished !\n")
     
     
-    # DEAL WITH THE DIFFERENT PROBLEMS ENCOUNTERED:
-    print("Solving the encountered problems...")
-    if osp.isfile(pb_filename): # Check if there are problems to solve
-        with open(pb_filename, 'r') as pb_log_file:
-            problems_list = pb_log_file.read().splitlines()
+    # # DEAL WITH THE DIFFERENT PROBLEMS ENCOUNTERED:
+    # print("Solving the encountered problems...")
+    # if osp.isfile(pb_filename): # Check if there are problems to solve
+    #     with open(pb_filename, 'r') as pb_log_file:
+    #         problems_list = pb_log_file.read().splitlines()
         
-        dict_problems = {'NO_BLAST_HIT':[]}
-        for problem in problems_list:
-            splitted_problm = problem.split(" | ")
-            problm_name = splitted_problm[-1]
-            clust_name = splitted_problm[0]
+    #     dict_problems = {'NO_BLAST_HIT':[]}
+    #     for problem in problems_list:
+    #         splitted_problm = problem.split(" | ")
+    #         problm_name = splitted_problm[-1]
+    #         clust_name = splitted_problm[0]
 
-            if problm_name == "NO_BLAST_HIT": # Plus emmerdant a gerer ca..
-                dict_problems['NO_BLAST_HIT'].append(clust_name)
+    #         if problm_name == "NO_BLAST_HIT": # Plus emmerdant a gerer ca..
+    #             dict_problems['NO_BLAST_HIT'].append(clust_name)
             
-            else:
-                print("UNKNOWN PROBLEM")
-                sys.exit()
+    #         else:
+    #             print("UNKNOWN PROBLEM")
+    #             sys.exit()
            
-        print("Problems solved !")    
-        # We have to re-write the new report file, with problems solved:
-        df_hits.to_csv(report_filename, sep='\t')
+    #     print("Problems solved !")    
+    #     # We have to re-write the new report file, with problems solved:
+    #     df_hits.to_csv(report_filename, sep='\t')
     
-    else:
-        print("NO problems to solve")
+    # else:
+    #     print("NO problems to solve")
     
 
     # Add length associated with each cluster:

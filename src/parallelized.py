@@ -6,7 +6,7 @@ Contains all functions used to parallelise processes
 """
 
 
-import src.shared_fun as shared
+# import src.shared_fun as shared
 
 
 # FROM STAT_TAX.PY:
@@ -58,20 +58,6 @@ def rk_search(tupl_enum_taxids, query_rank_func):
     #print(taxid)
     
     return ( "clust_" + str(idx), query_rank_func(int(taxid)) )
-
-
-def FP_search(tupl_blast_res_and_idx, my_df, taxo_cutoff):
-    """
-    """
-    idx_arg, blast_res = tupl_blast_res_and_idx
-    df_index = "clust_" + str(idx_arg)
-    name_df = my_df.loc[df_index, "topHit"]
-    rank_df = my_df.loc[df_index, "rank"]
-    
-    if shared.in_zymo(name_df, rank_df, taxo_cutoff) == 'FP':
-        return ('FP', df_index, blast_res)
-    
-    return ["NOT_FP"]
     
 
 def taxid_mapping(chunk, set_accession):
@@ -83,14 +69,14 @@ def taxid_mapping(chunk, set_accession):
     """
     to_return = []
     for line in chunk:
-        acc_nb, _, taxid, _ = line.rstrip('\n').split('\t')
+        acc_nb, _, taxid, gi = line.rstrip('\n').split('\t')
         to_search = acc_nb
 
         if acc_nb.startswith('NZ_'):
             to_search = acc_nb[3: ]
 
         if to_search in set_accession:
-            to_return.append((acc_nb, taxid))
+            to_return.append((to_search, taxid))
 
     if to_return:
         return to_return
