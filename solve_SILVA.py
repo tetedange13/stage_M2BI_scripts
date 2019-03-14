@@ -77,71 +77,129 @@ def eval_align(current_taxid, ref_name, set_problems):
     #return in_zymo(sp_name, current_rank, taxonomic_cutoff)
 
 
-def solve_pb_taxids(to_old_seqid2taxid):
+def detect_problems(to_seqid2taxid, to_seqid2acc, to_target_list):
     """
+    to_target_list = list of seqid that have been mapped
     """
     set_problems = set()
+    dict_seqid2taxid = {}
+    with open(to_seqid2taxid, 'r') as seqid2taxid_file:#, \
+         #open("problems.txt", 'w') as pbs_file:
+        for line in seqid2taxid_file:
+            seqid, taxid = line.rstrip('\n').split('\t')
+            assert(seqid not in dict_seqid2taxid.keys())
+            dict_seqid2taxid[seqid] = taxid
+                # print(list(dict_seqid2taxid.keys())[list(dict_seqid2taxid.values()).index(acc_nb)])    
+
+    dict_seqid2acc = {}
+    with open(to_seqid2acc) as seqid2acc_file:
+        for line in seqid2acc_file:
+            seqid, acc_nb = line.rstrip('\n').split()
+            dict_seqid2acc[seqid] = acc_nb
+
+
+    set_problems = set()
+    done_taxids = set()
+    with open(to_target_list, 'r') as target_list:
+        for line in target_list:
+            ref_name = line.rstrip('\n')
+            current_taxid = dict_seqid2taxid[ref_name]
+
+            name_taxid = taxfoo.get_taxid_name(int(current_taxid))
+            if not name_taxid and current_taxid not in done_taxids:
+                set_problems.add(current_taxid + '\t' + 
+                                 dict_seqid2acc[ref_name] + '\n')
+                done_taxids.add(current_taxid)
+
+    with open("problems.txt", 'w') as pbs_file:
+        for problem in set_problems:
+            pbs_file.write(problem)
+
+
+def solve_problems(to_problems_file):
+    """
+    """
+    remote_mode = True
+    dict_wrong2good = {} # Conversion between
+    compt_request = 0
+
+    with open(to_problems_file, 'r') as pbs_file:
+        for line in pbs_file:
+            wrong_taxid, acc_nb = line.rstrip('\n').split('\t')
+
+            if wrong_taxid not in dict_wrong2good.keys():
+                if remote_mode:
+                    print("QUERYING:", acc_nb)
+                    good_taxid = remote.taxid_from_gb_entry(acc_nb)
+                    compt_request += 1
+                    assert(good_taxid != "PROBLEM TAXID SEARCH")
+                else:
+                    print("MARCHE PAS POUR L'INSTANT")
+                    sys.exit()
+
+            dict_wrong2good[wrong_taxid] = good_taxid
+
+    with open("wrong2good_taxids", 'w') as wrong2good_file:
+        for wrong_taxid in dict_wrong2good:
+            wrong2good_file.write(wrong_taxid + '\t' + 
+                                  dict_wrong2good[wrong_taxid] + '\n')
+
+
+def correct_seqid2taxid(to_old_seqid2taxid, to_wrong2good_taxids):
+    """
+    Correct seqid2taxid file, by replacing taxids that have been found to be
+    wrong (taxid not found in the nt NCBI taxonomy dump files), by correct 
+    taxids (possibly found remotely or locally)
+    """
+    dict_wrong2good = {}
+    with open(to_wrong2good_taxids, 'r') as wrong2good_file:
+        for line in wrong2good_file:
+            wrong_taxid, good_taxid = line.rstrip('\n').split('\t')
+            assert(wrong_taxid not in dict_wrong2good.keys())
+            dict_wrong2good[wrong_taxid] = good_taxid
+
+    print(dict_wrong2good)
+    all_wrong_taxids = dict_wrong2good.keys()
     with open(to_old_seqid2taxid, 'r') as old_seqid2taxid, \
-         open("problems.txt", 'w') as pbs_file:
-        for line in old_seqid2taxid:
-            seqid, old_taxid = line.rstrip('\n').split('\t')
-
-            if not taxfoo.get_taxid_name(int(old_taxid)):
-                print(seqid, old_taxid, "HAS A PROBLEM !")
-
-                if old_taxid not in set_problems:
-                    pbs_file.write(seqid.split('.')[0] + ' ' + old_taxid + '\n')
-                    set_problems.add(old_taxid)
-                    # new_taxid = remote.taxid_from_gb_entry()
-                    # print(new_taxid);sys.exit()
-            # res_eval = eval_align(old_taxid, seqid)
-            # if res_eval:
-            #     list_evals.append(res_eval)
-            # dict_seqid2taxid[seqid] = old_taxid
-
-    print(len(set_problems))
-    sys.exit()
-
-    to_toto = "tempo.txt"
-    wrong2good_taxid = {}
-    
-    if osp.isfile(to_toto):
-        with open(to_toto) as toto:
-             for line in toto:
-                false_taxid, good_taxid = line.rstrip('\n').split('\t')
-                wrong2good_taxid[false_taxid] = good_taxid
-    
-    if True:
-        with open("problematic_ref_names.txt", 'r') as pb_ref_names_file:
-            for line in pb_ref_names_file:
-                ref_name_to_split, wrong_taxid = line.rstrip('\n').split('\t')
-                
-                if wrong_taxid not in wrong2good_taxid.keys():
-                    ref_name = ref_name_to_split.split('.')[0]
-                    print("REQUESTING:", ref_name, "..")
-                    if ref_name == "MCIE01000002":
-                        taxid = 46170
-                    elif ref_name == "JTBM01000001":
-                        taxid = 28901
-                    else:
-                        taxid = remote.taxid_from_gb_entry(ref_name)
-                        wrong2good_taxid[wrong_taxid] = str(taxid)
-                    
-                    with open(to_toto, 'a') as toto:
-                        toto.write(wrong_taxid + '\t' + str(taxid) + '\n')
-
-    
-    # Correct seqid2taxid file:
-    all_wrong_taxids = wrong2good_taxid.keys()
-    with open(to_old_seqid2taxid, 'r') as old_seqid2taxid, \
-         open("seqid2taxid", 'w') as seqid2taxid_file:
+         open("seqid2taxid", 'w') as new_seqid2taxid:
         for line in old_seqid2taxid:
             seqid, old_taxid = line.rstrip('\n').split('\t')
             if old_taxid in all_wrong_taxids:
-                seqid2taxid_file.write(seqid + '\t' + 
-                                       wrong2good_taxid[old_taxid] + '\n')
+                print("Corrected:", old_taxid)
+                new_seqid2taxid.write(seqid + '\t' + 
+                                       dict_wrong2good[old_taxid] + '\n')
             else:
-                seqid2taxid_file.write(line) 
+                new_seqid2taxid.write(line)
+
+
+    # to_toto = "tempo.txt"
+    # wrong2good_taxid = {}
+    
+    # if osp.isfile(to_toto):
+    #     with open(to_toto) as toto:
+    #          for line in toto:
+    #             false_taxid, good_taxid = line.rstrip('\n').split('\t')
+    #             wrong2good_taxid[false_taxid] = good_taxid
+    
+    # if True:
+    #     with open("problematic_ref_names.txt", 'r') as pb_ref_names_file:
+    #         for line in pb_ref_names_file:
+    #             ref_name_to_split, wrong_taxid = line.rstrip('\n').split('\t')
+                
+    #             if wrong_taxid not in wrong2good_taxid.keys():
+    #                 ref_name = ref_name_to_split.split('.')[0]
+    #                 print("REQUESTING:", ref_name, "..")
+    #                 if ref_name == "MCIE01000002":
+    #                     taxid = 46170
+    #                 elif ref_name == "JTBM01000001":
+    #                     taxid = 28901
+    #                 else:
+    #                     taxid = remote.taxid_from_gb_entry(ref_name)
+    #                     wrong2good_taxid[wrong_taxid] = str(taxid)
+                    
+    #                 with open(to_toto, 'a') as toto:
+    #                     toto.write(wrong_taxid + '\t' + str(taxid) + '\n')
+            
     
 
 # MAIN:
@@ -159,5 +217,12 @@ if __name__ == "__main__":
     names_path = to_dbs + "nt_db/taxo_18feb19/names.dmp"
     taxfoo.load_nodes_dmp(nodes_path)
     taxfoo.load_names_dmp(names_path)
-    solve_pb_taxids(to_dbs + "Centri_idxes/SILVA/seqid2taxid")
-    
+
+    # detect_problems(to_dbs + "Centri_idxes/SILVA/seqid2taxid", 
+    #                 to_dbs_SILVA + "seqid2acc", "16kit_run2_toSilva.ref_names")
+    detect_problems("old_seqid2taxid", to_dbs_SILVA + "seqid2acc", "headers.txt")
+    # solve_problems("problems.txt")
+    # correct_seqid2taxid(to_dbs + "Centri_idxes/SILVA/seqid2taxid", 
+    #                     "tempo.txt")
+    # correct_seqid2taxid(to_dbs + "Centri_idxes/SILVA/old_seqid2taxid", 
+    #                     "wrong2good_taxids")
