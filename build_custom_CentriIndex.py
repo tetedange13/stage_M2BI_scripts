@@ -177,7 +177,7 @@ if __name__ == "__main__":
                 nb_found = len(found_acc_numbers)
                 print("TO_FIND:", nb_to_find)
                 print("--> FOUND:", nb_found)
-                print(len(set_to_remote), "acc_nb couldn't be found locally!")
+                print(nb_to_find - nb_found, "acc_nb couldn't be found locally!")
                 print()
 
                 if nb_found == 0:
@@ -206,6 +206,8 @@ if __name__ == "__main__":
                 dict_acc2taxid["FOMU01000028"] = "321267"
                 dict_acc2taxid["CP001098"] = "373903"
                 dict_acc2taxid["LIGM01000002"] = "337330"
+                dict_acc2taxid["MCIE01000002"] = "46170"
+                dict_acc2taxid["JTBM01000001"] = "28901"
 
                 set_to_remote = set()
                 with open(to_need_remote, 'r') as need_remote_file:
