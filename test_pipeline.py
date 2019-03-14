@@ -191,8 +191,12 @@ if __name__ == "__main__":
     
     elif DETER == "minimap2":
         dirOut_minimap = path_proj + "3-deter_minimap2/"
-        # args_minimap2_map = "-K250M --secondary=no -t" + nb_threads + " -x map-ont "
+
         args_minimap2_map = "--secondary=no -t" + nb_threads + " -x map-ont "
+        if DB_NAME == "gg":
+            args_minimap2_map = ("-K100M --secondary=no -t" + nb_threads + 
+                                 " -x map-ont ")
+
         to_minimap_idxes = to_dbs + "minimap2_idxes/"
         root_minimap_outfiles = (dirOut_minimap + in_fq_base + "_to" + 
                                  DB_NAME.capitalize())
