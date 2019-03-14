@@ -76,14 +76,20 @@ def FP_search(tupl_blast_res_and_idx, my_df, taxo_cutoff):
 
 def taxid_mapping(chunk, set_accession):
     """
+    `chunk` will be a list of CSV rows all with the same name column
+
+    set_accession need to contain NCBI accession numbers (not GI, but can
+    easily be changed), WITHOUT version number (".one_number.second_number") 
     """
-    # `chunk` will be a list of CSV rows all with the same name column
-    # replace this with your real computation
     to_return = []
     for line in chunk:
         acc_nb, _, taxid, _ = line.rstrip('\n').split('\t')
+        to_search = acc_nb
 
-        if acc_nb in set_accession:
+        if acc_nb.startswith('NZ_'):
+            to_search = acc_nb[3: ]
+
+        if to_search in set_accession:
             to_return.append((acc_nb, taxid))
 
     if to_return:
