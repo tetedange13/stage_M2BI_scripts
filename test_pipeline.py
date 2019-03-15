@@ -56,9 +56,6 @@ if __name__ == "__main__":
     
     path_apps = "/home/sheldon/Applications/"
     path_proj = "/projets/metage_ONT_2019/"
-    # ref_fa_path = (path_proj + "databases/Zymo_genomes-ZR160406/" + 
-    #                "Zymo_genomes-ZR160406.fa")
-    
     #print("Processing " + tail_input_fq, '\n')
     
     
@@ -85,9 +82,10 @@ if __name__ == "__main__":
             porechop_log.write("TIME TRIM = " + str(t.time()-TRIM_TIME)+"\n\n")
         
     else:
-        print('\n', cmd_porechop)
-        print(porechop_log_path, '\n')
-        #sys.exit()
+        pass
+        # print('\n', cmd_porechop)
+        # print(porechop_log_path, '\n')
+
     #print("Trimming finished !")
     
     
@@ -128,8 +126,8 @@ if __name__ == "__main__":
         
         cmd_yacrd = (path_to_yacrd + " -i " + overlapped_file + '.paf' + 
                      " -f " + trmd_file_path) 
-        #print(cmd_yacrd)
-        log_yacrd = open(log_yacrd_path, 'w')  
+        # print(cmd_yacrd);sys.exit()
+        log_yacrd = open(log_yacrd_path, 'w')
         # Start by writting the header:            
         log_yacrd.write("type_of_read" +'\t' + "id_in_mapping_file" +
                         '\t' + "length_of_read" + '\t' +
@@ -147,11 +145,13 @@ if __name__ == "__main__":
                   flag_ext, dirOut_yacrd + in_fq_base + flag_ext)           
         
     else:
-        print('\n', cmd_overlap)
-        print(overlapped_file, '\n')               
+        pass
+        # print('\n', cmd_overlap)
+        # print(overlapped_file, '\n')               
     
    
     # TAXONOMIC DETERMINATION STEP:
+    print("TAXONOMIC DETERMINATION WITH:", DETER + "...")
     file_to_map = dirOut_yacrd + in_fq_base + flag_ext
     
     if DETER == "margin":
@@ -190,12 +190,13 @@ if __name__ == "__main__":
     #print("Mapping with MarginAlign+minimap2 finished !")
     
     elif DETER == "minimap2":
-        dirOut_minimap = path_proj + "3-deter_minimap2/"
+        # dirOut_minimap = path_proj + "3-deter_minimap2/"
+        dirOut_minimap = path_proj + "3-deter_minimap2_second/"
 
-        args_minimap2_map = "--secondary=no -t" + nb_threads + " -x map-ont "
-        if DB_NAME == "gg":
-            args_minimap2_map = ("-K100M --secondary=no -t" + nb_threads + 
-                                 " -x map-ont ")
+        args_minimap2_map = "-N10 -t" + nb_threads + " -x map-ont "
+        # if DB_NAME == "gg":
+        #     args_minimap2_map = ("-K100M --secondary=no -t" + nb_threads + 
+        #                          " -x map-ont ")
 
         to_minimap_idxes = to_dbs + "minimap2_idxes/"
         root_minimap_outfiles = (dirOut_minimap + in_fq_base + "_to" + 
@@ -203,7 +204,7 @@ if __name__ == "__main__":
         cmd_minimap = (to_minimap2 + "minimap2 " + args_minimap2_map + "-a " +
                        to_minimap_idxes + DB_NAME + ".mmi " + 
                        in_fq_path)
-        #print(cmd_minimap) ; sys.exit()
+        # print(cmd_minimap) ; sys.exit()
         START_MINIMAP = t.time()
         log_minimap = open(root_minimap_outfiles + ".log", 'w')
         with open(root_minimap_outfiles + ".sam", 'w') as minimap_SAM:
@@ -217,28 +218,28 @@ if __name__ == "__main__":
         sys.exit()
         
     
-    elif DETER == "centri":
-        # Classification using centrifuge:
+    elif DETER == "centri": # Classification using centrifuge:
         to_Centri_idxes = to_dbs + "Centri_idxes/"
-        #path_to_idx = path_proj + "centri_idx-Zymo/"
-        #name_idx_centri = "Zymo"
-        dirOut_centri = path_proj + "3-deter_Centri/"
+        dirOut_centri = path_proj + "3-deter_centri/"
         
         cmd_centri = ("centrifuge -t -p " + nb_threads + " -q " + 
-                      file_to_map + " -x " + to_Centri_idxes + DB_NAME +
-                      " --report-file " + dirOut_centri + in_fq_base + 
-                      "_centriReport.tsv")
-        #print(cmd_centri) ; sys.exit()
+                      in_fq_path + " -x " + to_Centri_idxes + DB_NAME +
+                      " --report-file " + dirOut_centri + in_fq_base + "_to" + 
+                      DB_NAME.capitalize() + "_report.tsv")
+        # print(cmd_centri);sys.exit()
         
-        centri_log_path = dirOut_centri + in_fq_base + "_centri.log"
-        centri_classif_path = (dirOut_centri + in_fq_base + 
-                               "_centriClassif.tsv")
+        centri_log_path = (dirOut_centri + in_fq_base + "_to" + 
+                           DB_NAME.capitalize() + ".log")
+        centri_classif_path = (dirOut_centri + in_fq_base + "_to" +  
+                               DB_NAME.capitalize() + "_classif.tsv")
         with open(centri_classif_path, 'w') as classif_centri, \
              open(centri_log_path, 'w') as centri_log:
             sub.Popen(cmd_centri.split(), stdout=classif_centri,
                       stderr=centri_log).communicate()
     
     
+    sys.exit()
+
     # De novo clustering using CARNAC-LR:
     path_to_carnac = path_apps + "CARNAC-LR_git93dd640/"
     dirOut_carnac = "./CARNAC/"
@@ -270,10 +271,8 @@ if __name__ == "__main__":
     else:
         print(cmd_carnac_convert)
         print(cmd_carnac)
-        
+    
     sys.exit()
-    
-    
         
     # Mapping using NGMLR:
     NGMLR_TIME =  t.time()
