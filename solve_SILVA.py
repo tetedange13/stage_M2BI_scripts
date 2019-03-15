@@ -260,20 +260,19 @@ if __name__ == "__main__":
               "metage_ONT_2019/")
     to_dbs_SILVA = to_dbs + "SILVA_refNR132_28feb19/"
 
-    test(to_dbs_SILVA + "wrong2good_taxids", "seqid2taxid")
+    # test(to_dbs_SILVA + "wrong2good_taxids", "seqid2taxid")
 
     # detect_problems("seqid2taxid", to_dbs_SILVA + "seqid2acc", 
     #                 "bonj/headers.txt")
 
     # local_taxid_search("wgs", "problems.txt")
-    local_taxid_search("gb", "wgs_need_remote")
-    # local_taxid_search("est", "bonj/wgs_need_remote", "bonj")
+    # local_taxid_search("gb", "wgs_need_remote")
+    # local_taxid_search("gss", "gb_need_remote")
 
-    # remote_taxid_search("problems.txt", "bonj")
+    remote_taxid_search("gb_need_remote")
     
     # correct_seqid2taxid(to_dbs + "Centri_idxes/SILVA/seqid2taxid", 
     #                     "bonj/wrong2good_taxids")
 
     #solve_headers(to_dbs_SILVA + "taxmap_ncbi_ssu_ref_nr99_132.txt", 
     #              to_dbs_SILVA + "headers.txt")
-    
