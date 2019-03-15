@@ -53,18 +53,34 @@ def taxid_from_gb_entry(gi_str):
     If the taxid cannot be found, the "Taxonomy" db of NCBI is (e-)searched
     using the ScientificName, to get the taxid 
     """
+    dict_specials = {"CP006690":"1051650",
+                     "CDRP01002148":"562",
+                     "FOMU01000028":"321267",
+                     "CP001098":"373903",
+                     "LIGM01000002":"337330",
+                     "MCIE01000002":"46170",
+                     "JTBM01000001":"28901",
+                     "LKUO01004057":"3659",
+                     "KH326984":"32644", # TAXID 32644 = NCBI unidentified
+                     "KH326984":"32644"} 
+
+    if gi_str in dict_specials.keys():
+        print("SPECIAL:", gi_str)
+        return dict_specials[gi_str]
+
+    print("QUERYING:", gi_str)
     try:
         fetch_handle = Entrez.efetch(db="nucleotide", id=gi_str,
                                      rettype='gb', retmode="text")
         fetch_res = fetch_handle.read()
         fetch_handle.close()
-
     except HTTPError:
         print("ERROR! HTTP 400 WITH GI:", gi_str)
-        sys.exit()
+        return "HTTP400"
+
     if not fetch_res:
         print("GI NOT FOUND:", gi_str)
-        sys.exit()
+        return "NOT_FOUND"
     
     # Regex for taxid:
     regex_taxid = re.compile("(:?\/db_xref=\"taxon:)([0-9]+)")
@@ -88,6 +104,6 @@ def taxid_from_gb_entry(gi_str):
     
     # Case where the taxid CANNOT be queried with the given ScientificName  
     if taxid == "TAXO_NOT_FOUND" or taxid == "SEVERAL_TAXIDS":
-        return "PROBLEM TAXID SEARCH"
-        
+        return "PB_TAXID_SEARCH"
+
     return taxid
