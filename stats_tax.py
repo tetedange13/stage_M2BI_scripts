@@ -22,10 +22,10 @@ import time as t
 import subprocess as sub
 import pysam as pys
 import multiprocessing as mp
-from functools import partial
-from docopt import docopt
 import sklearn.metrics as skm
 import matplotlib.pyplot as plt
+from functools import partial
+from docopt import docopt
 import src.remote as remote
 import src.check_args as check
 import src.parallelized as pll
@@ -60,7 +60,9 @@ def alignment_to_dict(align_obj):
 
     return {"mapq":align_obj.mapping_quality,
             "ref_name": align_obj.reference_name,
-            "ratio_len":ratio_len}
+            "ratio_len":ratio_len,
+            "is_suppl":align_obj.is_supplementary,
+            "is_second":align_obj.is_secondary}
             # "read_len":align_obj.infer_query_length()/align_obj.infer_read_length(),
             # "align_len":align_obj.infer_query_length()}
 
@@ -147,18 +149,20 @@ if __name__ == "__main__":
         print("SAM MODE !")
 
         # Guess the database used:
+        root_to_seqid2taxid = to_dbs + "Centri_idxes/"
         if "toZymo" in infile_base:
             print("DB GUESSED: Zymo")
-            to_seqid2taxid = to_dbs + "Centri_idxes/Zymo/seqid2taxid"
+            root_to_seqid2taxid += "Zymo"
         elif "toRrn" in infile_base:
             print("DB GUESSED: rrn")
-            to_seqid2taxid = to_dbs + "Centri_idxes/rrn/seqid2taxid"
+            root_to_seqid2taxid += "rrn"
         elif "toSilva" in infile_base:
             print("DB GUESSED: SILVA")
-            to_seqid2taxid = to_dbs + "Centri_idxes/SILVA/seqid2taxid"
+            root_to_seqid2taxid += "SILVA"
         else:
             print("Unkown database !\n")
             sys.exit(2)
+        to_seqid2taxid = root_to_seqid2taxid + "/seqid2taxid"
         print()
 
         # To make correspond operon number and taxid:
@@ -177,25 +181,24 @@ if __name__ == "__main__":
         dict_count = {"unmapped":0, "suppl_entries":0, "goods":0, "mapped":0}
         dict_mapq = {} # Needed to filter out alignments with low MAPQ
 
-        for alignment in input_samfile.fetch(until_eof=True):
+        for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
+            if (idx+1) % 500000 == 0: print("500 000 SAM entries elapsed !")
+
             if alignment.is_unmapped:
                 dict_count["unmapped"] += 1
                 dict_stats['FN'] += 1 # Count unmapped = 'FN'
 
             else:
                 # print(soft_clipping_from_cigar(alignment.cigartuples))
-                if alignment.is_secondary:
-                    pass # We skip secondary
+                dict_align = alignment_to_dict(alignment)
+                query_name = alignment.query_name
+                if alignment.is_supplementary or alignment.is_secondary:
+                    # dict_count["suppl_entries"] += 1
+                    dict_gethered[query_name].append(dict_align)
                 else:
-                    dict_align = alignment_to_dict(alignment)
-                    query_name = alignment.query_name
-                    if alignment.is_supplementary:
-                        dict_count["suppl_entries"] += 1
-                        dict_gethered[query_name].append(dict_align)
-                    else:
-                        dict_mapq[query_name] = alignment.mapping_quality
-                        assert(query_name not in dict_gethered.keys())
-                        dict_gethered[query_name] = [dict_align]
+                    dict_mapq[query_name] = alignment.mapping_quality
+                    assert(query_name not in dict_gethered.keys())
+                    dict_gethered[query_name] = [dict_align]
               
                 
         input_samfile.close()
@@ -205,7 +208,6 @@ if __name__ == "__main__":
         # Removing reads with lowest MAPQ:
         # CUTOFF_ON_MAPQ = 0.1  # 10%
         CUTOFF_ON_MAPQ = 0.05  # 5%
-        # CUTOFF_ON_MAPQ = 0
 
         print("\nRemoving the", str(int(CUTOFF_ON_MAPQ*100)) + "% worst reads...")
         sorted_by_mapq = sorted(dict_mapq.items(), key=lambda x: x[1])
@@ -253,7 +255,7 @@ if __name__ == "__main__":
                                taxonomic_cutoff=taxo_cutoff, 
                                tupl_sets=tupl_sets_levels,
                                cutoff_ratio=CUTOFF_ON_RATIO)
-        my_pool = mp.Pool(15)
+        my_pool = mp.Pool(10)
         results = my_pool.map(partial_func, dict_gethered.values())
         my_pool.close()
 

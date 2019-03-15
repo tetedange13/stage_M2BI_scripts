@@ -6,11 +6,11 @@ Contains all functions used to parallelise processes
 """
 
 
-# import src.shared_fun as shared
+import src.shared_fun as shared
 
 
 # FROM STAT_TAX.PY:
-def handle_suppl(list_align_obj, dict_conv_seqid2taxid):
+def handle_second(list_align_obj, dict_conv_seqid2taxid):
     """
     Take an alignment that has been found to be supplementary
     """
@@ -21,9 +21,11 @@ def handle_suppl(list_align_obj, dict_conv_seqid2taxid):
         set_taxid_target.add(taxid_target)
 
     # Different target name, but corresponding to the same taxid ?
-    if len(set_taxid_target) == 1: 
+    if len(set_taxid_target) == 1:
         return alignment["ref_name"] # Any target name is OK
-    return False
+    else:
+        lca = shared.taxfoo.find_lca(set_taxid_target)
+        print(lca);sys.exit()
 
 
 def SAM_taxo_classif(align_list, conv_seqid2taxid, taxonomic_cutoff, tupl_sets,
@@ -33,7 +35,10 @@ def SAM_taxo_classif(align_list, conv_seqid2taxid, taxonomic_cutoff, tupl_sets,
     reads. Filter out of 
     """
     if len(align_list) > 1: # Chimeric alignment
-        return ('suppl', )
+        if align_list[1]["is_second"]: # The 2nd alignment is secondary
+            assert(not align_list[1]["is_suppl"])
+            print("SALUT");sys.exit()
+        # return ('suppl', )
         # return ('suppl', handle_suppl(align_list, conv_seqid2taxid))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 
     else: # Normal linear case
@@ -43,8 +48,12 @@ def SAM_taxo_classif(align_list, conv_seqid2taxid, taxonomic_cutoff, tupl_sets,
             # ref_name = alignment.reference_name
             # ref_name = alignment.reference_name.split()[0]
             current_taxid = conv_seqid2taxid[align_dict["ref_name"]]
-            return (shared.in_zymo(current_taxid, taxonomic_cutoff, tupl_sets), 
-                    mapq)
+            lineage = shared.taxfoo.get_lineage_as_dict(current_taxid)
+            if taxonomic_cutoff in lineage:
+                return lineage[taxonomic_cutoff]
+            return 'FP' # ??
+            # return (shared.in_zymo(current_taxid, taxonomic_cutoff, tupl_sets), 
+            #         mapq)
         else:
             return ('ratio', ratio_len)
 
