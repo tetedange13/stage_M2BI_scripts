@@ -128,10 +128,7 @@ if __name__ == "__main__":
 
     # GET TAXONOMY FILES:
     if not (osp.isfile(dirOut+"nodes.dmp") and osp.isfile(dirOut+"names.dmp")):
-        print("\nGenerating taxonomic tree and names...")
-        with open("toto.txt", 'w') as toto:
-            toto.write(','.join(list(set_taxids)))
-        
+        print("\nGenerating taxonomic tree and names...")  
         cmd_centriDl = ("centrifuge-download -v -o " + dirOut + " -t " + 
                         ','.join(list(set_taxids)) + " taxonomy")
         sub.Popen(cmd_centriDl.split(), shell=True)
