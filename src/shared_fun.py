@@ -11,17 +11,17 @@ import src.ncbi_taxdump_utils as taxo_utils
 global taxfoo
 taxfoo = taxo_utils.NCBI_TaxonomyFoo()
 
+# Path to dump files:
+to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
+nodes_path = to_dbs + "nt_db/taxo_18feb19/nodes.dmp"
+names_path = to_dbs + "nt_db/taxo_18feb19/names.dmp"
+taxfoo.load_nodes_dmp(nodes_path)
+taxfoo.load_names_dmp(names_path)
+
 
 def generate_sets_zymo(taxonomic_cutoff):
     """
     """
-    # Path to dump files:
-    to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
-    nodes_path = to_dbs + "nt_db/taxo_18feb19/nodes.dmp"
-    names_path = to_dbs + "nt_db/taxo_18feb19/names.dmp"
-    taxfoo.load_nodes_dmp(nodes_path)
-    taxfoo.load_names_dmp(names_path)
-
     # Define the species contained within the Zymo mock community:
     dict_prok = {'Listeria monocytogenes':1639, 
                  'Bacillus subtilis':1423, 
