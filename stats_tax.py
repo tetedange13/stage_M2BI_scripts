@@ -67,6 +67,30 @@ def alignment_to_dict(align_obj):
             # "align_len":align_obj.infer_query_length()}
 
 
+def in_zymo(taxo_name, tupl_sets):
+    """
+    Given the rank of a BLAST hit and a sublist of taxonomic levels, deducted
+    from the cutoff (for the taxonomic level),  returns a string in 
+    ('TP', 'FP', 'TN', 'FN').
+    The name of the species is also requiered, to deal with 'strain' cases
+    """
+    # print(taxfoo.get_taxid_name(current_taxid), end='\t')
+    # current_lineage = taxfoo.get_lineage_as_dict(current_taxid)
+    # if taxonomic_cutoff not in current_lineage.keys():
+    #     return 'FP' # Taxo cutoff not in keys, so False Positive ?
+
+    # current_taxo_level = current_lineage[taxonomic_cutoff]
+    # assert(current_taxo_level)
+
+    set_levels_prok, set_levels_euk = tupl_sets
+    if taxo_name in set_levels_prok: # TP
+        return 'TP'
+    elif taxo_name in set_levels_euk: # TN
+        return 'TN'
+    else: # False Positive
+        return 'FP'
+
+
 def dict_stats_to_vectors(dict_res):
     """
     Generate 2 vectors (for predicted and true values), based on the values of
@@ -92,9 +116,7 @@ def dict_stats_to_vectors(dict_res):
 
 
 def calc_specificity(dict_res):
-    # Sensitivity, hit rate, recall, or true positive rate: TPR = TP/(TP+FN)
     # Specificity or true negative rate: TNR = TN/(TN+FP) 
-    # Precision or positive predictive value: PPV = TP/(TP+FP)
     # Negative predictive value: NPV = TN/(TN+FN)
     # Fall out or false positive rate: FPR = FP/(FP+TN)
     # False negative rate: FNR = FN/(TP+FN)
@@ -206,8 +228,8 @@ if __name__ == "__main__":
         dict_count["mapped"] = len(dict_gethered.keys())
 
         # Removing reads with lowest MAPQ:
-        # CUTOFF_ON_MAPQ = 0.1  # 10%
-        CUTOFF_ON_MAPQ = 0.05  # 5%
+        CUTOFF_ON_MAPQ = 0 
+        # CUTOFF_ON_MAPQ = 0.05  # 5%
 
         print("\nRemoving the", str(int(CUTOFF_ON_MAPQ*100)) + "% worst reads...")
         sorted_by_mapq = sorted(dict_mapq.items(), key=lambda x: x[1])
@@ -238,8 +260,8 @@ if __name__ == "__main__":
 
         # Handling supplementaries:
         TOTO = t.time()
-        CUTOFF_ON_RATIO = 0.9
-        # CUTOFF_ON_RATIO = 0
+        # CUTOFF_ON_RATIO = 0.9
+        CUTOFF_ON_RATIO = 0
         
 
         print("\nHandling supplementary alignments...")
@@ -248,45 +270,53 @@ if __name__ == "__main__":
         # assert(all(map(lambda a_list:len(a_list) > 1, dict_gethered.values())))
         # ref_name = alignment.reference_name
         # ref_name = alignment.reference_name.split()[0]
-
-        # Parallel version:
         partial_func = partial(pll.SAM_taxo_classif, 
                                conv_seqid2taxid=dict_seqid2taxid,
                                taxonomic_cutoff=taxo_cutoff, 
                                tupl_sets=tupl_sets_levels,
                                cutoff_ratio=CUTOFF_ON_RATIO)
-        my_pool = mp.Pool(10)
+
+        # Parallel version:
+        my_pool = mp.Pool(25)
         results = my_pool.map(partial_func, dict_gethered.values())
         my_pool.close()
 
         # Serial version:
-        # results = []
-        # for query_name in dict_gethered:
-        #   results.append(pll.SAM_taxo_classif(dict_gethered[query_name], 
-        #                  dict_seqid2taxid, taxo_cutoff, tupl_sets_levels, 
-        #                  CUTOFF_ON_RATIO))
+        # results = map(partial_func, dict_gethered.values())   
 
-        # list_res_suppl_handling = []
+        # sys.exit()
+        list_res_second_handling = []
         list_MAPQ = [] # Contain only MAPQ of align that pass all filters
+        list_identified_sp = []
         for res_eval in results:
             first_elem = res_eval[0]
-            if first_elem == 'suppl':
-                pass
-                # list_res_suppl_handling.append(res_eval[1])
+
+            if first_elem == 'second':
+                pass # FOR NOW
+                # list_res_second_handling.append(res_eval[1])
+            elif first_elem == 'suppl':
+                pass # We skip supplementaries
             else:
                 # if res_eval[0] == 'FN':
                 #     print("VAL RATIO:", res_eval[1]);sys.exit()
-                if first_elem != 'ratio':
-                    dict_stats[res_eval[0]] += 1
-                    list_MAPQ.append(res_eval[1])
-        print("SUPPL HANDLING TIME:", t.time()-TOTO)
+                if first_elem == 'FP':
+                    dict_stats[first_elem] += 1
+                elif first_elem == 'ratio':
+                    ratio = res_eval[1]
+                else:
+                    # list_MAPQ.append(res_eval[1])
+                    # list_identified_sp.append(res_eval[0])
+                    dict_stats[in_zymo(res_eval[0], tupl_sets_levels)] += 1
 
-        # Display distribution of MAPQ:
-        # right_xlim = max(list_MAPQ)
-        # # assert(all(map(lambda x: x<=left_xlim, list_MAPQ)))
-        # plt.hist(list_MAPQ, bins=int(256/1), log=True)
-        # plt.xlim((-1, right_xlim))
-        # plt.show()
+        print("SUPPL HANDLING TIME:", t.time() - TOTO)
+
+        if list_MAPQ:
+            # Display distribution of MAPQ:
+            right_xlim = max(list_MAPQ)
+            # assert(all(map(lambda x: x<=left_xlim, list_MAPQ)))
+            plt.hist(list_MAPQ, bins=int(256/1), log=True)
+            plt.xlim((-1, right_xlim))
+            plt.show()
         
         # Print general counting results:
         print(dict_count)
@@ -396,11 +426,11 @@ if __name__ == "__main__":
     NPV = 1 - calc_FOR(dict_to_convert)
     precision = round(skm.precision_score(y_true, y_pred), 4)
 
-    print("SENSITIVITY:", sensitivity, " | ", "FNR:", 1 - sensitivity)
-    print("SPECIFICITY:", calc_specificity(dict_to_convert))
-    print("PRECISION:", precision, " | ", "FDR:", 1 - precision)
+    print("SENSITIVITY:", sensitivity, " | ", "FNR:", 1 - sensitivity) # Sensitivity, hit rate, recall, or TPR = TP/(TP+FN)
+    print("PRECISION:", precision, " | ", "FDR:", 1 - precision) # positive predictive value: PPV = TP/(TP+FP) (or precision)
     print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
     # print(skm.classification_report(y_true, y_pred))
+    print("SPECIFICITY:", calc_specificity(dict_to_convert))
     print("FOR:", 1 - NPV, " | ", "NPV:", NPV)
     print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
     print("ACCURACY:", round(skm.accuracy_score(y_true, y_pred), 4))
