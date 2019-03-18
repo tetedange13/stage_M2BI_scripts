@@ -7,55 +7,44 @@ import time as t
 import multiprocessing as mp
 import itertools as ittls
 from functools import partial
-import src.remote as remote
 import src.parallelized as pll
 
-# import src.shared_fun as shared
+
+global problematic_taxids # taxid that need direct remote on taxo DB
+# More often entries that have been renamed and have an other taxid
+problematic_taxids = {"65071", "82939", "162153", "307514", "1940813",
+                      "1940819"}
 
 
-def solve_headers(to_taxmap_file, to_headers_list_file):
+def seqid2taxid_from_taxmap(to_taxmap_file, to_headers_list_file):
     """
     """
     dict_acc2taxid = {}
     with open(to_taxmap_file, 'r') as taxmap:
         for line in taxmap:
-            acc_nb, _, taxid = line.rstrip('\n').split('\t')[0:3]
+            pacc, _, _, _, _, taxid = line.rstrip('\n').split('\t')
+            taxid = taxid.strip()
             
-            if acc_nb not in dict_acc2taxid.keys():
-                dict_acc2taxid[acc_nb] = taxid
+            if pacc not in dict_acc2taxid.keys():
+                dict_acc2taxid[pacc] = taxid
             else:
-                pass
-                #print("DUPLICATE:", acc_nb, taxid)
-                #sys.exit(2)
-        
-    my_set = set()
+                assert(dict_acc2taxid[pacc] == taxid)
+                # print("DUPLICATE:", pacc, taxid)
+                # sys.exit(2)
+    
+    done_headers = set()
     with open(to_headers_list_file, 'r') as headers_file, \
          open("seqid2taxid", 'w') as seqid2taxid_file:
         for header in headers_file:
-            splitted_header = header.rstrip('\n').split('.')[0] # We get only the 1st part
-            if header not in my_set:
-                my_set.add(header)
+            pacc = header.rstrip('\n').split('.')[0] # We get only the 1st part
+            if header not in done_headers:
+                done_headers.add(header)
                 seqid2taxid_file.write(header.rstrip('\n') + '\t' + 
-                                       dict_acc2taxid[splitted_header] + '\n')
+                                       dict_acc2taxid[pacc] + '\n')
             else:
                 print("PROBLEM")
                 print(header)
                 sys.exit(2)
-
-
-def test(to_wrong2good_file, to_seqid2taxid):
-    with open(to_wrong2good_file, 'r') as wrong2good_file:
-        set_found_taxids = {line.split('\t')[0] for line in wrong2good_file}
-
-    done_taxids = set()
-    with open(to_seqid2taxid, 'r') as seqid2taxid_file, \
-         open("problems.txt", 'w') as pbs_file:
-        for line in seqid2taxid_file:
-            seqid, taxid = line.rstrip('\n').split('\t')
-            if taxid not in set_found_taxids and taxid not in done_taxids:
-                pbs_file.write(taxid + '\t' + seqid.split('.')[0] + '\n')
-                done_taxids.add(taxid)
-
 
 
 def detect_problems(to_seqid2taxid, to_seqid2acc, to_target_list, dirOut="./"):
@@ -70,7 +59,7 @@ def detect_problems(to_seqid2taxid, to_seqid2acc, to_target_list, dirOut="./"):
     taxfoo.load_nodes_dmp(nodes_path)
     taxfoo.load_names_dmp(names_path)
     print("Module loaded !")
-    print(taxfoo.get_lineage(161659));sys.exit()
+    # print(taxfoo.get_lineage(307514));sys.exit()
 
     dict_seqid2taxid = {}
     with open(to_seqid2taxid, 'r') as seqid2taxid_file:#, \
@@ -79,14 +68,13 @@ def detect_problems(to_seqid2taxid, to_seqid2acc, to_target_list, dirOut="./"):
             seqid, taxid = line.rstrip('\n').split('\t')
             assert(seqid not in dict_seqid2taxid.keys())
             dict_seqid2taxid[seqid] = taxid
-            # print(list(dict_seqid2taxid.keys())[list(dict_seqid2taxid.values()).index(acc_nb)])    
+            # print(list(dict_seqid2taxid.keys())[list(dict_seqid2taxid.values()).index(pacc)])    
 
     dict_seqid2acc = {}
     with open(to_seqid2acc) as seqid2acc_file:
         for line in seqid2acc_file:
-            seqid, acc_nb = line.rstrip('\n').split()
-            dict_seqid2acc[seqid] = acc_nb
-
+            seqid, pacc = line.rstrip('\n').split()
+            dict_seqid2acc[seqid] = pacc
 
     set_problems = set()
     done_taxids = set()
@@ -99,12 +87,17 @@ def detect_problems(to_seqid2taxid, to_seqid2acc, to_target_list, dirOut="./"):
             name_taxid = taxfoo.get_taxid_name(int(current_taxid))
             if name_taxid == "unidentified":
                 set_uniden.add(current_taxid)
+
+            # lineage_dict = taxfoo.get_lineage_as_dict(int(current_taxid))
+            # if 'genus' in lineage_dict.keys() and lineage_dict['genus'] == "Pythium": 
+            #     print(current_taxid)
                 # sys.exit()
-            if not name_taxid and current_taxid not in done_taxids:
-            # if not name_taxid:
-                set_problems.add(current_taxid + '\t' + 
-                                 dict_seqid2acc[ref_name] + '\n')
-                done_taxids.add(current_taxid)
+            if (not name_taxid and current_taxid or 
+                current_taxid in problematic_taxids):
+                if current_taxid not in done_taxids:
+                    set_problems.add(current_taxid + '\t' + 
+                                     dict_seqid2acc[ref_name] + '\n')
+                    done_taxids.add(current_taxid)
 
     if set_problems:
         print("PROBLEMS FOUND..")
@@ -112,14 +105,16 @@ def detect_problems(to_seqid2taxid, to_seqid2acc, to_target_list, dirOut="./"):
             [pbs_file.write(problem) for problem in set_problems]
     else:
         print("NO PROBLEMS FOUND !")
-    print("Taxids assiciated to 'unidentified':", set_uniden)
+    print("Taxids associated to 'unidentified':", set_uniden)
     print()
 
 
 def remote_taxid_search(to_problems_file, dirOut="./"):
     """
     """
+    import src.remote as remote
     print("REMOTE TAXID SEARCH...")
+
     dict_wrong2good = {} # Conversion between wrong and good taxid
     to_wrong2good_file = osp.join(dirOut, "wrong2good_taxids")
 
@@ -127,19 +122,27 @@ def remote_taxid_search(to_problems_file, dirOut="./"):
         with open(to_wrong2good_file, 'r') as wrong2good_file:
             for line in wrong2good_file:
                 wrong_taxid, good_taxid = line.rstrip('\n').split('\t')
+                assert(wrong_taxid != good_taxid)
                 dict_wrong2good[wrong_taxid] = good_taxid 
 
-    possible_issues = ("HTTP400", "PB_TAXID_SEARCH", "NOT_FOUND")
+    possible_issues = ("HTTP400", "TAXO_NOT_FOUND", "SEVERAL_TAXIDS", 
+                       "GI_NOT_FOUND")
     with open(to_problems_file, 'r') as pbs_file:
         for line in pbs_file:
-            wrong_taxid, acc_nb = line.rstrip('\n').split('\t')
+            wrong_taxid, pacc = line.rstrip('\n').split('\t')
 
             if wrong_taxid not in dict_wrong2good.keys():
-                good_taxid = remote.taxid_from_gb_entry(acc_nb)
+                good_taxid, found_organism = remote.taxid_from_gb_entry(pacc)
+
+                if (wrong_taxid == good_taxid or 
+                    wrong_taxid in problematic_taxids):
+                    print("PB WITH TAXID FOUND IN GB ENTRY !")
+                    print("   --> Requesting it on the NCBI Taxonomy db")
+                    good_taxid = remote.query_taxid(found_organism)
 
                 if good_taxid in possible_issues:
-                    with open(osp.join(dirOut, "remote_fails"), 'w') as fails:
-                        fails.write(acc_nb + '\t' + good_taxid + '\n')
+                    with open(osp.join(dirOut, "remote_fails"), 'a') as fails:
+                        fails.write(pacc + '\t' + good_taxid + '\n')
                 else:
                     dict_wrong2good[wrong_taxid] = good_taxid
                     with open(to_wrong2good_file, 'a') as wrong2good_file:
@@ -161,9 +164,9 @@ def local_taxid_search(gz_db_name, to_problems_file, dirOut="./",
 
     with open(to_problems_file, 'r') as pbs_file:
         for line in pbs_file:
-            wrong_taxid, acc_nb = line.rstrip('\n').split('\t')
+            wrong_taxid, pacc = line.rstrip('\n').split('\t')
             if wrong_taxid not in dict_acc2wrong.values():
-                dict_acc2wrong[acc_nb] = wrong_taxid
+                dict_acc2wrong[pacc] = wrong_taxid
 
     size_chunks = 1000000
     results = []
@@ -196,10 +199,10 @@ def local_taxid_search(gz_db_name, to_problems_file, dirOut="./",
     with open(to_wrong2good_file, 'a') as wrong2good_file:
         for res in results:
             if res: # If  NOT 'None'
-                for found_acc_nb, found_taxid in res:
+                for found_pacc, found_taxid in res:
                     if found_taxid not in dict_acc2good.values():
-                        old_taxid = dict_acc2wrong[found_acc_nb]
-                        dict_acc2good[found_acc_nb] = found_taxid
+                        old_taxid = dict_acc2wrong[found_pacc]
+                        dict_acc2good[found_pacc] = found_taxid
                         wrong2good_file.write(old_taxid + '\t' + 
                                               found_taxid + '\n')
 
@@ -217,7 +220,7 @@ def local_taxid_search(gz_db_name, to_problems_file, dirOut="./",
     print("PARALLEL SEARCH TIME:", t.time() - TAXID_START_TIME)
     print("TO_FIND:", nb_to_find)
     print("--> FOUND:", nb_found)
-    print(nb_to_find - nb_found, "acc_nb couldn't be found locally!")
+    print(nb_to_find - nb_found, "pacc couldn't be found locally!")
     print()
 
 
@@ -260,19 +263,18 @@ if __name__ == "__main__":
               "metage_ONT_2019/")
     to_dbs_SILVA = to_dbs + "SILVA_refNR132_28feb19/"
 
+    seqid2taxid_from_taxmap(to_dbs_SILVA + "taxmap_embl_ssu_ref_nr99_132.txt", 
+                           to_dbs_SILVA + "headers.txt")
+
     # test(to_dbs_SILVA + "wrong2good_taxids", "seqid2taxid")
 
     # detect_problems("seqid2taxid", to_dbs_SILVA + "seqid2acc", 
-    #                 "bonj/headers.txt")
+    #                 to_dbs_SILVA + "headers.txt")
 
     # local_taxid_search("wgs", "problems.txt")
     # local_taxid_search("gb", "wgs_need_remote")
     # local_taxid_search("gss", "gb_need_remote")
 
-    remote_taxid_search("gb_need_remote")
+    # remote_taxid_search("problems.txt")
     
-    # correct_seqid2taxid(to_dbs + "Centri_idxes/SILVA/seqid2taxid", 
-    #                     "bonj/wrong2good_taxids")
-
-    #solve_headers(to_dbs_SILVA + "taxmap_ncbi_ssu_ref_nr99_132.txt", 
-    #              to_dbs_SILVA + "headers.txt")
+    correct_seqid2taxid("old_seqid2taxid", "wrong2good_taxids")
