@@ -25,7 +25,8 @@ def handle_second(list_align_obj, dict_conv_seqid2taxid):
         return alignment["ref_name"] # Any target name is OK
     else:
         lca = shared.taxfoo.find_lca(set_taxid_target)
-        print(lca);sys.exit()
+        assert(lca != 1)
+        return lca
 
 
 def SAM_taxo_classif(align_list, conv_seqid2taxid, taxonomic_cutoff, tupl_sets,
@@ -36,10 +37,14 @@ def SAM_taxo_classif(align_list, conv_seqid2taxid, taxonomic_cutoff, tupl_sets,
     """
     if len(align_list) > 1: # Chimeric alignment
         if align_list[1]["is_second"]: # The 2nd alignment is secondary
+            # print(align_list[1]["is_second"])
             assert(not align_list[1]["is_suppl"])
-            print("SALUT");sys.exit()
-        # return ('suppl', )
-        # return ('suppl', handle_suppl(align_list, conv_seqid2taxid))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+            # print("SALUT");import sys;sys.exit()
+            return ('second', )
+            # return ('second', handle_second(align_list, conv_seqid2taxid))
+        else: # should be a supplementary
+            assert align_list[1]["is_suppl"]
+            return ('suppl', )                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 
     else: # Normal linear case
         align_dict = align_list[0]
@@ -50,8 +55,8 @@ def SAM_taxo_classif(align_list, conv_seqid2taxid, taxonomic_cutoff, tupl_sets,
             current_taxid = conv_seqid2taxid[align_dict["ref_name"]]
             lineage = shared.taxfoo.get_lineage_as_dict(current_taxid)
             if taxonomic_cutoff in lineage:
-                return lineage[taxonomic_cutoff]
-            return 'FP' # ??
+                return (lineage[taxonomic_cutoff], mapq)
+            return ('FP', mapq) # ??
             # return (shared.in_zymo(current_taxid, taxonomic_cutoff, tupl_sets), 
             #         mapq)
         else:
