@@ -38,8 +38,10 @@ def query_taxid(term_to_search):
     nb_taxid = len(taxid)
 
     if nb_taxid == 0: # No results found for the "term" specified
+        print("   --> TAXO_NOT_FOUND FOR:", term_to_search)
         return "TAXO_NOT_FOUND"
     elif nb_taxid > 1: # More than 1 taxid ("term" not enough precise ?)
+        print("   --> SEVERAL_TAXIDS FOR:", term_to_search)
         return "SEVERAL_TAXIDS"    
     else:
         return taxid[0]
@@ -62,11 +64,26 @@ def taxid_from_gb_entry(gi_str):
                      "JTBM01000001":"28901",
                      "LKUO01004057":"3659",
                      "KH326984":"32644", # TAXID 32644 = NCBI unidentified
-                     "KH326984":"32644"} 
+                     "KH326984":"32644",
+                     "FAOO01000006":"1643428",
+                     "DQ219316":"6738", # Unclassified Anomura
+                     "LQ104849":"715199", # Streptomyces sp. DSM 24056 not found
+                     "LQ104848":"631015", # Streptosporangium sp. DSM 24060 not found
+                     "AF052914":"859426", # ScientificName = 'Telestula sp.'
+                     "D85647":"63190", # ScientificName = '[Rhizoctonia] zeae
+                     "JQ977511":"13687", # Sphingomonas sp. Dca12 => Sphingomonas
+                     "AY165769":"71484"} # Flabellina sp. VV-2003 => Flabellina
+                     # "":"",
+                     # "GU138662":"2052682", # Pythium ultimum => Globisporangium ultimum
+                     # "AY598647":"1448053" # Pythium intermedium => Globisporangium intermedium
+                     # "AY598657":"2052683", # Pythium ultimum var. ultimum => Globisporangium ultimum var. ultimum
+                     # "MUIH01000001":"2548426", # Gammaproteobacteria included
+                     # "MUHZ01000001":"2548426"} # Gammaproteobacteria included
 
     if gi_str in dict_specials.keys():
         print("SPECIAL:", gi_str)
-        return dict_specials[gi_str]
+        # We return also the gi_str, to avoid unpack errors
+        return (dict_specials[gi_str], gi_str)
 
     print("QUERYING:", gi_str)
     try:
@@ -80,30 +97,27 @@ def taxid_from_gb_entry(gi_str):
 
     if not fetch_res:
         print("GI NOT FOUND:", gi_str)
-        return "NOT_FOUND"
+        return "GI_NOT_FOUND"
     
-    # Regex for taxid:
+    # Regex for taxid and SCientificName of the organism:
     regex_taxid = re.compile("(:?\/db_xref=\"taxon:)([0-9]+)")
     match_taxid = regex_taxid.search(fetch_res)
+    regex_organism = re.compile("(:?ORGANISM\s+)(.*)")
+    match_organism = regex_organism.search(fetch_res)
+    assert(match_organism)
+    organism = match_organism.group(2)
+    assert(organism != "metagenome")
     
     # If we got the ScientficName, but not the taxid:
     if match_taxid:
         taxid = match_taxid.group(2)
-    
     else:
         print("Taxid NOT contented within this GenBank entry !") 
         print("   --> Requesting it on the NCBI Taxonomy db")
-        
-        regex_organism = re.compile("(:?ORGANISM\s+)(.*)")
-        match_organism = regex_organism.search(fetch_res)
-        assert(match_organism)
-        
-        organism = match_organism.group(2)
-        assert(organism != "metagenome")
         taxid = query_taxid(organism)
-    
-    # Case where the taxid CANNOT be queried with the given ScientificName  
-    if taxid == "TAXO_NOT_FOUND" or taxid == "SEVERAL_TAXIDS":
-        return "PB_TAXID_SEARCH"
+        if taxid in ("TAXO_NOT_FOUND", "SEVERAL_TAXIDS"):
+            print("   --> FAILED !")
+        else:
+            print("   --> SUCCESS !")
 
-    return taxid
+    return (taxid, organism)
