@@ -10,18 +10,35 @@ import src.shared_fun as shared
 
 
 # FROM STAT_TAX.PY:
-def handle_second(list_align_obj, dict_conv_seqid2taxid):
+def handle_second(tupl_dict_item, dict_conv_seqid2taxid):
     """
-    Take an alignment that has been found to be supplementary
+    Take an alignment that has been found to be secondary
     """
-    set_taxid_target = set()
+    readID, list_align_obj = tupl_dict_item
+
+    # Check if they are all secondaries (1st one can be the representative):
+    assert(all(map(lambda dico: not dico["is_suppl"], list_align_obj)))
+    secondaries = [dico["is_second"] for dico in list_align_obj]
+    if list_align_obj[0]["is_second"]:
+        assert(all(secondaries))
+    else:
+        assert(all(secondaries[1: ]))
+
+    # if len(list_align_obj) != 6:
+    #     print("SALUT:", len(list_align_obj))
+    if any(map(lambda dico: dico["mapq"] > 0 , list_align_obj[1: ])):
+        print(readID, [align_obj["mapq"] for align_obj in list_align_obj])
+        
+    list_taxid_target = []
     for alignment in list_align_obj:
         taxid_target = dict_conv_seqid2taxid[alignment["ref_name"]]
         assert(taxid_target) # If taxid not 'None'
-        set_taxid_target.add(taxid_target)
+        list_taxid_target.append(taxid_target)
 
     # Different target name, but corresponding to the same taxid ?
-    if len(set_taxid_target) == 1:
+    set_taxid_target = set(list_taxid_target)
+    if len(set_taxid_target) == 1: # Mergeable directly
+        print("MERGE !")
         return alignment["ref_name"] # Any target name is OK
     else:
         lca = shared.taxfoo.find_lca(set_taxid_target)
@@ -29,22 +46,18 @@ def handle_second(list_align_obj, dict_conv_seqid2taxid):
         return lca
 
 
-def SAM_taxo_classif(align_list, conv_seqid2taxid, taxonomic_cutoff, tupl_sets,
-                     cutoff_ratio):
+def SAM_taxo_classif(tupl_dict_item, conv_seqid2taxid, taxonomic_cutoff, 
+                     tupl_sets, cutoff_ratio):
     """
     Parallelized taxonomic classification, from a group (by readID) of mapped 
     reads. Filter out of 
     """
-    if len(align_list) > 1: # Chimeric alignment
-        if align_list[1]["is_second"]: # The 2nd alignment is secondary
-            # print(align_list[1]["is_second"])
-            assert(not align_list[1]["is_suppl"])
-            # print("SALUT");import sys;sys.exit()
-            return ('second', )
-            # return ('second', handle_second(align_list, conv_seqid2taxid))
-        else: # should be a supplementary
-            assert align_list[1]["is_suppl"]
-            return ('suppl', )                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+    readID, align_list = tupl_dict_item
+    nb_alignments_for_readID = len(align_list)
+    if nb_alignments_for_readID > 1: # Secondary alignment
+        # return ('second', )
+        return ('second', handle_second(tupl_dict_item, conv_seqid2taxid),
+                nb_alignments_for_readID)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 
     else: # Normal linear case
         align_dict = align_list[0]
@@ -57,8 +70,6 @@ def SAM_taxo_classif(align_list, conv_seqid2taxid, taxonomic_cutoff, tupl_sets,
             if taxonomic_cutoff in lineage:
                 return (lineage[taxonomic_cutoff], mapq)
             return ('FP', mapq) # ??
-            # return (shared.in_zymo(current_taxid, taxonomic_cutoff, tupl_sets), 
-            #         mapq)
         else:
             return ('ratio', ratio_len)
 
