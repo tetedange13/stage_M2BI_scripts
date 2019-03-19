@@ -22,7 +22,6 @@ import time as t
 import subprocess as sub
 import pysam as pys
 import multiprocessing as mp
-import sklearn.metrics as skm
 import matplotlib.pyplot as plt
 from functools import partial
 from docopt import docopt
@@ -86,7 +85,8 @@ def in_zymo(taxo_name, tupl_sets):
     if taxo_name in set_levels_prok: # TP
         return 'TP'
     elif taxo_name in set_levels_euk: # TN
-        return 'TN'
+        # return 'TN'
+        return 'FP' # Eukaryota from the Zymo treated as FP too 
     else: # False Positive
         return 'FP'
 
@@ -139,6 +139,29 @@ def calc_FOR(dict_res):
         return spe
     except ZeroDivisionError:
         return 'NA'
+
+
+def compute_metrics(dict_stats_to_convert, at_taxa_level):
+    """
+    """
+    import sklearn.metrics as skm
+    y_true, y_pred = dict_stats_to_vectors(dict_stats_to_convert)
+
+    precision = round(skm.precision_score(y_true, y_pred), 4) # PPV = TP/(TP+FP) (positive predictive value or precision)
+    print("PRECISION:", precision, " | ", "FDR:", 1 - precision) 
+
+    if not at_taxa_level:
+        sensitivity = round(skm.recall_score(y_true, y_pred), 4)
+    
+        print("SENSITIVITY:", sensitivity, " | ", "FNR:", 1 - sensitivity) # TPR = TP/(TP+FN) (or sensitivity, hit rate, recall) 
+        print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
+        print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
+        print("ACCURACY:", round(skm.accuracy_score(y_true, y_pred), 4))
+        print("SPECIFICITY:", calc_specificity(dict_stats_to_convert))
+        # NPV = 1 - calc_FOR(dict_stats_to_convert)
+        # print("FOR:", 1 - NPV, " | ", "NPV:", NPV)
+    print()
+
 
 
 
@@ -200,8 +223,9 @@ if __name__ == "__main__":
         input_samfile = pys.AlignmentFile(to_infile, "r")
 
         dict_gethered = {}
-        dict_count = {"unmapped":0, "suppl_entries":0, "goods":0, "mapped":0}
-        dict_mapq = {} # Needed to filter out alignments with low MAPQ
+        dict_count = {"unmapped":0, "secondaries":0}
+        list_suppl = []
+        # dict_mapq = {} # Needed to filter out alignments with low MAPQ
 
         for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
             if (idx+1) % 500000 == 0: print("500 000 SAM entries elapsed !")
@@ -211,51 +235,83 @@ if __name__ == "__main__":
                 dict_stats['FN'] += 1 # Count unmapped = 'FN'
 
             else:
-                # print(soft_clipping_from_cigar(alignment.cigartuples))
-                dict_align = alignment_to_dict(alignment)
                 query_name = alignment.query_name
-                if alignment.is_supplementary or alignment.is_secondary:
-                    # dict_count["suppl_entries"] += 1
-                    dict_gethered[query_name].append(dict_align)
+                if alignment.has_tag("SA"): # We skip supplementaries
+                    list_suppl.append(query_name)
+                    if not alignment.is_supplementary:
+                        dict_count["mapped"] += 1
                 else:
-                    dict_mapq[query_name] = alignment.mapping_quality
-                    assert(query_name not in dict_gethered.keys())
-                    dict_gethered[query_name] = [dict_align]
+                    # if not alignment.is_secondary:
+                    #     print(alignment.__str__());sys.exit()
+                    dict_align = alignment_to_dict(alignment)
+                    
+                    # if alignment.is_supplementary or alignment.is_secondary:
+                    if query_name in dict_gethered.keys():
+                        # else: # Secondary
+                        # dict_count["suppl_entries"] += 1
+                        dict_gethered[query_name].append(dict_align)
+                    else:
+                        # dict_mapq[query_name] = alignment.mapping_quality
+                        # assert(query_name not in dict_gethered.keys())
+                        dict_gethered[query_name] = [dict_align]
               
                 
         input_samfile.close()
         print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
-        dict_count["mapped"] = len(dict_gethered.keys())
+
+        dict_count["mapped"] += len(dict_gethered.keys())
+        dict_count["SA"] = len(list_suppl)
+        dict_count["SA_uniq"] = len(set(list_suppl))
+        del list_suppl
+
+        # Removing supplementaries and low mapq:
+        # fixed_mapq_cutoff = 2
+        # all_query_name = list(dict_gethered.keys()) # List casting needed here
+        # compt_suppl_SAM_entries, compt_nb_suppl = 0, 0
+
+        # for query_name in all_query_name:
+        #     len_align_list = len(dict_gethered[query_name])
+        #     cond_1_a = len_align_list > 1
+        #     # cond_2 = dict_gethered[query_name][0]["mapq"] < fixed_mapq_cutoff
+
+        #     if (cond_1_a and dict_gethered[query_name][1]["is_suppl"]): #or cond_2:
+        #         # if not cond_2:
+        #         compt_suppl_SAM_entries += len_align_list
+        #         compt_nb_suppl += 1
+        #         print("TOTO")
+        #         del dict_gethered[query_name]
+        # print("NB_ENTRIES (SUPPL) REMOVED", compt_suppl_SAM_entries)
+        # print("NB_SUPPL REMOVED", compt_nb_suppl)
+
 
         # Removing reads with lowest MAPQ:
-        CUTOFF_ON_MAPQ = 0 
-        # CUTOFF_ON_MAPQ = 0.05  # 5%
+        # CUTOFF_ON_MAPQ = 0 
+        # # CUTOFF_ON_MAPQ = 0.05  # 5%
 
-        print("\nRemoving the", str(int(CUTOFF_ON_MAPQ*100)) + "% worst reads...")
-        sorted_by_mapq = sorted(dict_mapq.items(), key=lambda x: x[1])
-        inital_len_dict_gethered = len(sorted_by_mapq)
-        nb_to_remove = int(inital_len_dict_gethered*CUTOFF_ON_MAPQ)
-        print("(represents theorically:", nb_to_remove, "reads)")
+        # print("\nRemoving the", str(int(CUTOFF_ON_MAPQ*100)) + "% worst reads...")
+        # sorted_by_mapq = sorted(dict_mapq.items(), key=lambda x: x[1])
+        # inital_len_dict_gethered = len(sorted_by_mapq)
+        # nb_to_remove = int(inital_len_dict_gethered*CUTOFF_ON_MAPQ)
+        # print("(represents theorically:", nb_to_remove, "reads)")
 
-        i, nb_removed = 0, 0
-        while nb_removed < nb_to_remove and i < inital_len_dict_gethered:
-            current_query_name = sorted_by_mapq[i][0]
-            if len(dict_gethered[current_query_name]) == 1: # NOT suppl
-                del dict_gethered[current_query_name]
-                nb_removed += 1
-            i += 1
+        # i, nb_removed = 0, 0
+        # while nb_removed < nb_to_remove and i < inital_len_dict_gethered:
+        #     current_query_name = sorted_by_mapq[i][0]
+        #     if len(dict_gethered[current_query_name]) == 1: # NOT suppl
+        #         del dict_gethered[current_query_name]
+        #         nb_removed += 1
+        #     i += 1
 
-        if nb_removed < nb_to_remove:
-            print("WARNING: Couldn't remove enough alignments...")
-            print("(removed only", nb_removed)
-        assert(inital_len_dict_gethered == len(dict_gethered) + nb_removed)
+        # if nb_removed < nb_to_remove:
+        #     print("WARNING: Couldn't remove enough alignments...")
+        #     print("(removed only", nb_removed)
+        # assert(inital_len_dict_gethered == len(dict_gethered) + nb_removed)
 
-        if nb_removed != nb_to_remove:
-            print("Number of alignments actually removed", nb_removed)
-        else:
-            print("Well removed the predicted number of alignments !")
+        # if nb_removed != nb_to_remove:
+        #     print("Number of alignments actually removed", nb_removed)
+        # else:
+        #     print("Well removed the predicted number of alignments !")
         print()
-        # dict_stats['FN'] += nb_removed
 
 
         # Handling supplementaries:
@@ -264,7 +320,7 @@ if __name__ == "__main__":
         CUTOFF_ON_RATIO = 0
         
 
-        print("\nHandling supplementary alignments...")
+        print("Handling supplementary alignments...")
         print("Cutoff on alignment length of:", CUTOFF_ON_RATIO)
         # # Check if all lists have length >= 2:
         # assert(all(map(lambda a_list:len(a_list) > 1, dict_gethered.values())))
@@ -277,38 +333,70 @@ if __name__ == "__main__":
                                cutoff_ratio=CUTOFF_ON_RATIO)
 
         # Parallel version:
-        my_pool = mp.Pool(25)
-        results = my_pool.map(partial_func, dict_gethered.values())
+        my_pool = mp.Pool(15)
+        results = my_pool.map(partial_func, dict_gethered.items())
         my_pool.close()
 
         # Serial version:
-        # results = map(partial_func, dict_gethered.values())   
+        # results = map(partial_func, dict_gethered.values())
+
 
         # sys.exit()
         list_res_second_handling = []
         list_MAPQ = [] # Contain only MAPQ of align that pass all filters
         list_identified_sp = []
+        compt_FP = 0
+
         for res_eval in results:
             first_elem = res_eval[0]
 
             if first_elem == 'second':
-                pass # FOR NOW
+                dict_count["secondaries"] += 1
                 # list_res_second_handling.append(res_eval[1])
-            elif first_elem == 'suppl':
-                pass # We skip supplementaries
             else:
                 # if res_eval[0] == 'FN':
                 #     print("VAL RATIO:", res_eval[1]);sys.exit()
                 if first_elem == 'FP':
                     dict_stats[first_elem] += 1
+                    compt_FP += 1
                 elif first_elem == 'ratio':
                     ratio = res_eval[1]
                 else:
                     # list_MAPQ.append(res_eval[1])
-                    # list_identified_sp.append(res_eval[0])
-                    dict_stats[in_zymo(res_eval[0], tupl_sets_levels)] += 1
-
+                    list_identified_sp.append(res_eval[0])
+        
         print("SUPPL HANDLING TIME:", t.time() - TOTO)
+        print()
+        print("FP FROM NOT IN KEYS:", compt_FP)
+        # set_seen_sp = set()
+        set_seen_prok = set()
+        # compt_seen_prok = set()
+        dict_species2res = {} # To access evaluation results of a given species 
+
+        for species in list_identified_sp:
+            res_eval = in_zymo(species, tupl_sets_levels)
+            dict_stats[res_eval] += 1
+            dict_species2res[species] = res_eval
+
+            if res_eval == 'TP': # If it is a proK from th Zymo
+                set_seen_prok.add(species)
+        
+
+         # AT THE TAXA LEVEL:
+        set_prok_Zymo = tupl_sets_levels[0]
+        recall_at_taxa_level = len(set_seen_prok)/len(set_prok_Zymo)
+        assert(all(map(lambda dict_val: dict_val != 'FN', 
+                       dict_species2res.values())))
+
+        print("RESULTS AT THE TAXA LEVELS:")
+        TP_list = [sp for sp in dict_species2res if dict_species2res[sp] == 'TP']
+        print("NB_TP", len(TP_list), " | NB_FP", len(dict_species2res))
+        dict_stats_sp_level = {'TP':len(TP_list),
+                               'FP':len(dict_species2res.keys())}
+        compute_metrics(dict_stats_sp_level, True)
+        print("SENSITIVITY:", recall_at_taxa_level, " | ", "FNR:",
+              1 - recall_at_taxa_level)
+
 
         if list_MAPQ:
             # Display distribution of MAPQ:
@@ -421,17 +509,4 @@ if __name__ == "__main__":
 
 
     # COMPUTE METRICS:
-    y_true, y_pred = dict_stats_to_vectors(dict_to_convert)
-    sensitivity = round(skm.recall_score(y_true, y_pred), 4)
-    NPV = 1 - calc_FOR(dict_to_convert)
-    precision = round(skm.precision_score(y_true, y_pred), 4)
-
-    print("SENSITIVITY:", sensitivity, " | ", "FNR:", 1 - sensitivity) # Sensitivity, hit rate, recall, or TPR = TP/(TP+FN)
-    print("PRECISION:", precision, " | ", "FDR:", 1 - precision) # positive predictive value: PPV = TP/(TP+FP) (or precision)
-    print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
-    # print(skm.classification_report(y_true, y_pred))
-    print("SPECIFICITY:", calc_specificity(dict_to_convert))
-    print("FOR:", 1 - NPV, " | ", "NPV:", NPV)
-    print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
-    print("ACCURACY:", round(skm.accuracy_score(y_true, y_pred), 4))
-    print()
+    compute_metrics(dict_to_convert, False)
