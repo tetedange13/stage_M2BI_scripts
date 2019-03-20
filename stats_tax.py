@@ -61,34 +61,70 @@ def alignment_to_dict(align_obj):
             "ref_name": align_obj.reference_name,
             "ratio_len":ratio_len,
             "is_suppl":align_obj.is_supplementary,
+            "AS":align_obj.get_tag("AS"),
             "is_second":align_obj.is_secondary}
             # "read_len":align_obj.infer_query_length()/align_obj.infer_read_length(),
             # "align_len":align_obj.infer_query_length()}
 
 
-def in_zymo(taxo_name, tupl_sets):
-    """
-    Given the rank of a BLAST hit and a sublist of taxonomic levels, deducted
-    from the cutoff (for the taxonomic level),  returns a string in 
-    ('TP', 'FP', 'TN', 'FN').
-    The name of the species is also requiered, to deal with 'strain' cases
-    """
-    # print(taxfoo.get_taxid_name(current_taxid), end='\t')
-    # current_lineage = taxfoo.get_lineage_as_dict(current_taxid)
-    # if taxonomic_cutoff not in current_lineage.keys():
-    #     return 'FP' # Taxo cutoff not in keys, so False Positive ?
+# def in_zymo_old(taxo_name, tupl_sets):
+#     """
+#     Given the rank of a BLAST hit and a sublist of taxonomic levels, deducted
+#     from the cutoff (for the taxonomic level),  returns a string in 
+#     ('TP', 'FP', 'TN', 'FN').
+#     The name of the species is also requiered, to deal with 'strain' cases
+#     """
+#     # print(taxfoo.get_taxid_name(current_taxid), end='\t')
+#     # current_lineage = taxfoo.get_lineage_as_dict(current_taxid)
+#     # if taxonomic_cutoff not in current_lineage.keys():
+#     #     return 'FP' # Taxo cutoff not in keys, so False Positive ?
 
-    # current_taxo_level = current_lineage[taxonomic_cutoff]
-    # assert(current_taxo_level)
+#     # current_taxo_level = current_lineage[taxonomic_cutoff]
+#     # assert(current_taxo_level)
 
+#     set_levels_prok, set_levels_euk = tupl_sets
+#     if taxo_name in set_levels_prok: # TP
+#         return 'TP'
+#     # elif taxo_name in set_levels_euk: # TN
+#         # return 'TN'
+#         # return 'FP' # Eukaryota from the Zymo treated as FP too 
+#     else: # False Positive
+#         return 'FP'
+
+
+def str_from_res_eval(tupl_res_eval):
+    """
+    Generate a string (ready to write) from an evaluation result
+    """
+    readID, type_res, lineage, mapq = tupl_res_eval
+    to_return = [readID, type_res]
+    lineage_to_write = lineage 
+
+    if type_res != 'ratio':
+        lineage_to_write = ';'.join(str(taxid) for taxid in lineage)
+
+    return ",".join(to_return + [lineage_to_write, str(mapq)])
+
+
+def in_zymo(str_list_taxids, tupl_sets, taxonomic_cutoff):
+    """
+    """
     set_levels_prok, set_levels_euk = tupl_sets
-    if taxo_name in set_levels_prok: # TP
-        return 'TP'
-    elif taxo_name in set_levels_euk: # TN
-        # return 'TN'
-        return 'FP' # Eukaryota from the Zymo treated as FP too 
-    else: # False Positive
-        return 'FP'
+
+    found = False
+    for taxid in str_list_taxids.split(';'):
+        if shared.taxfoo.get_taxid_rank(int(taxid)) == taxonomic_cutoff:
+            found = True
+            break
+
+    taxo_name = shared.taxfoo.get_taxid_name(int(taxid))
+
+    if not found:
+        return 'FPnotInKey'
+    else:
+        if taxo_name in set_levels_prok:
+            return (taxo_name, "TP")
+    return (taxo_name, "FP")
 
 
 def dict_stats_to_vectors(dict_res):
@@ -210,167 +246,194 @@ if __name__ == "__main__":
         to_seqid2taxid = root_to_seqid2taxid + "/seqid2taxid"
         print()
 
-        # To make correspond operon number and taxid:
-        dict_seqid2taxid = {}
-        with open(to_seqid2taxid, 'r') as seqid2taxid_file:
-            for line in seqid2taxid_file:
-                splitted_line = line.rstrip('\n').split('\t')
-                dict_seqid2taxid[splitted_line[0]] = int(splitted_line[1])
+        to_out_file = "salut.csv"
+        if not osp.isfile(to_out_file):
+            # To make correspond operon number and taxid:
+            dict_seqid2taxid = {}
+            with open(to_seqid2taxid, 'r') as seqid2taxid_file:
+                for line in seqid2taxid_file:
+                    splitted_line = line.rstrip('\n').split('\t')
+                    dict_seqid2taxid[splitted_line[0]] = int(splitted_line[1])
 
-        # Start SAM file parsing:
-        print("Extracting information from SAM file...")
-        START_SAM_PARSING = t.time()
-        input_samfile = pys.AlignmentFile(to_infile, "r")
+            # Start SAM file parsing:
+            print("Extracting information from SAM file...")
+            START_SAM_PARSING = t.time()
+            input_samfile = pys.AlignmentFile(to_infile, "r")
 
-        dict_gethered = {}
-        dict_count = {"unmapped":0, "secondaries":0}
-        list_suppl = []
-        # dict_mapq = {} # Needed to filter out alignments with low MAPQ
+            dict_gethered = {}
+            dict_count = {"mapped":0}
+            list_suppl = []
+            list_unmapped = []
+            # dict_mapq = {} # Needed to filter out alignments with low MAPQ
 
-        for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
-            if (idx+1) % 500000 == 0: print("500 000 SAM entries elapsed !")
-
-            if alignment.is_unmapped:
-                dict_count["unmapped"] += 1
-                dict_stats['FN'] += 1 # Count unmapped = 'FN'
-
-            else:
+            for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
+                if (idx+1) % 500000 == 0:
+                    print("500 000 SAM entries elapsed !")
                 query_name = alignment.query_name
-                if alignment.has_tag("SA"): # We skip supplementaries
-                    list_suppl.append(query_name)
-                    if not alignment.is_supplementary:
-                        dict_count["mapped"] += 1
+                assert(query_name) # Different from ""
+
+                if alignment.is_unmapped:
+                    list_unmapped.append(query_name)
+                    dict_stats['FN'] += 1 # Count unmapped = 'FN'
+
                 else:
-                    # if not alignment.is_secondary:
-                    #     print(alignment.__str__());sys.exit()
-                    dict_align = alignment_to_dict(alignment)
-                    
-                    # if alignment.is_supplementary or alignment.is_secondary:
-                    if query_name in dict_gethered.keys():
-                        # else: # Secondary
-                        # dict_count["suppl_entries"] += 1
-                        dict_gethered[query_name].append(dict_align)
+                    if alignment.has_tag("SA"): # We skip supplementaries
+                        list_suppl.append(query_name)
+                        if not alignment.is_supplementary:
+                            dict_count["mapped"] += 1
                     else:
-                        # dict_mapq[query_name] = alignment.mapping_quality
-                        # assert(query_name not in dict_gethered.keys())
-                        dict_gethered[query_name] = [dict_align]
-              
-                
-        input_samfile.close()
-        print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
+                        dict_align = alignment_to_dict(alignment)
+                        if query_name in dict_gethered.keys():
+                            dict_gethered[query_name].append(dict_align)
+                        else:
+                            # dict_mapq[query_name] = alignment.mapping_quality
+                            # assert(query_name not in dict_gethered.keys())
+                            dict_gethered[query_name] = [dict_align]
+                  
+                    
+            input_samfile.close()
+            print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
 
-        dict_count["mapped"] += len(dict_gethered.keys())
-        dict_count["SA"] = len(list_suppl)
-        dict_count["SA_uniq"] = len(set(list_suppl))
-        del list_suppl
+            assert(len(list_unmapped) == len(set(list_unmapped)))
+            # dict_count['unmapped'] = len(list_unmapped)
+            dict_count["mapped"] += len(dict_gethered.keys())
+            dict_count["SA"] = len(list_suppl)
+            dict_count["SA_uniq"] = len(set(list_suppl))
+            del list_suppl
 
-        # Removing supplementaries and low mapq:
-        # fixed_mapq_cutoff = 2
-        # all_query_name = list(dict_gethered.keys()) # List casting needed here
-        # compt_suppl_SAM_entries, compt_nb_suppl = 0, 0
+            # Removing supplementaries and low mapq:
+            # fixed_mapq_cutoff = 2
+            # all_query_name = list(dict_gethered.keys()) # List casting needed here
+            # compt_suppl_SAM_entries, compt_nb_suppl = 0, 0
 
-        # for query_name in all_query_name:
-        #     len_align_list = len(dict_gethered[query_name])
-        #     cond_1_a = len_align_list > 1
-        #     # cond_2 = dict_gethered[query_name][0]["mapq"] < fixed_mapq_cutoff
+            # for query_name in all_query_name:
+            #     len_align_list = len(dict_gethered[query_name])
+            #     cond_1_a = len_align_list > 1
+            #     # cond_2 = dict_gethered[query_name][0]["mapq"] < fixed_mapq_cutoff
 
-        #     if (cond_1_a and dict_gethered[query_name][1]["is_suppl"]): #or cond_2:
-        #         # if not cond_2:
-        #         compt_suppl_SAM_entries += len_align_list
-        #         compt_nb_suppl += 1
-        #         print("TOTO")
-        #         del dict_gethered[query_name]
-        # print("NB_ENTRIES (SUPPL) REMOVED", compt_suppl_SAM_entries)
-        # print("NB_SUPPL REMOVED", compt_nb_suppl)
-
-
-        # Removing reads with lowest MAPQ:
-        # CUTOFF_ON_MAPQ = 0 
-        # # CUTOFF_ON_MAPQ = 0.05  # 5%
-
-        # print("\nRemoving the", str(int(CUTOFF_ON_MAPQ*100)) + "% worst reads...")
-        # sorted_by_mapq = sorted(dict_mapq.items(), key=lambda x: x[1])
-        # inital_len_dict_gethered = len(sorted_by_mapq)
-        # nb_to_remove = int(inital_len_dict_gethered*CUTOFF_ON_MAPQ)
-        # print("(represents theorically:", nb_to_remove, "reads)")
-
-        # i, nb_removed = 0, 0
-        # while nb_removed < nb_to_remove and i < inital_len_dict_gethered:
-        #     current_query_name = sorted_by_mapq[i][0]
-        #     if len(dict_gethered[current_query_name]) == 1: # NOT suppl
-        #         del dict_gethered[current_query_name]
-        #         nb_removed += 1
-        #     i += 1
-
-        # if nb_removed < nb_to_remove:
-        #     print("WARNING: Couldn't remove enough alignments...")
-        #     print("(removed only", nb_removed)
-        # assert(inital_len_dict_gethered == len(dict_gethered) + nb_removed)
-
-        # if nb_removed != nb_to_remove:
-        #     print("Number of alignments actually removed", nb_removed)
-        # else:
-        #     print("Well removed the predicted number of alignments !")
-        print()
+            #     if (cond_1_a and dict_gethered[query_name][1]["is_suppl"]): #or cond_2:
+            #         # if not cond_2:
+            #         compt_suppl_SAM_entries += len_align_list
+            #         compt_nb_suppl += 1
+            #         print("TOTO")
+            #         del dict_gethered[query_name]
+            # print("NB_ENTRIES (SUPPL) REMOVED", compt_suppl_SAM_entries)
+            # print("NB_SUPPL REMOVED", compt_nb_suppl)
 
 
-        # Handling supplementaries:
-        TOTO = t.time()
-        # CUTOFF_ON_RATIO = 0.9
-        CUTOFF_ON_RATIO = 0
-        
+            # Removing reads with lowest MAPQ:
+            # CUTOFF_ON_MAPQ = 0 
+            # # CUTOFF_ON_MAPQ = 0.05  # 5%
 
-        print("Handling supplementary alignments...")
-        print("Cutoff on alignment length of:", CUTOFF_ON_RATIO)
-        # # Check if all lists have length >= 2:
-        # assert(all(map(lambda a_list:len(a_list) > 1, dict_gethered.values())))
-        # ref_name = alignment.reference_name
-        # ref_name = alignment.reference_name.split()[0]
-        partial_func = partial(pll.SAM_taxo_classif, 
-                               conv_seqid2taxid=dict_seqid2taxid,
-                               taxonomic_cutoff=taxo_cutoff, 
-                               tupl_sets=tupl_sets_levels,
-                               cutoff_ratio=CUTOFF_ON_RATIO)
+            # print("\nRemoving the", str(int(CUTOFF_ON_MAPQ*100)) + "% worst reads...")
+            # sorted_by_mapq = sorted(dict_mapq.items(), key=lambda x: x[1])
+            # inital_len_dict_gethered = len(sorted_by_mapq)
+            # nb_to_remove = int(inital_len_dict_gethered*CUTOFF_ON_MAPQ)
+            # print("(represents theorically:", nb_to_remove, "reads)")
 
-        # Parallel version:
-        my_pool = mp.Pool(15)
-        results = my_pool.map(partial_func, dict_gethered.items())
-        my_pool.close()
+            # i, nb_removed = 0, 0
+            # while nb_removed < nb_to_remove and i < inital_len_dict_gethered:
+            #     current_query_name = sorted_by_mapq[i][0]
+            #     if len(dict_gethered[current_query_name]) == 1: # NOT suppl
+            #         del dict_gethered[current_query_name]
+            #         nb_removed += 1
+            #     i += 1
 
-        # Serial version:
-        # results = map(partial_func, dict_gethered.values())
+            # if nb_removed < nb_to_remove:
+            #     print("WARNING: Couldn't remove enough alignments...")
+            #     print("(removed only", nb_removed)
+            # assert(inital_len_dict_gethered == len(dict_gethered) + nb_removed)
+
+            # if nb_removed != nb_to_remove:
+            #     print("Number of alignments actually removed", nb_removed)
+            # else:
+            #     print("Well removed the predicted number of alignments !")
+            print()
 
 
-        # sys.exit()
-        list_res_second_handling = []
-        list_MAPQ = [] # Contain only MAPQ of align that pass all filters
-        list_identified_sp = []
-        compt_FP = 0
+            # Handling supplementaries:
+            TOTO = t.time()
+            # CUTOFF_ON_RATIO = 0.9
+            CUTOFF_ON_RATIO = 0
+            
 
-        for res_eval in results:
-            first_elem = res_eval[0]
+            print("Handling supplementary alignments...")
+            print("Cutoff on alignment length of:", CUTOFF_ON_RATIO)
+            # # Check if all lists have length >= 2:
+            # assert(all(map(lambda a_list:len(a_list) > 1, dict_gethered.values())))
+            # ref_name = alignment.reference_name
+            # ref_name = alignment.reference_name.split()[0]
+            partial_func = partial(pll.SAM_taxo_classif, 
+                                   conv_seqid2taxid=dict_seqid2taxid,
+                                   taxonomic_cutoff=taxo_cutoff, 
+                                   tupl_sets=tupl_sets_levels,
+                                   cutoff_ratio=CUTOFF_ON_RATIO)
 
-            if first_elem == 'second':
-                dict_count["secondaries"] += 1
-                # list_res_second_handling.append(res_eval[1])
-            else:
-                # if res_eval[0] == 'FN':
-                #     print("VAL RATIO:", res_eval[1]);sys.exit()
-                if first_elem == 'FP':
-                    dict_stats[first_elem] += 1
-                    compt_FP += 1
-                elif first_elem == 'ratio':
-                    ratio = res_eval[1]
-                else:
-                    # list_MAPQ.append(res_eval[1])
-                    list_identified_sp.append(res_eval[0])
-        
-        print("SUPPL HANDLING TIME:", t.time() - TOTO)
-        print()
-        print("FP FROM NOT IN KEYS:", compt_FP)
-        # set_seen_sp = set()
+            # Parallel version:
+            my_pool = mp.Pool(15)
+            results = my_pool.map(partial_func, dict_gethered.items())
+            my_pool.close()
+            # Serial version:
+            # results = map(partial_func, dict_gethered.items())
+    
+            # Write outfile:
+            with open(to_out_file, 'w') as salu_file:
+                # Write header:
+                salu_file.write(",type_align,lineage,mapq\n")
+
+                # Write mapped reads:
+                for res_eval in results:
+                    salu_file.write(str_from_res_eval(res_eval) + '\n')
+
+                # Write unmapped reads:
+                for unmapped_read in list_unmapped:
+                    salu_file.write(unmapped_read + ',unmapped,no\n')
+
+
+            print("SUPPL HANDLING TIME:", t.time() - TOTO)
+        # for res_eval in results:
+        #     print(res_eval)
+        #     readID, type_res = res_eval[0:2]
+
+        #     if type_res == 'second' or type_res == 'linear':
+        #         list_identified_sp.append(res_eval[2])
+        #         if type_res == 'second':
+        #             dict_count["secondaries"] += 1
+        #     elif type_res == 'FP':
+        #         dict_stats[type_res] += 1
+        #         compt_FP += 1
+        #         list_MAPQ.append(res_eval[1])
+        #     else: # type_res 'ratio':
+        #         ratio = res_eval[1]
+                    
+        else:
+            print("FOUND CSV FILE !")
+
+        # list_MAPQ = [] # Contain only MAPQ of align that pass all filters
+        # list_identified_sp = []
+        # compt_FP = 0
+
+        print("Loading CSV file...")
+        my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
+        print("CSV loaded !")
+        dict_count = {"unmapped":0}
+
+        for readID in my_csv.index:
+            type_align = my_csv.loc[readID, "type_align"]
+            if type_align == "unmapped":
+                dict_count['unmapped'] += 1
+            elif type_align == 'ratio':
+                pass
+            else: # normal or secondary
+                species, res = in_zymo(my_csv.loc[readID, "lineage"], 
+                                              tupl_sets_levels, taxo_cutoff)
+                print(species, res)
+
+
+        sys.exit()
+        # print("FP FROM NOT IN KEYS:", compt_FP)
+
         set_seen_prok = set()
-        # compt_seen_prok = set()
         dict_species2res = {} # To access evaluation results of a given species 
 
         for species in list_identified_sp:
@@ -383,10 +446,10 @@ if __name__ == "__main__":
         
 
          # AT THE TAXA LEVEL:
-        set_prok_Zymo = tupl_sets_levels[0]
-        recall_at_taxa_level = len(set_seen_prok)/len(set_prok_Zymo)
-        assert(all(map(lambda dict_val: dict_val != 'FN', 
-                       dict_species2res.values())))
+        # set_prok_Zymo = tupl_sets_levels[0]
+        recall_at_taxa_level = len(set_seen_prok)/len(tupl_sets_levels[0])
+        # assert(all(map(lambda dict_val: dict_val != 'FN', 
+        #                dict_species2res.values())))
 
         print("RESULTS AT THE TAXA LEVELS:")
         TP_list = [sp for sp in dict_species2res if dict_species2res[sp] == 'TP']
