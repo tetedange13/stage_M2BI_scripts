@@ -18,16 +18,18 @@ def handle_second(tupl_dict_item, dict_conv_seqid2taxid):
 
     # Check if they are all secondaries (1st one can be the representative):
     assert(all(map(lambda dico: not dico["is_suppl"], list_align_obj)))
-    secondaries = [dico["is_second"] for dico in list_align_obj]
-    if list_align_obj[0]["is_second"]:
-        assert(all(secondaries))
-    else:
-        assert(all(secondaries[1: ]))
+    assert(all(map(lambda dico: dico["is_second"], list_align_obj[1: ])))
+    # secondaries = [dico["is_second"] for dico in list_align_obj]
+    # if list_align_obj[0]["is_second"]:
+    #     assert(all(secondaries))
+    # else:
+    #     assert(all(secondaries[1: ]))
 
     # if len(list_align_obj) != 6:
-    #     print("SALUT:", len(list_align_obj))
-    if any(map(lambda dico: dico["mapq"] > 0 , list_align_obj[1: ])):
-        print(readID, [align_obj["mapq"] for align_obj in list_align_obj])
+    print("SALUT:", len(list_align_obj))
+    mapq = list_align_obj[0]["mapq"]
+    if mapq > 1:
+        print(readID, mapq, [align_obj["AS"] for align_obj in list_align_obj])
         
     list_taxid_target = []
     for alignment in list_align_obj:
@@ -38,12 +40,12 @@ def handle_second(tupl_dict_item, dict_conv_seqid2taxid):
     # Different target name, but corresponding to the same taxid ?
     set_taxid_target = set(list_taxid_target)
     if len(set_taxid_target) == 1: # Mergeable directly
-        print("MERGE !")
-        return alignment["ref_name"] # Any target name is OK
+        # print("MERGE !")
+        return (next(iter(set_taxid_target)), mapq) # Return this unique taxid
     else:
         lca = shared.taxfoo.find_lca(set_taxid_target)
         assert(lca != 1)
-        return lca
+        return (lca, mapq)
 
 
 def SAM_taxo_classif(tupl_dict_item, conv_seqid2taxid, taxonomic_cutoff, 
@@ -55,23 +57,27 @@ def SAM_taxo_classif(tupl_dict_item, conv_seqid2taxid, taxonomic_cutoff,
     readID, align_list = tupl_dict_item
     nb_alignments_for_readID = len(align_list)
     if nb_alignments_for_readID > 1: # Secondary alignment
+        current_taxid, mapq = handle_second(tupl_dict_item, conv_seqid2taxid)
+        type_alignment = 'second'
         # return ('second', )
-        return ('second', handle_second(tupl_dict_item, conv_seqid2taxid),
-                nb_alignments_for_readID)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+        # return ('second', handle_second(tupl_dict_item, conv_seqid2taxid),
+        #         nb_alignments_for_readID)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 
     else: # Normal linear case
         align_dict = align_list[0]
         mapq, ratio_len = align_dict["mapq"], align_dict["ratio_len"]
         if ratio_len >= cutoff_ratio:
-            # ref_name = alignment.reference_name
-            # ref_name = alignment.reference_name.split()[0]
             current_taxid = conv_seqid2taxid[align_dict["ref_name"]]
-            lineage = shared.taxfoo.get_lineage_as_dict(current_taxid)
-            if taxonomic_cutoff in lineage:
-                return (lineage[taxonomic_cutoff], mapq)
-            return ('FP', mapq) # ??
+            type_alignment = 'linear'
         else:
-            return ('ratio', ratio_len)
+            return (readID, 'ratio', str(ratio_len), mapq)
+
+    # lineage = shared.taxfoo.get_lineage_as_dict(current_taxid)
+    lineage_as_taxids = shared.taxfoo.get_lineage_as_taxids(current_taxid)
+    # if taxonomic_cutoff in lineage:
+    #     return type_alignment + [lineage[taxonomic_cutoff]] + [mapq]
+    # return ['FP'] + [mapq] # ??
+    return (readID, type_alignment, lineage_as_taxids, mapq)
 
 
 # FROM CLUST_TAX.PY:
