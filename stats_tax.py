@@ -54,42 +54,37 @@ def alignment_to_dict(align_obj):
     counting
     infer_query_length() method does NOT include them
     """
-    ratio_len = align_obj.query_length/align_obj.infer_read_length()
+    ratio_len = align_obj.infer_query_length()/align_obj.infer_read_length()
     assert(ratio_len <= 1)
 
-    return {"mapq":align_obj.mapping_quality,
-            "ref_name": align_obj.reference_name,
-            "ratio_len":ratio_len,
-            "is_suppl":align_obj.is_supplementary,
-            "AS":align_obj.get_tag("AS"),
-            "is_second":align_obj.is_secondary}
+    to_return = {"mapq":align_obj.mapping_quality,
+                 "ref_name": align_obj.reference_name,
+                 "len_align":align_obj.infer_query_length(),
+                 "ratio_len":ratio_len,
+                 "de":round(align_obj.get_tag("de"), 4),
+                 "is_suppl":align_obj.is_supplementary,
+                 "has_SA": align_obj.has_tag("SA"),
+                 "AS":align_obj.get_tag("AS"),
+                 "is_second":align_obj.is_secondary}
             # "read_len":align_obj.infer_query_length()/align_obj.infer_read_length(),
             # "align_len":align_obj.infer_query_length()}
 
+    # if to_return["has_SA"]:
+    return to_return
 
-# def in_zymo_old(taxo_name, tupl_sets):
-#     """
-#     Given the rank of a BLAST hit and a sublist of taxonomic levels, deducted
-#     from the cutoff (for the taxonomic level),  returns a string in 
-#     ('TP', 'FP', 'TN', 'FN').
-#     The name of the species is also requiered, to deal with 'strain' cases
-#     """
-#     # print(taxfoo.get_taxid_name(current_taxid), end='\t')
-#     # current_lineage = taxfoo.get_lineage_as_dict(current_taxid)
-#     # if taxonomic_cutoff not in current_lineage.keys():
-#     #     return 'FP' # Taxo cutoff not in keys, so False Positive ?
 
-#     # current_taxo_level = current_lineage[taxonomic_cutoff]
-#     # assert(current_taxo_level)
+def plot_thin_hist(list_values, title_arg=""):
+    """
+    Draw a thin histogram from a list of values
+    """
+    fig = plt.figure()
+    axis = plt.subplot(111)
+    plt.title(title_arg)
 
-#     set_levels_prok, set_levels_euk = tupl_sets
-#     if taxo_name in set_levels_prok: # TP
-#         return 'TP'
-#     # elif taxo_name in set_levels_euk: # TN
-#         # return 'TN'
-#         # return 'FP' # Eukaryota from the Zymo treated as FP too 
-#     else: # False Positive
-#         return 'FP'
+    right_xlim = max(list_values)
+    plt.hist(list_values, bins=int(256/1), log=True)
+    plt.xlim((-1, right_xlim))
+    plt.show()
 
 
 def str_from_res_eval(tupl_res_eval):
@@ -120,7 +115,7 @@ def in_zymo(str_list_taxids, tupl_sets, taxonomic_cutoff):
     taxo_name = shared.taxfoo.get_taxid_name(int(taxid))
 
     if not found:
-        return 'FPnotInKey'
+        return ('notDeterminable', 'FPnotInKey')
     else:
         if taxo_name in set_levels_prok:
             return (taxo_name, "TP")
@@ -246,7 +241,7 @@ if __name__ == "__main__":
         to_seqid2taxid = root_to_seqid2taxid + "/seqid2taxid"
         print()
 
-        to_out_file = "salut.csv"
+        to_out_file = infile_base + ".csv"
         if not osp.isfile(to_out_file):
             # To make correspond operon number and taxid:
             dict_seqid2taxid = {}
@@ -261,10 +256,8 @@ if __name__ == "__main__":
             input_samfile = pys.AlignmentFile(to_infile, "r")
 
             dict_gethered = {}
-            dict_count = {"mapped":0}
             list_suppl = []
             list_unmapped = []
-            # dict_mapq = {} # Needed to filter out alignments with low MAPQ
 
             for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
                 if (idx+1) % 500000 == 0:
@@ -277,32 +270,73 @@ if __name__ == "__main__":
                     dict_stats['FN'] += 1 # Count unmapped = 'FN'
 
                 else:
-                    if alignment.has_tag("SA"): # We skip supplementaries
-                        list_suppl.append(query_name)
-                        if not alignment.is_supplementary:
-                            dict_count["mapped"] += 1
+                    dict_align = alignment_to_dict(alignment)
+                    if alignment.is_secondary or alignment.is_supplementary:
+                        dict_gethered[query_name].append(dict_align)
                     else:
-                        dict_align = alignment_to_dict(alignment)
-                        if query_name in dict_gethered.keys():
-                            dict_gethered[query_name].append(dict_align)
-                        else:
-                            # dict_mapq[query_name] = alignment.mapping_quality
-                            # assert(query_name not in dict_gethered.keys())
-                            dict_gethered[query_name] = [dict_align]
+                        assert(query_name not in dict_gethered.keys())
+                        dict_gethered[query_name] = [dict_align]
+
+                    # if alignment.has_tag("SA"): # We skip supplementaries
+                    #     list_suppl.append(query_name)
+                    #     if not alignment.is_supplementary:
+                    #         dict_count["mapped"] += 1
+                    # else:
+                    #     dict_align = alignment_to_dict(alignment)
+                    #     if query_name in dict_gethered.keys():
+                    #         dict_gethered[query_name].append(dict_align)
+                    #     else:
+                    #         # dict_mapq[query_name] = alignment.mapping_quality
+                    #         # assert(query_name not in dict_gethered.keys())
+                    #         dict_gethered[query_name] = [dict_align]
                   
                     
             input_samfile.close()
             print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
-
             assert(len(list_unmapped) == len(set(list_unmapped)))
-            # dict_count['unmapped'] = len(list_unmapped)
-            dict_count["mapped"] += len(dict_gethered.keys())
-            dict_count["SA"] = len(list_suppl)
-            dict_count["SA_uniq"] = len(set(list_suppl))
-            del list_suppl
+            dict_count = {"suppl_as_repr":0}
 
-            # Removing supplementaries and low mapq:
-            # fixed_mapq_cutoff = 2
+
+            # Remove suppl and propagate MAPQ if representative is a suppl:
+            all_query_name = list(dict_gethered.keys())
+            list_nb_second = []
+            for query_name in all_query_name:
+                align_list = dict_gethered[query_name]
+                if len(align_list) > 1:
+                    representative = align_list[0]
+                    assert(not representative["is_suppl"])
+                    assert(not representative["is_second"])
+
+                    # Propagate max value of MAPQ to all secondaries:
+                    if representative["has_SA"]:
+                        dict_count["suppl_as_repr"] += 1
+                        # print(query_name, 'Suppl as representative')
+                        mapq_suppl = [align_obj["mapq"] for align_obj in align_list if align_obj["has_SA"]]
+                        max_mapq = max(mapq_suppl)
+                        
+                        for align_obj in align_list:
+                            if not align_obj["has_SA"]: # Secondaries
+                                assert(align_obj["mapq"] == 0)
+                                align_obj["mapq"] = max_mapq 
+                        
+                    no_suppl_list = [align_obj for align_obj in align_list if not align_obj["has_SA"]]
+                    if no_suppl_list:
+                        list_nb_second.append(len(no_suppl_list))
+                        dict_gethered[query_name] = no_suppl_list
+                    else: # Only suppl at this entry (i.e. empty list)
+                        print(query_name, "Only suppl")
+                        del dict_gethered[query_name]
+
+
+            # plot_thin_hist(list_nb_second, 
+            #                "Distrib of nb of secondaries with N=100")
+            # sys.exit()
+            # dict_count["mapped"] += len(dict_gethered.keys())
+            # dict_count["SA"] = len(list_suppl)
+            # dict_count["SA_uniq"] = len(set(list_suppl))
+            # del list_suppl
+
+            # Removing entries with low mapq:
             # all_query_name = list(dict_gethered.keys()) # List casting needed here
             # compt_suppl_SAM_entries, compt_nb_suppl = 0, 0
 
@@ -311,44 +345,9 @@ if __name__ == "__main__":
             #     cond_1_a = len_align_list > 1
             #     # cond_2 = dict_gethered[query_name][0]["mapq"] < fixed_mapq_cutoff
 
-            #     if (cond_1_a and dict_gethered[query_name][1]["is_suppl"]): #or cond_2:
-            #         # if not cond_2:
-            #         compt_suppl_SAM_entries += len_align_list
-            #         compt_nb_suppl += 1
-            #         print("TOTO")
-            #         del dict_gethered[query_name]
-            # print("NB_ENTRIES (SUPPL) REMOVED", compt_suppl_SAM_entries)
-            # print("NB_SUPPL REMOVED", compt_nb_suppl)
+                # if dict_gethered[query_name][0]["mapq"] < FIXED_MAPQ_CUTOFF:
+                #     print(query_name, "MAPQ too low", )
 
-
-            # Removing reads with lowest MAPQ:
-            # CUTOFF_ON_MAPQ = 0 
-            # # CUTOFF_ON_MAPQ = 0.05  # 5%
-
-            # print("\nRemoving the", str(int(CUTOFF_ON_MAPQ*100)) + "% worst reads...")
-            # sorted_by_mapq = sorted(dict_mapq.items(), key=lambda x: x[1])
-            # inital_len_dict_gethered = len(sorted_by_mapq)
-            # nb_to_remove = int(inital_len_dict_gethered*CUTOFF_ON_MAPQ)
-            # print("(represents theorically:", nb_to_remove, "reads)")
-
-            # i, nb_removed = 0, 0
-            # while nb_removed < nb_to_remove and i < inital_len_dict_gethered:
-            #     current_query_name = sorted_by_mapq[i][0]
-            #     if len(dict_gethered[current_query_name]) == 1: # NOT suppl
-            #         del dict_gethered[current_query_name]
-            #         nb_removed += 1
-            #     i += 1
-
-            # if nb_removed < nb_to_remove:
-            #     print("WARNING: Couldn't remove enough alignments...")
-            #     print("(removed only", nb_removed)
-            # assert(inital_len_dict_gethered == len(dict_gethered) + nb_removed)
-
-            # if nb_removed != nb_to_remove:
-            #     print("Number of alignments actually removed", nb_removed)
-            # else:
-            #     print("Well removed the predicted number of alignments !")
-            print()
 
 
             # Handling supplementaries:
@@ -356,16 +355,10 @@ if __name__ == "__main__":
             # CUTOFF_ON_RATIO = 0.9
             CUTOFF_ON_RATIO = 0
             
-
             print("Handling supplementary alignments...")
             print("Cutoff on alignment length of:", CUTOFF_ON_RATIO)
-            # # Check if all lists have length >= 2:
-            # assert(all(map(lambda a_list:len(a_list) > 1, dict_gethered.values())))
-            # ref_name = alignment.reference_name
-            # ref_name = alignment.reference_name.split()[0]
             partial_func = partial(pll.SAM_taxo_classif, 
                                    conv_seqid2taxid=dict_seqid2taxid,
-                                   taxonomic_cutoff=taxo_cutoff, 
                                    tupl_sets=tupl_sets_levels,
                                    cutoff_ratio=CUTOFF_ON_RATIO)
 
@@ -376,6 +369,8 @@ if __name__ == "__main__":
             # Serial version:
             # results = map(partial_func, dict_gethered.items())
     
+            sys.exit()
+
             # Write outfile:
             with open(to_out_file, 'w') as salu_file:
                 # Write header:
@@ -391,6 +386,7 @@ if __name__ == "__main__":
 
 
             print("SUPPL HANDLING TIME:", t.time() - TOTO)
+            sys.exit()
         # for res_eval in results:
         #     print(res_eval)
         #     readID, type_res = res_eval[0:2]
@@ -413,28 +409,68 @@ if __name__ == "__main__":
         # list_identified_sp = []
         # compt_FP = 0
 
+        TIME_CSV_TREATMENT = t.time()
         print("Loading CSV file...")
         my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
         print("CSV loaded !")
-        dict_count = {"unmapped":0}
+
+        # Compute counts:
+        nb_second_merged = sum(my_csv['type_align'] == 'merged')
+        nb_second_lca = sum(my_csv['type_align'] == 'lca')
+        nb_unmapped = sum(my_csv['type_align'] == 'unmapped')
+        dict_count = {"unmapped":nb_unmapped,
+                      "mergeable":nb_second_merged, "needed_lca":nb_second_lca,
+                      "total_second":nb_second_merged + nb_second_lca,
+                      "linear":sum(my_csv['type_align'] == 'linear'),
+                      "total_reads":nb_second_merged+nb_second_lca+nb_unmapped}
+        print(dict_count)
+        print(sum(my_csv['type_align'] == 'ratio'))
+
+        list_MAPQ = my_csv["mapq"][my_csv["mapq"].notnull()]
+        # Display distribution of MAPQ:
+        # right_xlim = max(list_MAPQ)
+        # # print(right_xlim, min(list_MAPQ));sys.exit()
+        # plt.hist(list_MAPQ, bins=int(256/1), log=True)
+        # plt.xlim((-1, right_xlim))
+        # plt.show()
+
+        # sys.exit()
+
+        # FIXED_MAPQ_CUTOFF = 0
+        # print(sum(map(lambda mapq_val: mapq_val>=FIXED_MAPQ_CUTOFF, 
+        #               my_csv["mapq"])))
+        
+        # sys.exit()
+
+        dict_stats['FPnotInKey'] = 0
+        set_seen_prok = set()
+        dict_species2res = {} # To access evaluation results of a given species 
 
         for readID in my_csv.index:
             type_align = my_csv.loc[readID, "type_align"]
             if type_align == "unmapped":
-                dict_count['unmapped'] += 1
+                dict_stats['FN'] += 1
             elif type_align == 'ratio':
                 pass
             else: # normal or secondary
                 species, res = in_zymo(my_csv.loc[readID, "lineage"], 
-                                              tupl_sets_levels, taxo_cutoff)
-                print(species, res)
+                                       tupl_sets_levels, taxo_cutoff)
+                # print(species, res)
+                dict_stats[res] += 1
 
+                
+        dict_count['FPnotInKey'] = dict_stats['FPnotInKey']
+        dict_stats['FP'] += dict_stats['FPnotInKey']
+        del dict_stats['FPnotInKey']
+
+        print("TIME FOR CSV TREATMENT:", t.time() - TIME_CSV_TREATMENT)
+        print(dict_stats)
+        
 
         sys.exit()
         # print("FP FROM NOT IN KEYS:", compt_FP)
 
-        set_seen_prok = set()
-        dict_species2res = {} # To access evaluation results of a given species 
+        
 
         for species in list_identified_sp:
             res_eval = in_zymo(species, tupl_sets_levels)
@@ -461,13 +497,6 @@ if __name__ == "__main__":
               1 - recall_at_taxa_level)
 
 
-        if list_MAPQ:
-            # Display distribution of MAPQ:
-            right_xlim = max(list_MAPQ)
-            # assert(all(map(lambda x: x<=left_xlim, list_MAPQ)))
-            plt.hist(list_MAPQ, bins=int(256/1), log=True)
-            plt.xlim((-1, right_xlim))
-            plt.show()
         
         # Print general counting results:
         print(dict_count)

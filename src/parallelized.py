@@ -25,11 +25,12 @@ def handle_second(tupl_dict_item, dict_conv_seqid2taxid):
     # else:
     #     assert(all(secondaries[1: ]))
 
-    # if len(list_align_obj) != 6:
-    print("SALUT:", len(list_align_obj))
     mapq = list_align_obj[0]["mapq"]
-    if mapq > 1:
-        print(readID, mapq, [align_obj["AS"] for align_obj in list_align_obj])
+    if mapq > 10:
+    # if False:
+        assert(len(set([align_obj["len_align"] for align_obj in list_align_obj])) == 1)
+        print(readID, [align_obj["AS"] for align_obj in list_align_obj],
+              [align_obj["de"] for align_obj in list_align_obj])
         
     list_taxid_target = []
     for alignment in list_align_obj:
@@ -41,15 +42,15 @@ def handle_second(tupl_dict_item, dict_conv_seqid2taxid):
     set_taxid_target = set(list_taxid_target)
     if len(set_taxid_target) == 1: # Mergeable directly
         # print("MERGE !")
-        return (next(iter(set_taxid_target)), mapq) # Return this unique taxid
+        return ('merged', next(iter(set_taxid_target)), mapq) # Return this unique taxid
     else:
+        # print(readID, mapq, [align_obj["AS"] for align_obj in list_align_obj], set_taxid_target)
         lca = shared.taxfoo.find_lca(set_taxid_target)
-        assert(lca != 1)
-        return (lca, mapq)
+        # assert(lca != 1) # If LCA searching fails, LCA == 1
+        return ('lca', lca, mapq)
 
 
-def SAM_taxo_classif(tupl_dict_item, conv_seqid2taxid, taxonomic_cutoff, 
-                     tupl_sets, cutoff_ratio):
+def SAM_taxo_classif(tupl_dict_item, conv_seqid2taxid, tupl_sets, cutoff_ratio):
     """
     Parallelized taxonomic classification, from a group (by readID) of mapped 
     reads. Filter out of 
@@ -57,8 +58,9 @@ def SAM_taxo_classif(tupl_dict_item, conv_seqid2taxid, taxonomic_cutoff,
     readID, align_list = tupl_dict_item
     nb_alignments_for_readID = len(align_list)
     if nb_alignments_for_readID > 1: # Secondary alignment
-        current_taxid, mapq = handle_second(tupl_dict_item, conv_seqid2taxid)
-        type_alignment = 'second'
+        type_alignment, current_taxid, mapq = handle_second(tupl_dict_item, 
+                                                            conv_seqid2taxid)
+        # type_alignment = 'second'
         # return ('second', )
         # return ('second', handle_second(tupl_dict_item, conv_seqid2taxid),
         #         nb_alignments_for_readID)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
@@ -68,7 +70,7 @@ def SAM_taxo_classif(tupl_dict_item, conv_seqid2taxid, taxonomic_cutoff,
         mapq, ratio_len = align_dict["mapq"], align_dict["ratio_len"]
         if ratio_len >= cutoff_ratio:
             current_taxid = conv_seqid2taxid[align_dict["ref_name"]]
-            type_alignment = 'linear'
+            type_alignment = 'linear' # i.e. not secondary
         else:
             return (readID, 'ratio', str(ratio_len), mapq)
 
