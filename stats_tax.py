@@ -66,14 +66,11 @@ def alignment_to_dict(align_obj):
                  "has_SA": align_obj.has_tag("SA"),
                  "AS":align_obj.get_tag("AS"),
                  "is_second":align_obj.is_secondary}
-            # "read_len":align_obj.infer_query_length()/align_obj.infer_read_length(),
-            # "align_len":align_obj.infer_query_length()}
 
-    # if to_return["has_SA"]:
     return to_return
 
 
-def plot_thin_hist(list_values, title_arg=""):
+def plot_thin_hist(list_values, title_arg="", y_log=True):
     """
     Draw a thin histogram from a list of values
     """
@@ -81,9 +78,12 @@ def plot_thin_hist(list_values, title_arg=""):
     axis = plt.subplot(111)
     plt.title(title_arg)
 
-    right_xlim = max(list_values)
-    plt.hist(list_values, bins=int(256/1), log=True)
-    plt.xlim((-1, right_xlim))
+    max_val = max(list_values)
+    min_val = min(list_values)
+
+
+    plt.hist(list_values, bins=int(256/1), log=y_log)
+    plt.xlim((0.15, 0.3))
     plt.show()
 
 
@@ -91,23 +91,53 @@ def str_from_res_eval(tupl_res_eval):
     """
     Generate a string (ready to write) from an evaluation result
     """
-    readID, type_res, lineage, mapq = tupl_res_eval
+    readID, type_res, lineage = tupl_res_eval[0:3]
+    rest = tupl_res_eval[3: ]
     to_return = [readID, type_res]
-    lineage_to_write = lineage 
-
-    if type_res != 'ratio':
+     
+    if type_res == 'ratio' or type_res == 'pb_lca':
+        lineage_to_write = lineage
+    else: 
         lineage_to_write = ';'.join(str(taxid) for taxid in lineage)
 
-    return ",".join(to_return + [lineage_to_write, str(mapq)])
+    return ",".join(to_return + [lineage_to_write] + [str(x) for x in rest])
 
 
-def in_zymo(str_list_taxids, tupl_sets, taxonomic_cutoff):
+def lca_last_try(str_list_taxids):
     """
+    Try to produce a LCA from a set of taxid, by eliminating
+    """
+    # old_set_taxids = map(int, str_list_taxids.split('&'))
+    old_set_taxids = list(map(int, str_list_taxids.split('&')))
+    new_set_taxids = set()
+    list_ranks = []
+    problems = 'aucun'
+    for taxid in old_set_taxids:
+        taxid_name = shared.taxfoo.get_taxid_name(taxid)
+        if ('metagenome' in taxid_name or 'uncultured' in taxid_name or 
+            'unidentified' in taxid_name or 'phage' in taxid_name.lower() or
+            taxid_name == 'synthetic construct' or 
+            'virus' in taxid_name.lower()):
+            pass
+            # print("PB:", taxid_name, taxid)
+        else:
+            new_set_taxids.add(taxid)
+
+    # if new_set_taxids and taxfoo.find_lca(new_set_taxids) == 1:
+    # if not new_set_taxids:
+    #     print([taxfoo.get_taxid_name(taxid) for taxid in old_set_taxids])
+    return shared.taxfoo.find_lca(new_set_taxids)
+
+
+def in_zymo(list_taxids, tupl_sets, taxonomic_cutoff):
+    """
+    Given the lineage of a read (as a list of taxids), determine if the 
+    organism belongs to the Zymo mock comm, at a given taxonomic cutoff 
     """
     set_levels_prok, set_levels_euk = tupl_sets
 
     found = False
-    for taxid in str_list_taxids.split(';'):
+    for taxid in list_taxids:
         if shared.taxfoo.get_taxid_rank(int(taxid)) == taxonomic_cutoff:
             found = True
             break
@@ -152,7 +182,7 @@ def calc_specificity(dict_res):
     # Fall out or false positive rate: FPR = FP/(FP+TN)
     # False negative rate: FNR = FN/(TP+FN)
     # False discovery rate: FDR = FP/(TP+FP)
-    # Overall accuracy: ACC = (TP+TN)/(TP+FP+FN+TN)
+    
     try:
         spe = dict_res['TN']/(dict_res['TN'] + dict_res['FP'])
         return spe
@@ -187,7 +217,7 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
         print("SENSITIVITY:", sensitivity, " | ", "FNR:", 1 - sensitivity) # TPR = TP/(TP+FN) (or sensitivity, hit rate, recall) 
         print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
         print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
-        print("ACCURACY:", round(skm.accuracy_score(y_true, y_pred), 4))
+        print("ACCURACY:", round(skm.accuracy_score(y_true, y_pred), 4)) # ACC = (TP+TN)/(TP+FP+FN+TN) (overall accuracy)
         print("SPECIFICITY:", calc_specificity(dict_stats_to_convert))
         # NPV = 1 - calc_FOR(dict_stats_to_convert)
         # print("FOR:", 1 - NPV, " | ", "NPV:", NPV)
@@ -207,8 +237,6 @@ if __name__ == "__main__":
     # Common variables:
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
-    # taxo_levels = ['superkingdom', 'phylum', 'class', 'order', 'family', 
-    #                'genus', 'species', 'subspecies'] + ["strain"] 
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
 
     print("Loading taxonomic Python module...")
@@ -310,7 +338,6 @@ if __name__ == "__main__":
                     # Propagate max value of MAPQ to all secondaries:
                     if representative["has_SA"]:
                         dict_count["suppl_as_repr"] += 1
-                        # print(query_name, 'Suppl as representative')
                         mapq_suppl = [align_obj["mapq"] for align_obj in align_list if align_obj["has_SA"]]
                         max_mapq = max(mapq_suppl)
                         
@@ -336,19 +363,6 @@ if __name__ == "__main__":
             # dict_count["SA_uniq"] = len(set(list_suppl))
             # del list_suppl
 
-            # Removing entries with low mapq:
-            # all_query_name = list(dict_gethered.keys()) # List casting needed here
-            # compt_suppl_SAM_entries, compt_nb_suppl = 0, 0
-
-            # for query_name in all_query_name:
-            #     len_align_list = len(dict_gethered[query_name])
-            #     cond_1_a = len_align_list > 1
-            #     # cond_2 = dict_gethered[query_name][0]["mapq"] < fixed_mapq_cutoff
-
-                # if dict_gethered[query_name][0]["mapq"] < FIXED_MAPQ_CUTOFF:
-                #     print(query_name, "MAPQ too low", )
-
-
 
             # Handling supplementaries:
             TOTO = t.time()
@@ -363,51 +377,36 @@ if __name__ == "__main__":
                                    cutoff_ratio=CUTOFF_ON_RATIO)
 
             # Parallel version:
-            my_pool = mp.Pool(15)
-            results = my_pool.map(partial_func, dict_gethered.items())
-            my_pool.close()
-            # Serial version:
-            # results = map(partial_func, dict_gethered.items())
-    
-            sys.exit()
+            # my_pool = mp.Pool(15)
+            # results = my_pool.map(partial_func, dict_gethered.items())
+            # my_pool.close()
+            # Serial version (need list casting to have output):
+            results = list(map(partial_func, dict_gethered.items())) 
+
+            # sys.exit()
 
             # Write outfile:
-            with open(to_out_file, 'w') as salu_file:
+            with open(to_out_file, 'w') as out_file:
                 # Write header:
-                salu_file.write(",type_align,lineage,mapq\n")
+                out_file.write(",type_align,lineage,mapq,len_align,de\n")
 
                 # Write mapped reads:
                 for res_eval in results:
-                    salu_file.write(str_from_res_eval(res_eval) + '\n')
+                    out_file.write(str_from_res_eval(res_eval) + '\n')
 
                 # Write unmapped reads:
                 for unmapped_read in list_unmapped:
-                    salu_file.write(unmapped_read + ',unmapped,no\n')
+                    out_file.write(unmapped_read + ',unmapped,no\n')
 
 
             print("SUPPL HANDLING TIME:", t.time() - TOTO)
             sys.exit()
-        # for res_eval in results:
-        #     print(res_eval)
-        #     readID, type_res = res_eval[0:2]
 
-        #     if type_res == 'second' or type_res == 'linear':
-        #         list_identified_sp.append(res_eval[2])
-        #         if type_res == 'second':
-        #             dict_count["secondaries"] += 1
-        #     elif type_res == 'FP':
-        #         dict_stats[type_res] += 1
-        #         compt_FP += 1
-        #         list_MAPQ.append(res_eval[1])
-        #     else: # type_res 'ratio':
-        #         ratio = res_eval[1]
                     
         else:
             print("FOUND CSV FILE !")
 
-        # list_MAPQ = [] # Contain only MAPQ of align that pass all filters
         # list_identified_sp = []
-        # compt_FP = 0
 
         TIME_CSV_TREATMENT = t.time()
         print("Loading CSV file...")
@@ -417,24 +416,19 @@ if __name__ == "__main__":
         # Compute counts:
         nb_second_merged = sum(my_csv['type_align'] == 'merged')
         nb_second_lca = sum(my_csv['type_align'] == 'lca')
+        nb_second_pb_lca = sum(my_csv['type_align'] == 'pb_lca')
+        total_second = nb_second_merged + nb_second_lca + nb_second_pb_lca
         nb_unmapped = sum(my_csv['type_align'] == 'unmapped')
+        nb_linear = sum(my_csv['type_align'] == 'linear')
+
         dict_count = {"unmapped":nb_unmapped,
                       "mergeable":nb_second_merged, "needed_lca":nb_second_lca,
-                      "total_second":nb_second_merged + nb_second_lca,
-                      "linear":sum(my_csv['type_align'] == 'linear'),
-                      "total_reads":nb_second_merged+nb_second_lca+nb_unmapped}
-        print(dict_count)
-        print(sum(my_csv['type_align'] == 'ratio'))
+                      "pb_lca":nb_second_pb_lca, "total_second":total_second,
+                      "linear":nb_linear,
+                      "total_reads":total_second + nb_unmapped + nb_linear}
+        print("FP CAUSED BY RATIO:", sum(my_csv['type_align'] == 'ratio'))
 
         list_MAPQ = my_csv["mapq"][my_csv["mapq"].notnull()]
-        # Display distribution of MAPQ:
-        # right_xlim = max(list_MAPQ)
-        # # print(right_xlim, min(list_MAPQ));sys.exit()
-        # plt.hist(list_MAPQ, bins=int(256/1), log=True)
-        # plt.xlim((-1, right_xlim))
-        # plt.show()
-
-        # sys.exit()
 
         # FIXED_MAPQ_CUTOFF = 0
         # print(sum(map(lambda mapq_val: mapq_val>=FIXED_MAPQ_CUTOFF, 
@@ -445,6 +439,8 @@ if __name__ == "__main__":
         dict_stats['FPnotInKey'] = 0
         set_seen_prok = set()
         dict_species2res = {} # To access evaluation results of a given species 
+        dict_count["unsolved_lca_pb"] = 0
+        list_len_align = []
 
         for readID in my_csv.index:
             type_align = my_csv.loc[readID, "type_align"]
@@ -453,35 +449,51 @@ if __name__ == "__main__":
             elif type_align == 'ratio':
                 pass
             else: # normal or secondary
-                species, res = in_zymo(my_csv.loc[readID, "lineage"], 
-                                       tupl_sets_levels, taxo_cutoff)
+                lineage_val = my_csv.loc[readID, "lineage"]
+                lineage_to_eval = lineage_val.split(';')
+
+                if type_align == 'pb_lca':
+                    lca_attempt = lca_last_try(lineage_val)
+                    if lca_attempt != 1:
+                        lineage_to_eval = shared.taxfoo.get_lineage_as_taxids(lca_attempt)
+                    else:
+                        dict_count["unsolved_lca_pb"] += 1
+                        # dict_stats['FN'] += 1
+                        # print("PB LCA ATTEMPT:", readID)
+                        continue            
+                    
+                species, res = in_zymo(lineage_to_eval, tupl_sets_levels, 
+                                       taxo_cutoff)
                 # print(species, res)
                 dict_stats[res] += 1
+                dict_species2res[species] = res
+
+                to_print = [val for val in my_csv.loc[readID, ["type_align", "mapq", "len_align"]]]
+                if res == 'TP': # If it is a proK from th Zymo
+                    # print('TP', to_print)
+                    list_len_align.append(my_csv.loc[readID, "de"])
+                    set_seen_prok.add(species)
+                else:
+                    # list_len_align.append(my_csv.loc[readID, "de"])
+                    pass
+                    # print('FP', to_print)
 
                 
+        plot_thin_hist(list_len_align, "Distrib len_align TP", True)
+
         dict_count['FPnotInKey'] = dict_stats['FPnotInKey']
         dict_stats['FP'] += dict_stats['FPnotInKey']
         del dict_stats['FPnotInKey']
 
         print("TIME FOR CSV TREATMENT:", t.time() - TIME_CSV_TREATMENT)
+        print(dict_count)
         print(dict_stats)
         
 
         sys.exit()
-        # print("FP FROM NOT IN KEYS:", compt_FP)
 
-        
 
-        for species in list_identified_sp:
-            res_eval = in_zymo(species, tupl_sets_levels)
-            dict_stats[res_eval] += 1
-            dict_species2res[species] = res_eval
-
-            if res_eval == 'TP': # If it is a proK from th Zymo
-                set_seen_prok.add(species)
-        
-
-         # AT THE TAXA LEVEL:
+        # AT THE TAXA LEVEL:
         # set_prok_Zymo = tupl_sets_levels[0]
         recall_at_taxa_level = len(set_seen_prok)/len(tupl_sets_levels[0])
         # assert(all(map(lambda dict_val: dict_val != 'FN', 
