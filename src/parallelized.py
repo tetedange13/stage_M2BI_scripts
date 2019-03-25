@@ -10,12 +10,10 @@ import src.shared_fun as shared
 
 
 # FROM STAT_TAX.PY:
-def handle_second(tupl_dict_item, dict_conv_seqid2taxid):
+def handle_second(readID, list_align_obj, dict_conv_seqid2taxid):
     """
     Take an alignment that has been found to be secondary
     """
-    readID, list_align_obj = tupl_dict_item
-
     # Check if they are all secondaries (1st one can be the representative):
     assert(all(map(lambda dico: not dico["is_suppl"], list_align_obj)))
     assert(all(map(lambda dico: dico["is_second"], list_align_obj[1: ])))
@@ -51,7 +49,7 @@ def handle_second(tupl_dict_item, dict_conv_seqid2taxid):
         return ('lca', lca)
 
 
-def SAM_taxo_classif(tupl_dict_item, conv_seqid2taxid, tupl_sets, cutoff_ratio):
+def SAM_taxo_classif(tupl_dict_item, conv_seqid2taxid, tupl_sets):
     """
     Parallelized taxonomic classification, from a group (by readID) of mapped 
     reads. Filter out of 
@@ -61,27 +59,47 @@ def SAM_taxo_classif(tupl_dict_item, conv_seqid2taxid, tupl_sets, cutoff_ratio):
     representative = align_list[0]
     mapq, ratio_len = representative["mapq"], representative["ratio_len"]
     len_align = representative["len_align"]
+    common_to_return = [mapq, len_align, ratio_len]
 
     if nb_alignments_for_readID > 1: # Secondary alignment
-        type_alignment, current_taxid = handle_second(tupl_dict_item, 
-                                                            conv_seqid2taxid)
-        de_list = [dico["de"] for dico in align_list]
+        assert(not representative["is_suppl"])
+        assert(not representative["is_second"])
+        # print("SALUT:", nb_alignments_for_readID)
+        no_suppl_list = [align_obj for align_obj in align_list 
+                         if not align_obj["has_SA"]]
+        if not no_suppl_list: # Only supplementaries entries for this read
+            return (readID, 'only_suppl', 'no')
+        # Need to propagate max value of MAPQ to all secondaries:
+        if representative["has_SA"]:
+            # print(readID, "suppl_as_repr")
+            max_mapq = max([align_obj["mapq"] for align_obj in align_list 
+                            if align_obj["has_SA"]])
+            for align_not_suppl in no_suppl_list:
+                assert(align_not_suppl["mapq"] == 0)
+                align_not_suppl["mapq"] = max_mapq
+        # Secondary handling
+        type_alignment, current_taxid = handle_second(readID, no_suppl_list, 
+                                                      conv_seqid2taxid)
+        de_list = [dico["de"] for dico in no_suppl_list]
         de = max(de_list)
         # de = sum(de_list) / len(de_list)
+
     else: # Normal linear case
         de = representative["de"]
-        if ratio_len >= cutoff_ratio:
-            current_taxid = conv_seqid2taxid[representative["ref_name"]]
-            type_alignment = 'linear' # i.e. not secondary
-        else:
-            return (readID, 'ratio_'+str(ratio_len), 'no', mapq, len_align, de)
+        # if ratio_len >= cutoff_ratio:
+        current_taxid = conv_seqid2taxid[representative["ref_name"]]
+        type_alignment = 'linear' # i.e. not secondary
+        # else:
+        #     return (readID, 'ratio_'+str(ratio_len), 'no', mapq, len_align, de)
 
     if type_alignment == 'pb_lca':
-        lineage_as_taxids = current_taxid
+        taxo_to_write = current_taxid # Contains actually a set of taxids (str)
     else:
-        lineage_as_taxids = shared.taxfoo.get_lineage_as_taxids(current_taxid)
+        # lineage_as_taxids = shared.taxfoo.get_lineage_as_taxids(current_taxid)
+        taxo_to_write = ';' + str(current_taxid) + ';' # Will be considered as an str
 
-    return (readID, type_alignment, lineage_as_taxids, mapq, len_align, de)
+    common_to_return += [de]
+    return [readID, type_alignment, taxo_to_write] + common_to_return
 
 
 # FROM CLUST_TAX.PY:
