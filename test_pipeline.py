@@ -193,7 +193,7 @@ if __name__ == "__main__":
         # dirOut_minimap = path_proj + "3-deter_minimap2/"
         dirOut_minimap = path_proj + "3-deter_minimap2_second/"
 
-        args_minimap2_map = "-N10 -t" + nb_threads + " -x map-ont "
+        args_minimap2_map = "-p1 -N5000 -t" + nb_threads + " -x map-ont "
         # if DB_NAME == "gg":
         #     args_minimap2_map = ("-K100M --secondary=no -t" + nb_threads + 
         #                          " -x map-ont ")
