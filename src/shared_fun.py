@@ -10,6 +10,8 @@ import src.ncbi_taxdump_utils as taxo_utils
 
 global taxfoo
 taxfoo = taxo_utils.NCBI_TaxonomyFoo()
+want_taxo = taxo_utils.default_want_taxonomy
+
 
 # Path to dump files:
 to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
