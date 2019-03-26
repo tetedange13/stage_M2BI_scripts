@@ -10,6 +10,18 @@ import src.shared_fun as shared
 
 
 # FROM STAT_TAX.PY:
+def not_trash(taxid_to_eval):
+    """
+    """
+    taxid_name = shared.taxfoo.get_taxid_name(taxid_to_eval)
+    if ('metagenome' in taxid_name or 'uncultured' in taxid_name or 
+        'unidentified' in taxid_name or 'phage' in taxid_name.lower() or
+        taxid_name == 'synthetic construct' or 
+        'virus' in taxid_name.lower()):
+        return False
+    return True
+
+
 def handle_second(readID, list_align_obj, dict_conv_seqid2taxid):
     """
     Take an alignment that has been found to be secondary
@@ -34,6 +46,9 @@ def handle_second(readID, list_align_obj, dict_conv_seqid2taxid):
         taxid_target = dict_conv_seqid2taxid[alignment["ref_name"]]
         assert(taxid_target) # If taxid not 'None'
         list_taxid_target.append(taxid_target)
+
+    if sum(map(not_trash, set(list_taxid_target))) > 1:
+        print([shared.taxfoo.get_taxid_name(taxid) for taxid in set(list_taxid_target)])
 
     # Different target name, but corresponding to the same taxid ?
     set_taxid_target = set(list_taxid_target)

@@ -94,11 +94,16 @@ def calc_taxo_shift(arg_taxid, taxonomic_cutoff):
     Calculate the 'taxonomic shift', i.e. the number of taxonomic levels of
     difference, between a taxonomic cutoff and the rank of a taxid
     """
-    idx_cutoff = shared.default_want_taxonomy.find(taxonomic_cutoff)
-    sublist_taxo = default_want_taxonomy[0:idx_cutoff]
-    print(sublist_taxo)
+    idx_cutoff = shared.want_taxo.index(taxonomic_cutoff) + 1
+    sublist_taxo = shared.want_taxo[0:idx_cutoff]
+    shift = len(shared.taxfoo.get_lineage(arg_taxid)) - len(sublist_taxo)
+
+    print("BONJ", shared.taxfoo.get_taxid_name(arg_taxid), shift)
+    return shift
+    # if shift <= 0:
+    #     pass
+    
     # print(len(shared.taxfoo.))
-    # shared.default_want_taxonomy)
 
 
 def lca_last_try(str_list_taxids):
@@ -121,7 +126,6 @@ def lca_last_try(str_list_taxids):
         else:
             new_set_taxids.add(taxid)
 
-    # if new_set_taxids and taxfoo.find_lca(new_set_taxids) == 1:
     if not new_set_taxids:
         return 'only_trashes'
     return shared.taxfoo.find_lca(new_set_taxids)
@@ -146,7 +150,7 @@ def in_zymo(taxo_taxid, tupl_sets, taxonomic_cutoff):
         return (taxo_name, "FP")
 
 
-def final_eval(csv_index_val, two_col_from_csv):
+def final_eval(csv_index_val, two_col_from_csv, sets_levels, taxonomic_cutoff):
     """
     """
     type_align = two_col_from_csv.loc[csv_index_val, "type_align"]
@@ -165,11 +169,12 @@ def final_eval(csv_index_val, two_col_from_csv):
         elif lca_attempt == 1:
             return (csv_index_val, 'unsolved_lca_pb', 'unsolved_lca_pb', 'FP')
         taxid_to_eval = lca_attempt
+        # calc_taxo_shift(lca_attempt, taxonomic_cutoff)
         # else:
         #     lineage_to_eval = shared.taxfoo.get_lineage_as_taxids(lca_attempt)
 
-    taxo_name, res_evaluation = in_zymo(taxid_to_eval, tupl_sets_levels, 
-                                        taxo_cutoff)
+    taxo_name, res_evaluation = in_zymo(taxid_to_eval, sets_levels, 
+                                        taxonomic_cutoff)
     return (csv_index_val, taxid_to_eval, taxo_name, res_evaluation)
 
 
@@ -345,38 +350,6 @@ if __name__ == "__main__":
             assert(len(list_unmapped) == len(set(list_unmapped)))
             list_suppl_as_repr = []
 
-
-            # Remove suppl and propagate MAPQ if representative is a suppl:
-            # all_query_name = list(dict_gethered.keys())
-            # list_nb_second, list_only_suppl = [], []
-            # for query_name in all_query_name:
-            #     align_list = dict_gethered[query_name]
-            #     if len(align_list) > 1:
-            #         representative = align_list[0]
-            #         assert(not representative["is_suppl"])
-            #         assert(not representative["is_second"])
-
-            #         # Propagate max value of MAPQ to all secondaries:
-            #         if representative["has_SA"]:
-            #             list_suppl_as_repr.append(query_name)
-            #             mapq_suppl = [align_obj["mapq"] for align_obj in align_list if align_obj["has_SA"]]
-            #             max_mapq = max(mapq_suppl)
-                        
-            #             for align_obj in align_list:
-            #                 if not align_obj["has_SA"]: # Secondaries
-            #                     assert(align_obj["mapq"] == 0)
-            #                     align_obj["mapq"] = max_mapq 
-                        
-            #         no_suppl_list = [align_obj for align_obj in align_list if not align_obj["has_SA"]]
-            #         if no_suppl_list:
-            #             list_nb_second.append(len(no_suppl_list))
-            #             dict_gethered[query_name] = no_suppl_list
-            #         else: # Only suppl at this entry (i.e. empty list)
-            #             print(query_name, "Only suppl")
-            #             list_only_suppl.append(query_name)
-            #             del dict_gethered[query_name]
-
-
             # print("SUPPL AS REPR:", len(list_suppl_as_repr))
             # plot_thin_hist(list_nb_second, 
             #                "Distrib of nb of secondaries with N=100")
@@ -466,8 +439,9 @@ if __name__ == "__main__":
                         (my_csv['type_align'] != 'only_suppl'))
 
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
-        partial_eval = partial(final_eval, 
-                               two_col_from_csv=my_csv_to_pll)
+        partial_eval = partial(final_eval, two_col_from_csv=my_csv_to_pll,
+                                           sets_levels=tupl_sets_levels,
+                                           taxonomic_cutoff=taxo_cutoff)
 
         # Parallel version:
         eval_pool = mp.Pool(15)
@@ -513,6 +487,7 @@ if __name__ == "__main__":
         dict_stats['FP'] += sum(my_csv['type_align'] == 'only_suppl')
         dict_stats['TP'] += sum(my_csv['res_eval'] == 'TP')
         print(dict_count)
+        print(dict_stats)
         print()
 
         # true_FP = ((my_csv['res_eval'] == 'FP') & 
@@ -522,15 +497,32 @@ if __name__ == "__main__":
         is_TP = (my_csv['res_eval'].notnull()) & (my_csv['res_eval'] == 'TP')
         # print(my_csv['species'][false_pos].)
         # salut = shared.taxfoo.get_lineage_as_dict(list_taxids[-1])
-        salut = my_csv[is_FP & (my_csv['type_align'] == 'pb_lca')]['lineage']
-        for val in salut:
-            pass
+        # print(my_csv[is_FP & (my_csv['species'] == 'notDeterminable')]['type_align'].value_counts())
+        salut = my_csv[is_FP & 
+                       (my_csv['species'] == 'notDeterminable') &
+                       (my_csv['type_align'] == 'merged')]['lineage']
+        for taxid_lineage in salut:
+            # print(taxid_lineage.strip(';'))
+            calc_taxo_shift(int(taxid_lineage.strip(';')), taxo_cutoff)
+            # lca = lca_last_try(taxid_lineage)
+            # if lca != 'only_trashes':
+            #     print(lca)
+
+                # if lca == 204429:
+                #     print(shared.taxfoo.get_lineage_as_dict(lca))
+
+            # calc_taxo_shift(val, taxo_cutoff)
             # calc_taxo_shift()
-            print(val)
+            #print(val)
         
-        print(my_csv[is_TP]['type_align'].value_counts())
-        print()
-        print(my_csv[is_FP]['species'].value_counts())
+        # plot_thin_hist(my_csv[is_TP]['mapq'], "Distrib MAPQ", True, (-1, 60))
+
+        # print(my_csv[is_TP]['type_align'].value_counts())
+        # print()
+        # print(my_csv[is_FP & 
+        #      (my_csv['species']=='notDeterminable') & 
+        #      (my_csv['type_align'] == 'merged')]['mapq'].value_counts())
+        # print(my_csv[is_FP]['species'].value_counts())
         # print(my_csv[false_pos].groupby('species').count())
 
 
