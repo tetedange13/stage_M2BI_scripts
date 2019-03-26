@@ -106,7 +106,7 @@ def calc_taxo_shift(arg_taxid, taxonomic_cutoff):
     # print(len(shared.taxfoo.))
 
 
-def lca_last_try(str_list_taxids):
+def old_lca_last_try(str_list_taxids):
     """
     Try to produce a LCA from a set of taxid, by eliminating
     """
@@ -129,6 +129,49 @@ def lca_last_try(str_list_taxids):
     if not new_set_taxids:
         return 'only_trashes'
     return shared.taxfoo.find_lca(new_set_taxids)
+
+
+def lca_last_try(old_set_taxids):
+    """
+    Try to produce a LCA from a set of taxid, by eliminating
+    """
+    # old_set_taxids = list(map(int, str_list_taxids.split('&')))
+    new_set_taxids = set()
+    list_ranks = []
+    for taxid in old_set_taxids:
+        taxid_name = shared.taxfoo.get_taxid_name(taxid)
+        if ('metagenome' in taxid_name or 'uncultured' in taxid_name or 
+            'unidentified' in taxid_name or 'phage' in taxid_name.lower() or
+            taxid_name == 'synthetic construct' or 
+            'virus' in taxid_name.lower()):
+            pass
+            # print("PB:", taxid_name, taxid)
+        else:
+            new_set_taxids.add(taxid)
+
+    if not new_set_taxids:
+        return 'only_trashes'
+    return shared.taxfoo.find_lca(new_set_taxids)
+
+
+def handle_second(str_list_taxids):
+    """
+    Take an alignment that has been found to be secondary and try to determine
+    its taxonomy (i.e. 1 unique taxid)    
+    """
+    set_taxid_target = set(map(int, str_list_taxids.split('s')))
+    lca = shared.taxfoo.find_lca(set_taxid_target)
+
+    if lca == 1: # If LCA searching fails, LCA==1
+        lca_attempt = lca_last_try(set_taxid_target)
+        if lca_attempt == 'only_trashes':
+            return (lca_attempt, )
+        elif lca_attempt == 1:
+            return ('unsolved_lca_pb', )
+        else:
+            return ('lca_last_try', lca_attempt)
+
+    return ('lca', lca)
 
 
 def in_zymo(taxo_taxid, tupl_sets, taxonomic_cutoff):
@@ -176,6 +219,29 @@ def final_eval(csv_index_val, two_col_from_csv, sets_levels, taxonomic_cutoff):
     taxo_name, res_evaluation = in_zymo(taxid_to_eval, sets_levels, 
                                         taxonomic_cutoff)
     return (csv_index_val, taxid_to_eval, taxo_name, res_evaluation)
+
+
+def eval_taxo(csv_index_val, two_col_from_csv, sets_levels, taxonomic_cutoff):
+    """
+    """
+    lineage_val = two_col_from_csv.loc[csv_index_val, "lineage"]
+    type_align = two_col_from_csv.loc[csv_index_val, "type_align"]
+    if lineage_val.startswith(';'): # normal or second_uniq
+        taxid_to_eval = lineage_val.strip(';')
+    else: # Secondary with more than 1 unique taxid
+        res_second_handling = handle_second(lineage_val)
+        remark_eval = res_second_handling[0]
+        if len(res_second_handling) == 1: # Problem (only trashes or unsolved)
+            return (csv_index_val, remark_eval, 'FP', remark_eval)
+        else:
+            taxid_to_eval = res_second_handling[1]
+
+    taxo_name, classif = in_zymo(taxid_to_eval, sets_levels, taxonomic_cutoff)
+    # return (csv_index_val, taxid_to_eval, taxo_name, classif)
+
+    if lineage_val.startswith(';'):
+        return (csv_index_val, taxo_name, classif, type_align)
+    return (csv_index_val, taxo_name, classif, remark_eval)
 
 
 def dict_stats_to_vectors(dict_res):
@@ -330,23 +396,11 @@ if __name__ == "__main__":
                     else:
                         assert(query_name not in dict_gethered.keys())
                         dict_gethered[query_name] = [dict_align]
-
-                    # if alignment.has_tag("SA"): # We skip supplementaries
-                    #     list_suppl.append(query_name)
-                    #     if not alignment.is_supplementary:
-                    #         dict_count["mapped"] += 1
-                    # else:
-                    #     dict_align = alignment_to_dict(alignment)
-                    #     if query_name in dict_gethered.keys():
-                    #         dict_gethered[query_name].append(dict_align)
-                    #     else:
-                    #         # dict_mapq[query_name] = alignment.mapping_quality
-                    #         # assert(query_name not in dict_gethered.keys())
-                    #         dict_gethered[query_name] = [dict_align]
                   
                     
             input_samfile.close()
             print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
+            print()
             assert(len(list_unmapped) == len(set(list_unmapped)))
             list_suppl_as_repr = []
 
@@ -359,13 +413,12 @@ if __name__ == "__main__":
             # del list_suppl
 
 
-            # Handling supplementaries:
+            # Extract releval SAM info towards a CSV file:
             TOTO = t.time()
-            print("Handling supplementary alignments...")
-            partial_func = partial(pll.SAM_taxo_classif, 
-                                   conv_seqid2taxid=dict_seqid2taxid,
-                                   tupl_sets=tupl_sets_levels)
-            # Parallel version:
+            print("Converting SAM into CSV...")
+            partial_func = partial(pll.SAM_to_CSV, 
+                                   conv_seqid2taxid=dict_seqid2taxid)
+                                               # Parallel version:
             my_pool = mp.Pool(15)
             results = my_pool.map(partial_func, dict_gethered.items())
             my_pool.close()
@@ -377,7 +430,7 @@ if __name__ == "__main__":
             # Write outfile:
             with open(to_out_file, 'w') as out_file:
                 # Write header:
-                out_file.write(",type_align,lineage,mapq,len_align," +
+                out_file.write(",type_align,lineage,nb_trashes,mapq,len_align," +
                                "ratio_len,de\n")
 
                 # Write mapped reads:
@@ -387,44 +440,99 @@ if __name__ == "__main__":
                 # Write unmapped reads:
                 for unmapped_read in list_unmapped:
                     out_file.write(unmapped_read + ',unmapped,no\n')
-                # for suppl_read in list_only_suppl:
-                #     out_file.write(suppl_read + ',only_suppl,no\n')
 
-            print("SUPPL HANDLING TIME:", t.time() - TOTO)
+            print("CSV CONVERSION TIME:", t.time() - TOTO)
             sys.exit()
 
                     
         else:
             print("FOUND CSV FILE !")
 
-        # list_identified_sp = []
 
         TIME_CSV_TREATMENT = t.time()
         print("Loading CSV file...")
         my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
         print("CSV loaded !")
 
-        # list_MAPQ = my_csv['mapq'][my_csv['mapq'].notnull()]
-        # plot_thin_hist(list_MAPQ, "Distrib MAPQ", True, (-1, 60))
+        # list_lineage_second = my_csv[my_csv['type_align'] == 'second_plural']['lineage']
+        # list_second_len = list(map(lambda val: len(val.split('s')), list_lineage_second))
+        # list_second_len = list(map(lambda val: len(set(val.split('s'))), list_lineage_second))
+        # plot_thin_hist(list_second_len, "Distrib len_second", False, (-1, 12))
+        # sys.exit()
 
+        with_lineage = ((my_csv['type_align'] != 'unmapped') & 
+                (my_csv['type_align'] != 'only_suppl'))
+        my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
+        partial_eval = partial(eval_taxo, two_col_from_csv=my_csv_to_pll,
+                                          sets_levels=tupl_sets_levels,
+                                          taxonomic_cutoff=taxo_cutoff)
+
+        # Parallel version:
+        eval_pool = mp.Pool(15)
+        results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
+        eval_pool.close()
+        del my_csv_to_pll
+        print("PLL PROCESS FINISHED !")
+        
         # Compute counts:
-        nb_second_merged = sum(my_csv['type_align'] == 'merged')
-        nb_second_lca = sum(my_csv['type_align'] == 'lca')
-        nb_second_pb_lca = sum(my_csv['type_align'] == 'pb_lca')
-        total_second = nb_second_merged + nb_second_lca + nb_second_pb_lca
         nb_unmapped = sum(my_csv['type_align'] == 'unmapped')
-
+        nb_second_plur = sum(my_csv['type_align'] == 'second_plural')
+        nb_second_uniq = sum(my_csv['type_align'] == 'second_uniq')
         dict_count = {"unmapped":nb_unmapped,
                       "only_suppl":sum(my_csv['type_align'] == 'only_suppl'),
-                      "mergeable":nb_second_merged, "needed_lca":nb_second_lca,
-                      "pb_lca":nb_second_pb_lca, 
-                      "total_second":total_second,
-                      "linear":sum(my_csv['type_align'] == 'linear'),
-                      "total_reads":len(my_csv)}
-
-        print("FP CAUSED BY RATIO:", sum(my_csv['type_align'] == 'ratio'))
+                      "normal":sum(my_csv['type_align'] == 'normal'),
+                      'second_plural':nb_second_plur,
+                      'second_uniq':nb_second_uniq,
+                      'tot_second':nb_second_plur + nb_second_uniq,
+                      "unsolved_lca_pb":0, 'FPnotInKey':0, "only_trashes":0}
+        dict_count["tot_reads"] = (nb_unmapped + dict_count["tot_second"] +
+                                   dict_count["normal"])
         dict_stats['FN'] += nb_unmapped
-        # list_MAPQ = my_csv["mapq"][my_csv["mapq"].notnull()]
+
+        set_seen_prok = set()
+        dict_species2res = {} # To access evaluation results of a given species
+        list_index_new_col, list_val_new_col = [], []
+        problems = ('only_trashes', 'notDeterminable', 'unsolved_lca_pb')
+
+        for tupl_res in results_eval:
+            readID, species, res_eval, remark_evaluation = tupl_res
+
+            if species not in problems:
+                dict_species2res[species] = res_eval
+            else:
+                if species == 'unsolved_lca_pb':
+                    dict_count["unsolved_lca_pb"] += 1
+                elif species == 'notDeterminable':
+                    dict_count['FPnotInKey'] += 1
+                else:
+                    dict_count['only_trashes'] += 1
+
+                if res_eval == 'TP':
+                    set_seen_prok.add(species)
+                    
+            list_index_new_col.append(readID)
+            list_val_new_col.append((species, res_eval, remark_evaluation))
+
+        tmp_df = pd.DataFrame({'species':[tupl[0] for tupl in list_val_new_col],
+                               'res_eval':[tupl[1] for tupl in list_val_new_col],
+                               'remark_eval':[tupl[2] for tupl in list_val_new_col]},
+                              index=list_index_new_col)
+        my_csv = my_csv.assign(species=tmp_df['species'], 
+                               res_eval=tmp_df['res_eval'],
+                               remark_eval=tmp_df['remark_eval'])
+        del tmp_df
+        print("TIME FOR CSV TREATMENT:", t.time() - TIME_CSV_TREATMENT)
+        print()
+
+        toto = my_csv[my_csv["species"] == 'notDeterminable']
+        for val in toto.index:
+            if toto.loc[val, "nb_trashes"] == 0:
+                # print(toto.loc[val, "type_align"])
+                # print(toto.loc[val, "lineage"])
+                pass
+
+        # list_MAPQ = my_csv['mapq'][my_csv['mapq'].notnull()]
+        # plot_thin_hist(list_MAPQ, "Distrib MAPQ", True, (-1, 60))        
 
         # FIXED_MAPQ_CUTOFF = 0
         # print(sum(map(lambda mapq_val: mapq_val>=FIXED_MAPQ_CUTOFF, 
@@ -433,68 +541,48 @@ if __name__ == "__main__":
         # CUTOFF_ON_RATIO = 0
         # print("Cutoff on alignment length of:", CUTOFF_ON_RATIO)
 
-        
-        with_lineage = ((my_csv['type_align'] != 'unmapped') & 
-                        (my_csv['type_align'] != 'ratio') &
-                        (my_csv['type_align'] != 'only_suppl'))
+        # cutoff_nb_trashes = 4
+        cutoff_nb_trashes = max(my_csv['nb_trashes'])
+        print("CUTOFF ON THE NB OF TRASHES:", cutoff_nb_trashes)
+        print()
 
-        my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
-        partial_eval = partial(final_eval, two_col_from_csv=my_csv_to_pll,
-                                           sets_levels=tupl_sets_levels,
-                                           taxonomic_cutoff=taxo_cutoff)
+        is_FP = ((my_csv['res_eval'].notnull()) & 
+                 (my_csv['res_eval'] == 'FP') &
+                 (my_csv['nb_trashes'] <= cutoff_nb_trashes))
+        is_TP = ((my_csv['res_eval'].notnull()) & 
+                 (my_csv['res_eval'] == 'TP') &
+                 (my_csv['nb_trashes'] <= cutoff_nb_trashes))
+        print("FP STATS:")
+        print(my_csv[is_FP]['nb_trashes'].value_counts().sort_index())
+        # print(my_csv[is_FP & (my_csv['species'] == 'notDeterminable')]['nb_trashes'].value_counts())
+        print()
+        print("TP STATS:")
+        # print(my_csv[is_TP]['nb_trashes'].value_counts().sort_index())
+        # plt.figure()
+        # axis = plt.subplot(111)
+        # plt.title("SALUT")
+        pd.DataFrame({'TP_nb_trashes':my_csv[is_TP]['nb_trashes'].value_counts(), 
+                      'FP_nb_trashes':my_csv[is_FP]['nb_trashes'].value_counts()
+                      }).plot.bar(title="Distrib nb_trashes between FP and TP",
+                                  color=('red', 'green'))
+        plt.show()
+        # my_csv[is_FP]['nb_trashes'].value_counts().plot(kind='bar', 
+        #                                                 colorbar=False,
+        #                                                 )
+        print()
 
-        # Parallel version:
-        eval_pool = mp.Pool(15)
-        results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
-        eval_pool.close()
-        del my_csv_to_pll
-        print("PLL PROCESS FINISHED !")
-
-
-        dict_count["unsolved_lca_pb"] = 0
-        dict_count['FPnotInKey'] = 0
-        set_seen_prok = set()
-        dict_species2res = {} # To access evaluation results of a given species
-        list_index_new_col, list_val_new_col = [], []
-
-        for tupl_res in results_eval:
-            readID, evaluated_taxid, species, res_eval = tupl_res
-
-            if species not in ('notDeterminable', 'unsolved_lca_pb'):
-                dict_species2res[species] = res_eval
-            else:
-                if species == 'unsolved_lca_pb':
-                    dict_count["unsolved_lca_pb"] += 1
-                else:
-                    dict_count['FPnotInKey'] += 1
-
-                if res_eval == 'TP':
-                    set_seen_prok.add(species)
-                    
-            list_index_new_col.append(readID)
-            list_val_new_col.append((evaluated_taxid, species, res_eval))
-
-        tmp_df = pd.DataFrame({'evaluated_taxid':[tupl[0] for tupl in list_val_new_col],
-                               'species':[tupl[1] for tupl in list_val_new_col],
-                               'res_eval':[tupl[2] for tupl in list_val_new_col]},
-                              index=list_index_new_col)
-        my_csv = my_csv.assign(species=tmp_df['species'], 
-                               res_eval=tmp_df['res_eval'])
-        del tmp_df
-        print("TIME FOR CSV TREATMENT:", t.time() - TIME_CSV_TREATMENT)
-
-        dict_stats['FP'] += sum(my_csv['res_eval'] == 'FP')
+        dict_stats['FP'] += sum(is_FP)
         dict_stats['FP'] += sum(my_csv['type_align'] == 'only_suppl')
-        dict_stats['TP'] += sum(my_csv['res_eval'] == 'TP')
+        dict_stats['TP'] += sum(is_TP)
         print(dict_count)
         print(dict_stats)
+        print("TOT READS EVALUATED:", sum(dict_stats.values()))
         print()
 
         # true_FP = ((my_csv['res_eval'] == 'FP') & 
         #            (my_csv['species'] != 'notDeterminable') &
         #            (my_csv['species'] != 'unsolved_lca_pb'))
-        is_FP = (my_csv['res_eval'].notnull()) & (my_csv['res_eval'] == 'FP')
-        is_TP = (my_csv['res_eval'].notnull()) & (my_csv['res_eval'] == 'TP')
+        
         # print(my_csv['species'][false_pos].)
         # salut = shared.taxfoo.get_lineage_as_dict(list_taxids[-1])
         # print(my_csv[is_FP & (my_csv['species'] == 'notDeterminable')]['type_align'].value_counts())
