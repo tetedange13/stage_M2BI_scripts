@@ -73,7 +73,9 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
             # print([shared.taxfoo.get_taxid_name(taxid) for taxid in set(list_taxid_target)])
 
         nb_trashes = sum(map(is_trash, list_taxid_target))
-        # de_list = [dico["de"] for dico in no_suppl_list]
+        # print([dico["de"] for dico in no_suppl_list], 
+        #       [dico["AS"] for dico in no_suppl_list], 
+        #       [dico["mapq"] for dico in no_suppl_list])
         de = max(de_list)
         # de = sum(de_list) / len(de_list)
 

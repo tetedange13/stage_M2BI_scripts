@@ -454,10 +454,14 @@ if __name__ == "__main__":
         my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
         print("CSV loaded !")
 
-        # list_lineage_second = my_csv[my_csv['type_align'] == 'second_plural']['lineage']
-        # list_second_len = list(map(lambda val: len(val.split('s')), list_lineage_second))
-        # list_second_len = list(map(lambda val: len(set(val.split('s'))), list_lineage_second))
-        # plot_thin_hist(list_second_len, "Distrib len_second", False, (-1, 12))
+        list_lineage_second = my_csv[my_csv['type_align'] == 'second_plural']['lineage']
+        list_second_len = list(map(lambda val: len(val.split('s')), list_lineage_second))
+        list_second_len = list(map(lambda val: len(set(val.split('s'))), list_lineage_second))
+        list_second_len += [1] * len(my_csv[my_csv['type_align'] == 'second_uniq'])
+        pd.Series(list_second_len, 
+                  name='Boxplot len_second (p1N300)').plot.box()#;plt.show()
+        # plot_thin_hist(list_second_len, "Distrib len_second", False, (-50, 650))
+        print("MEAN NB OF SECONDARIES:", sum(list_second_len)/len(list_second_len))
         # sys.exit()
 
         with_lineage = ((my_csv['type_align'] != 'unmapped') & 
@@ -468,6 +472,8 @@ if __name__ == "__main__":
                                           taxonomic_cutoff=taxo_cutoff)
 
         # Parallel version:
+        print()
+        print("PROCESSING CSV TO EVALUATE TAXO...")
         eval_pool = mp.Pool(15)
         results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
         eval_pool.close()
@@ -500,12 +506,10 @@ if __name__ == "__main__":
             if species not in problems:
                 dict_species2res[species] = res_eval
             else:
-                if species == 'unsolved_lca_pb':
-                    dict_count["unsolved_lca_pb"] += 1
-                elif species == 'notDeterminable':
+                if species == 'notDeterminable':
                     dict_count['FPnotInKey'] += 1
                 else:
-                    dict_count['only_trashes'] += 1
+                    dict_count[species] += 1
 
                 if res_eval == 'TP':
                     set_seen_prok.add(species)
@@ -521,15 +525,10 @@ if __name__ == "__main__":
                                res_eval=tmp_df['res_eval'],
                                remark_eval=tmp_df['remark_eval'])
         del tmp_df
-        print("TIME FOR CSV TREATMENT:", t.time() - TIME_CSV_TREATMENT)
+        print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
 
-        toto = my_csv[my_csv["species"] == 'notDeterminable']
-        for val in toto.index:
-            if toto.loc[val, "nb_trashes"] == 0:
-                # print(toto.loc[val, "type_align"])
-                # print(toto.loc[val, "lineage"])
-                pass
+        # sys.exit()
 
         # list_MAPQ = my_csv['mapq'][my_csv['mapq'].notnull()]
         # plot_thin_hist(list_MAPQ, "Distrib MAPQ", True, (-1, 60))        
@@ -546,26 +545,73 @@ if __name__ == "__main__":
         print("CUTOFF ON THE NB OF TRASHES:", cutoff_nb_trashes)
         print()
 
-        is_FP = ((my_csv['res_eval'].notnull()) & 
-                 (my_csv['res_eval'] == 'FP') &
+        is_FP = ((my_csv['res_eval'] == 'FP') &
                  (my_csv['nb_trashes'] <= cutoff_nb_trashes))
-        is_TP = ((my_csv['res_eval'].notnull()) & 
-                 (my_csv['res_eval'] == 'TP') &
+        is_TP = ((my_csv['res_eval'] == 'TP') &
                  (my_csv['nb_trashes'] <= cutoff_nb_trashes))
         print("FP STATS:")
-        print(my_csv[is_FP]['nb_trashes'].value_counts().sort_index())
-        # print(my_csv[is_FP & (my_csv['species'] == 'notDeterminable')]['nb_trashes'].value_counts())
+        print(my_csv[is_FP]['remark_eval'].value_counts().sort_index())
+        # print(my_csv[is_FP & (my_csv['type_align'] == 'second_plural')]['remark_eval'].value_counts())
         print()
         print("TP STATS:")
+        print(my_csv[is_TP]['type_align'].value_counts().sort_index())
         # print(my_csv[is_TP]['nb_trashes'].value_counts().sort_index())
-        # plt.figure()
-        # axis = plt.subplot(111)
-        # plt.title("SALUT")
+        # sys.exit()
+
+        toto = my_csv[is_FP & (my_csv['type_align'] == 'second_plural')]['lineage']
+        # toto = toto.assign(bonj=len(toto['lineage'].))
+        # print(toto.index);sys.exit()
+        for idx, val in enumerate(toto):
+            bonj = pd.Series([len(shared.taxfoo.get_lineage(int(taxid))) for taxid in set(val.split('s'))])
+            list_names = [shared.taxfoo.get_taxid_name(int(taxid)) for taxid in set(val.split('s'))]
+
+            try:
+                felix = [shared.taxfoo.get_lineage_as_dict(int(taxid))[taxo_cutoff] 
+                             for taxid in val.split('s')]
+                # print(list(enumerate(felix)))
+                if 'Bacilli' in felix:
+                    my_set = set([(classes, idx) for idx, classes in enumerate(felix) if classes != 'Bacilli'])
+                    if len(my_set) == 2:
+                        read_ID = toto.index[idx]
+                        print(read_ID, len(felix), my_set)#felix[felix.index('Bacilli')], my_set)
+
+            except KeyError:
+                continue
+
+            try:
+                idxes_lower_taxo = list(bonj[(bonj == 9)].index)
+                if len(idxes_lower_taxo) == 1:
+                    # print(list_names[idxes_lower_taxo[0]], idxes_lower_taxo[0], len(bonj))
+                    pass
+                elif len(idxes_lower_taxo) == 2:
+                    if list_names[idxes_lower_taxo[0]] == 'Staphylococcus aureus':
+                        new_idx = idxes_lower_taxo[1]
+                        # print(list_names[(new_idx-1):(new_idx+2)])
+                        # print(list_names[new_idx], new_idx, len(bonj))
+                        pass
+                else:
+                    if len(idxes_lower_taxo) == 4:
+                    # print(len(idxes_lower_taxo))
+                        pass
+                        #print([list_names[idx] for idx in idxes_lower_taxo])
+
+                # idx_lower_taxo = bonj.index(9)
+                # 
+                # if list_names[idx_lower_taxo] ==:
+                    # if sum(map(lambda val: val == 9, bonj)) == 1:
+                        # print(list_names)
+                # print(list_names[idx_lower_taxo])
+            except ValueError:
+                # print(list_names, bonj)
+                continue
+
+        # sys.exit()
+
         pd.DataFrame({'TP_nb_trashes':my_csv[is_TP]['nb_trashes'].value_counts(), 
                       'FP_nb_trashes':my_csv[is_FP]['nb_trashes'].value_counts()
                       }).plot.bar(title="Distrib nb_trashes between FP and TP",
                                   color=('red', 'green'))
-        plt.show()
+        # plt.show()
         # my_csv[is_FP]['nb_trashes'].value_counts().plot(kind='bar', 
         #                                                 colorbar=False,
         #                                                 )
@@ -591,6 +637,7 @@ if __name__ == "__main__":
                        (my_csv['type_align'] == 'merged')]['lineage']
         for taxid_lineage in salut:
             # print(taxid_lineage.strip(';'))
+            pass
             calc_taxo_shift(int(taxid_lineage.strip(';')), taxo_cutoff)
             # lca = lca_last_try(taxid_lineage)
             # if lca != 'only_trashes':
@@ -614,7 +661,7 @@ if __name__ == "__main__":
         # print(my_csv[false_pos].groupby('species').count())
 
 
-        sys.exit()
+        # sys.exit()
 
 
         # list_len_align = []
@@ -636,7 +683,7 @@ if __name__ == "__main__":
 
 
         # Print general counting results:
-        tot_reads = dict_count['total_reads']
+        tot_reads = dict_count['tot_reads']
         print("TOT READS:", tot_reads)
         print("% UNMAPPED:", dict_count["unmapped"]/tot_reads*100)
         print()
