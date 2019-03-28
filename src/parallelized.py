@@ -6,7 +6,7 @@ Contains all functions used to parallelise processes
 """
 
 
-import src.shared_fun as shared
+import src.taxo_eval as eval
 
 
 # FROM STAT_TAX.PY:
@@ -78,9 +78,6 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
         de = max(de_list)
         # de = sum(de_list) / len(de_list)
 
-        # if readID == "33554479-ce56-4fcd-ab71-a3717f2dc478":
-        #     print([dico['len_align'] for dico in no_suppl_list])
-
     else: # Normal case
         type_alignment = 'normal' # i.e. not secondary
         de = representative["de"]
@@ -89,12 +86,35 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
         nb_trashes = sum(map(is_trash, [current_taxid]))
         taxo_to_write = ';' + str(current_taxid) + ';' # Will be considered as an str
 
-
-    
     common_to_return += [de]
     # if type_alignment == 'normal':
     #     return [readID, type_alignment, taxo_to_write, ""] + common_to_return
     return [readID, type_alignment, taxo_to_write, nb_trashes] + common_to_return
+
+
+def eval_taxo(csv_index_val, two_col_from_csv, sets_levels, taxonomic_cutoff):
+    """
+    """
+    lineage_val = two_col_from_csv.loc[csv_index_val, "lineage"]
+    type_align = two_col_from_csv.loc[csv_index_val, "type_align"]
+    if lineage_val.startswith(';'): # Normal
+        taxid_to_eval = lineage_val.strip(';')
+    else: # Secondary (with 1 unique taxid or more) 
+        res_second_handling =eval.handle_second(lineage_val)
+        remark_eval = res_second_handling[0]
+        if len(res_second_handling) == 1: # Problem (only trashes or unsolved)
+            return (csv_index_val, remark_eval, 'FP', remark_eval)
+        else:
+            taxid_to_eval = res_second_handling[1]
+
+    taxo_name, classif = eval.in_zymo(taxid_to_eval, sets_levels, 
+                                        taxonomic_cutoff)
+    # return (csv_index_val, taxid_to_eval, taxo_name, classif)
+
+    if lineage_val.startswith(';'):
+        return (csv_index_val, taxo_name, classif, type_align)
+    return (csv_index_val, taxo_name, classif, remark_eval)
+
 
 
 # FROM CLUST_TAX.PY:

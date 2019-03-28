@@ -25,9 +25,7 @@ import multiprocessing as mp
 import matplotlib.pyplot as plt
 from functools import partial
 from docopt import docopt
-import src.remote as remote
 import src.check_args as check
-import src.parallelized as pll
 
 
 def alignment_to_dict(align_obj):
@@ -177,8 +175,9 @@ if __name__ == "__main__":
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
 
     print("Loading taxonomic Python module...")
-    import src.shared_fun as shared
-    tupl_sets_levels = shared.generate_sets_zymo(taxo_cutoff)      
+    import src.parallelized as pll
+    evaluate = pll.eval
+    tupl_sets_levels = evaluate.generate_sets_zymo(taxo_cutoff)      
     print("Taxonomic Python module loaded !\n")
 
     centri = False
@@ -397,7 +396,7 @@ if __name__ == "__main__":
         with_lineage = ((my_csv['type_align'] != 'unmapped') & 
                 (my_csv['type_align'] != 'only_suppl'))
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
-        partial_eval = partial(shared.main_func, two_col_from_csv=my_csv_to_pll,
+        partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
                                           sets_levels=tupl_sets_levels,
                                           taxonomic_cutoff=taxo_cutoff)
 
@@ -488,19 +487,17 @@ if __name__ == "__main__":
         print(my_csv[is_TP]['type_align'].value_counts().sort_index())
         # print(my_csv[is_TP]['nb_trashes'].value_counts().sort_index())
 
-        # for readID in my_csv[is_FP].index:
-        #     print(readID)
-        # sys.exit()
 
+        eval_taxfoo = evaluate.taxfoo
         toto = my_csv[is_FP & (my_csv['type_align'] == 'second_plural')]['lineage']
         # toto = toto.assign(bonj=len(toto['lineage'].))
         # print(toto.index);sys.exit()
         for idx, val in enumerate(toto):
-            bonj = pd.Series([len(shared.taxfoo.get_lineage(int(taxid))) for taxid in set(val.split('s'))])
-            list_names = [shared.taxfoo.get_taxid_name(int(taxid)) for taxid in set(val.split('s'))]
+            bonj = pd.Series([len(eval_taxfoo.get_lineage(int(taxid))) for taxid in set(val.split('s'))])
+            list_names = [eval_taxfoo.get_taxid_name(int(taxid)) for taxid in set(val.split('s'))]
 
             try:
-                felix = [shared.taxfoo.get_lineage_as_dict(int(taxid))[taxo_cutoff] 
+                felix = [eval_taxfoo.get_lineage_as_dict(int(taxid))[taxo_cutoff] 
                              for taxid in val.split('s')]
                 # print(list(enumerate(felix)))
                 if 'Bacilli' in felix:
@@ -566,7 +563,7 @@ if __name__ == "__main__":
         #            (my_csv['species'] != 'unsolved_lca_pb'))
         
         # print(my_csv['species'][false_pos].)
-        # salut = shared.taxfoo.get_lineage_as_dict(list_taxids[-1])
+        # salut = eval_taxfoo.get_lineage_as_dict(list_taxids[-1])
         # print(my_csv[is_FP & (my_csv['species'] == 'notDeterminable')]['type_align'].value_counts())
         salut = my_csv[is_FP & 
                        (my_csv['species'] == 'notDeterminable') &
@@ -580,7 +577,7 @@ if __name__ == "__main__":
             #     print(lca)
 
                 # if lca == 204429:
-                #     print(shared.taxfoo.get_lineage_as_dict(lca))
+                #     print(eval_taxfoo.get_lineage_as_dict(lca))
 
             # calc_taxo_shift(val, taxo_cutoff)
             # calc_taxo_shift()
@@ -663,7 +660,7 @@ if __name__ == "__main__":
                   "RANK:", df_hits.loc[clust, "rank"])
             
             if float(e_val) < cutoff_e_val:
-                res = shared.in_zymo(df_hits.loc[clust, "taxid"], taxo_cutoff, 
+                res = evaluate.in_zymo(df_hits.loc[clust, "taxid"], taxo_cutoff, 
                                    tupl_sets_levels)
                 # res = in_zymo(df_hits.loc[clust, "topHit"], 
                 #               df_hits.loc[clust, "rank"], 

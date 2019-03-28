@@ -12,7 +12,6 @@ global taxfoo
 taxfoo = taxo_utils.NCBI_TaxonomyFoo()
 want_taxo = taxo_utils.default_want_taxonomy
 
-
 # Path to dump files:
 to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
 nodes_path = to_dbs + "nt_db/taxo_18feb19/nodes.dmp"
@@ -129,27 +128,3 @@ def in_zymo(taxo_taxid, tupl_sets, taxonomic_cutoff):
         if taxo_name in set_levels_prok:
             return (taxo_name, "TP")
         return (taxo_name, "FP")
-
-
-def main_func(csv_index_val, two_col_from_csv, sets_levels, taxonomic_cutoff):
-    """
-    """
-    lineage_val = two_col_from_csv.loc[csv_index_val, "lineage"]
-    type_align = two_col_from_csv.loc[csv_index_val, "type_align"]
-    if lineage_val.startswith(';'): # Normal
-        taxid_to_eval = lineage_val.strip(';')
-    else: # Secondary (with 1 unique taxid or more) 
-        res_second_handling = handle_second(lineage_val)
-        remark_eval = res_second_handling[0]
-        if len(res_second_handling) == 1: # Problem (only trashes or unsolved)
-            return (csv_index_val, remark_eval, 'FP', remark_eval)
-        else:
-            taxid_to_eval = res_second_handling[1]
-
-    taxo_name, classif = in_zymo(taxid_to_eval, sets_levels, 
-                                        taxonomic_cutoff)
-    # return (csv_index_val, taxid_to_eval, taxo_name, classif)
-
-    if lineage_val.startswith(';'):
-        return (csv_index_val, taxo_name, classif, type_align)
-    return (csv_index_val, taxo_name, classif, remark_eval)
