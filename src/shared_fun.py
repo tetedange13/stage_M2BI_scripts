@@ -51,27 +51,105 @@ def generate_sets_zymo(taxonomic_cutoff):
         set_euk.add(euk_taxo_level)
 
     return (set_prok, set_euk)
-        
 
-# def in_zymo(current_taxid, taxonomic_cutoff, tupl_sets):
-#     """
-#     Given the rank of a BLAST hit and a sublist of taxonomic levels, deducted
-#     from the cutoff (for the taxonomic level),  returns a string in 
-#     ('TP', 'FP', 'TN', 'FN').
-#     The name of the species is also requiered, to deal with 'strain' cases
-#     """
-#     # print(taxfoo.get_taxid_name(current_taxid), end='\t')
-#     current_lineage = taxfoo.get_lineage_as_dict(current_taxid)
-#     if taxonomic_cutoff not in current_lineage.keys():
-#         return 'FP' # Taxo cutoff not in keys, so False Positive ?
 
-#     current_taxo_level = current_lineage[taxonomic_cutoff]
-#     assert(current_taxo_level)
+def calc_taxo_shift(arg_taxid, taxonomic_cutoff):
+    """
+    Calculate the 'taxonomic shift', i.e. the number of taxonomic levels of
+    difference, between a taxonomic cutoff and the rank of a taxid
+    """
+    idx_cutoff = want_taxo.index(taxonomic_cutoff) + 1
+    sublist_taxo = want_taxo[0:idx_cutoff]
+    shift = len(taxfoo.get_lineage(arg_taxid)) - len(sublist_taxo)
 
-#     set_levels_prok, set_levels_euk = tupl_sets
-#     if current_taxo_level in set_levels_prok: # TP
-#         return 'TP'
-#     elif current_taxo_level in set_levels_euk: # TN
-#         return 'TN'
-#     else: # False Positive
-#         return 'FP'
+    print("BONJ", taxfoo.get_taxid_name(arg_taxid), shift)
+    return shift
+    # if shift <= 0:
+    #     pass
+    
+    # print(len(taxfoo.))
+
+
+def lca_last_try(old_set_taxids):
+    """
+    Try to produce a LCA from a set of taxid, by eliminating
+    """
+    # old_set_taxids = list(map(int, str_list_taxids.split('&')))
+    new_set_taxids = set()
+    list_ranks = []
+    for taxid in old_set_taxids:
+        taxid_name = taxfoo.get_taxid_name(taxid)
+        if ('metagenome' in taxid_name or 'uncultured' in taxid_name or 
+            'unidentified' in taxid_name or 'phage' in taxid_name.lower() or
+            taxid_name == 'synthetic construct' or 
+            'virus' in taxid_name.lower()):
+            pass
+            # print("PB:", taxid_name, taxid)
+        else:
+            new_set_taxids.add(taxid)
+
+    if not new_set_taxids:
+        return 'only_trashes'
+    return taxfoo.find_lca(new_set_taxids)
+
+
+def handle_second(str_list_taxids):
+    """
+    Take an alignment that has been found to be secondary and try to determine
+    its taxonomy (i.e. 1 unique taxid)    
+    """
+    set_taxid_target = set(map(int, str_list_taxids.split('s')))
+    lca = taxfoo.find_lca(set_taxid_target)
+
+    if lca == 1: # If LCA searching fails, LCA==1
+        lca_attempt = lca_last_try(set_taxid_target)
+        if lca_attempt == 'only_trashes':
+            return (lca_attempt, )
+        elif lca_attempt == 1:
+            return ('unsolved_lca_pb', )
+        else:
+            return ('lca_last_try', lca_attempt)
+
+    return ('lca', lca)
+
+
+def in_zymo(taxo_taxid, tupl_sets, taxonomic_cutoff):
+    """
+    Given the taxid of a read (lowest one in the taxo), determine if the 
+    organism belongs to the Zymo mock comm, at a given taxonomic cutoff 
+    """
+    set_levels_prok, set_levels_euk = tupl_sets
+    lineage = taxfoo.get_lineage_as_dict(taxo_taxid)
+    taxo_levels = lineage.keys()
+
+    if taxonomic_cutoff not in taxo_levels:
+        return ('notDeterminable', 'FP')
+    else:
+        taxo_name = lineage[taxonomic_cutoff]
+        if taxo_name in set_levels_prok:
+            return (taxo_name, "TP")
+        return (taxo_name, "FP")
+
+
+def main_func(csv_index_val, two_col_from_csv, sets_levels, taxonomic_cutoff):
+    """
+    """
+    lineage_val = two_col_from_csv.loc[csv_index_val, "lineage"]
+    type_align = two_col_from_csv.loc[csv_index_val, "type_align"]
+    if lineage_val.startswith(';'): # Normal
+        taxid_to_eval = lineage_val.strip(';')
+    else: # Secondary (with 1 unique taxid or more) 
+        res_second_handling = handle_second(lineage_val)
+        remark_eval = res_second_handling[0]
+        if len(res_second_handling) == 1: # Problem (only trashes or unsolved)
+            return (csv_index_val, remark_eval, 'FP', remark_eval)
+        else:
+            taxid_to_eval = res_second_handling[1]
+
+    taxo_name, classif = in_zymo(taxid_to_eval, sets_levels, 
+                                        taxonomic_cutoff)
+    # return (csv_index_val, taxid_to_eval, taxo_name, classif)
+
+    if lineage_val.startswith(';'):
+        return (csv_index_val, taxo_name, classif, type_align)
+    return (csv_index_val, taxo_name, classif, remark_eval)

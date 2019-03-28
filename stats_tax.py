@@ -22,7 +22,6 @@ import time as t
 import subprocess as sub
 import pysam as pys
 import multiprocessing as mp
-# import numpy as np
 import matplotlib.pyplot as plt
 from functools import partial
 from docopt import docopt
@@ -73,12 +72,12 @@ def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
     plt.show()
 
 
-def str_from_res_eval(tupl_res_eval):
+def str_from_res_conv(tupl_res_conv):
     """
     Generate a string (ready to write) from an evaluation result
     """
-    readID, type_res, lineage = tupl_res_eval[0:3]
-    rest = tupl_res_eval[3: ]
+    readID, type_res, lineage = tupl_res_conv[0:3]
+    rest = tupl_res_conv[3: ]
     to_return = [readID, type_res]
      
     if type_res == 'ratio' or type_res == 'pb_lca':
@@ -88,107 +87,6 @@ def str_from_res_eval(tupl_res_eval):
         # lineage_to_write = ';'.join(str(taxid) for taxid in lineage)
 
     return ",".join(to_return + [lineage_to_write] + [str(x) for x in rest])
-
-
-def calc_taxo_shift(arg_taxid, taxonomic_cutoff):
-    """
-    Calculate the 'taxonomic shift', i.e. the number of taxonomic levels of
-    difference, between a taxonomic cutoff and the rank of a taxid
-    """
-    idx_cutoff = shared.want_taxo.index(taxonomic_cutoff) + 1
-    sublist_taxo = shared.want_taxo[0:idx_cutoff]
-    shift = len(shared.taxfoo.get_lineage(arg_taxid)) - len(sublist_taxo)
-
-    print("BONJ", shared.taxfoo.get_taxid_name(arg_taxid), shift)
-    return shift
-    # if shift <= 0:
-    #     pass
-    
-    # print(len(shared.taxfoo.))
-
-
-def lca_last_try(old_set_taxids):
-    """
-    Try to produce a LCA from a set of taxid, by eliminating
-    """
-    # old_set_taxids = list(map(int, str_list_taxids.split('&')))
-    new_set_taxids = set()
-    list_ranks = []
-    for taxid in old_set_taxids:
-        taxid_name = shared.taxfoo.get_taxid_name(taxid)
-        if ('metagenome' in taxid_name or 'uncultured' in taxid_name or 
-            'unidentified' in taxid_name or 'phage' in taxid_name.lower() or
-            taxid_name == 'synthetic construct' or 
-            'virus' in taxid_name.lower()):
-            pass
-            # print("PB:", taxid_name, taxid)
-        else:
-            new_set_taxids.add(taxid)
-
-    if not new_set_taxids:
-        return 'only_trashes'
-    return shared.taxfoo.find_lca(new_set_taxids)
-
-
-def handle_second(str_list_taxids):
-    """
-    Take an alignment that has been found to be secondary and try to determine
-    its taxonomy (i.e. 1 unique taxid)    
-    """
-    set_taxid_target = set(map(int, str_list_taxids.split('s')))
-    lca = shared.taxfoo.find_lca(set_taxid_target)
-
-    if lca == 1: # If LCA searching fails, LCA==1
-        lca_attempt = lca_last_try(set_taxid_target)
-        if lca_attempt == 'only_trashes':
-            return (lca_attempt, )
-        elif lca_attempt == 1:
-            return ('unsolved_lca_pb', )
-        else:
-            return ('lca_last_try', lca_attempt)
-
-    return ('lca', lca)
-
-
-def in_zymo(taxo_taxid, tupl_sets, taxonomic_cutoff):
-    """
-    Given the taxid of a read (lowest one in the taxo), determine if the 
-    organism belongs to the Zymo mock comm, at a given taxonomic cutoff 
-    """
-    set_levels_prok, set_levels_euk = tupl_sets
-    lineage = shared.taxfoo.get_lineage_as_dict(taxo_taxid)
-    taxo_levels = lineage.keys()
-
-    if taxonomic_cutoff not in taxo_levels:
-        return ('notDeterminable', 'FP')
-    else:
-        taxo_name = lineage[taxonomic_cutoff]
-        if taxo_name in set_levels_prok:
-            return (taxo_name, "TP")
-        return (taxo_name, "FP")
-
-
-def eval_taxo(csv_index_val, two_col_from_csv, sets_levels, taxonomic_cutoff):
-    """
-    """
-    lineage_val = two_col_from_csv.loc[csv_index_val, "lineage"]
-    type_align = two_col_from_csv.loc[csv_index_val, "type_align"]
-    if lineage_val.startswith(';'): # Normal
-        taxid_to_eval = lineage_val.strip(';')
-    else: # Secondary (with 1 unique taxid or more) 
-        res_second_handling = handle_second(lineage_val)
-        remark_eval = res_second_handling[0]
-        if len(res_second_handling) == 1: # Problem (only trashes or unsolved)
-            return (csv_index_val, remark_eval, 'FP', remark_eval)
-        else:
-            taxid_to_eval = res_second_handling[1]
-
-    taxo_name, classif = in_zymo(taxid_to_eval, sets_levels, taxonomic_cutoff)
-    # return (csv_index_val, taxid_to_eval, taxo_name, classif)
-
-    if lineage_val.startswith(';'):
-        return (csv_index_val, taxo_name, classif, type_align)
-    return (csv_index_val, taxo_name, classif, remark_eval)
 
 
 def dict_stats_to_vectors(dict_res):
@@ -283,7 +181,7 @@ if __name__ == "__main__":
     tupl_sets_levels = shared.generate_sets_zymo(taxo_cutoff)      
     print("Taxonomic Python module loaded !\n")
 
-    centri = True
+    centri = False
     if centri:
         dict_gethered = {}
         with open(to_infile, 'r') as in_tab_file:
@@ -464,9 +362,9 @@ if __name__ == "__main__":
                                "ratio_len,de\n")
 
                 # Write mapped reads:
-                for res_eval in results:
-                    out_file.write(str_from_res_eval(res_eval) + '\n')
-                del res_eval
+                for res_conversion in results:
+                    out_file.write(str_from_res_conv(res_conversion) + '\n')
+                del res_conversion
 
                 # Write unmapped reads:
                 for unmapped_read in list_unmapped:
@@ -499,7 +397,7 @@ if __name__ == "__main__":
         with_lineage = ((my_csv['type_align'] != 'unmapped') & 
                 (my_csv['type_align'] != 'only_suppl'))
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
-        partial_eval = partial(eval_taxo, two_col_from_csv=my_csv_to_pll,
+        partial_eval = partial(shared.main_func, two_col_from_csv=my_csv_to_pll,
                                           sets_levels=tupl_sets_levels,
                                           taxonomic_cutoff=taxo_cutoff)
 
