@@ -92,28 +92,29 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
     return [readID, type_alignment, taxo_to_write, nb_trashes] + common_to_return
 
 
-def eval_taxo(csv_index_val, two_col_from_csv, sets_levels, taxonomic_cutoff):
+def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels, 
+              taxonomic_cutoff):
     """
+    Do the parallel taxonomic evaluation on a given Pandas DataFrame
     """
-    lineage_val = two_col_from_csv.loc[csv_index_val, "lineage"]
-    type_align = two_col_from_csv.loc[csv_index_val, "type_align"]
+    lineage_val = two_col_from_csv.loc[one_csv_index_val, "lineage"]
+    type_align = two_col_from_csv.loc[one_csv_index_val, "type_align"]
     if lineage_val.startswith(';'): # Normal
         taxid_to_eval = lineage_val.strip(';')
     else: # Secondary (with 1 unique taxid or more) 
-        res_second_handling =eval.handle_second(lineage_val)
+        res_second_handling = eval.handle_second(lineage_val)
         remark_eval = res_second_handling[0]
         if len(res_second_handling) == 1: # Problem (only trashes or unsolved)
-            return (csv_index_val, remark_eval, 'FP', remark_eval)
+            return (one_csv_index_val, remark_eval, 'FP', remark_eval)
         else:
             taxid_to_eval = res_second_handling[1]
 
     taxo_name, classif = eval.in_zymo(taxid_to_eval, sets_levels, 
                                         taxonomic_cutoff)
-    # return (csv_index_val, taxid_to_eval, taxo_name, classif)
 
     if lineage_val.startswith(';'):
-        return (csv_index_val, taxo_name, classif, type_align)
-    return (csv_index_val, taxo_name, classif, remark_eval)
+        return (one_csv_index_val, taxo_name, classif, type_align)
+    return (one_csv_index_val, taxo_name, classif, remark_eval)
 
 
 
