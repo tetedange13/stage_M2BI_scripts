@@ -22,6 +22,7 @@ import time as t
 import subprocess as sub
 import pysam as pys
 import multiprocessing as mp
+# import numpy as np
 import matplotlib.pyplot as plt
 from functools import partial
 from docopt import docopt
@@ -106,31 +107,6 @@ def calc_taxo_shift(arg_taxid, taxonomic_cutoff):
     # print(len(shared.taxfoo.))
 
 
-def old_lca_last_try(str_list_taxids):
-    """
-    Try to produce a LCA from a set of taxid, by eliminating
-    """
-    # old_set_taxids = map(int, str_list_taxids.split('&'))
-    old_set_taxids = list(map(int, str_list_taxids.split('&')))
-    new_set_taxids = set()
-    list_ranks = []
-    problems = 'aucun'
-    for taxid in old_set_taxids:
-        taxid_name = shared.taxfoo.get_taxid_name(taxid)
-        if ('metagenome' in taxid_name or 'uncultured' in taxid_name or 
-            'unidentified' in taxid_name or 'phage' in taxid_name.lower() or
-            taxid_name == 'synthetic construct' or 
-            'virus' in taxid_name.lower()):
-            pass
-            # print("PB:", taxid_name, taxid)
-        else:
-            new_set_taxids.add(taxid)
-
-    if not new_set_taxids:
-        return 'only_trashes'
-    return shared.taxfoo.find_lca(new_set_taxids)
-
-
 def lca_last_try(old_set_taxids):
     """
     Try to produce a LCA from a set of taxid, by eliminating
@@ -181,7 +157,6 @@ def in_zymo(taxo_taxid, tupl_sets, taxonomic_cutoff):
     """
     set_levels_prok, set_levels_euk = tupl_sets
     lineage = shared.taxfoo.get_lineage_as_dict(taxo_taxid)
-    found = False
     taxo_levels = lineage.keys()
 
     if taxonomic_cutoff not in taxo_levels:
@@ -193,42 +168,14 @@ def in_zymo(taxo_taxid, tupl_sets, taxonomic_cutoff):
         return (taxo_name, "FP")
 
 
-def final_eval(csv_index_val, two_col_from_csv, sets_levels, taxonomic_cutoff):
-    """
-    """
-    type_align = two_col_from_csv.loc[csv_index_val, "type_align"]
-
-    # if type_align in ('ratio', 'unmapped'):
-    #     pass
-    # else: # normal or secondary
-    lineage_val = two_col_from_csv.loc[csv_index_val, "lineage"]
-    
-    if type_align != 'pb_lca':
-        taxid_to_eval = int(lineage_val.strip(';'))
-    else:
-        lca_attempt = lca_last_try(lineage_val)
-        if lca_attempt == 'only_trashes':
-            return (csv_index_val, 'only_trashes', 'only_trashes', 'FP')
-        elif lca_attempt == 1:
-            return (csv_index_val, 'unsolved_lca_pb', 'unsolved_lca_pb', 'FP')
-        taxid_to_eval = lca_attempt
-        # calc_taxo_shift(lca_attempt, taxonomic_cutoff)
-        # else:
-        #     lineage_to_eval = shared.taxfoo.get_lineage_as_taxids(lca_attempt)
-
-    taxo_name, res_evaluation = in_zymo(taxid_to_eval, sets_levels, 
-                                        taxonomic_cutoff)
-    return (csv_index_val, taxid_to_eval, taxo_name, res_evaluation)
-
-
 def eval_taxo(csv_index_val, two_col_from_csv, sets_levels, taxonomic_cutoff):
     """
     """
     lineage_val = two_col_from_csv.loc[csv_index_val, "lineage"]
     type_align = two_col_from_csv.loc[csv_index_val, "type_align"]
-    if lineage_val.startswith(';'): # normal or second_uniq
+    if lineage_val.startswith(';'): # Normal
         taxid_to_eval = lineage_val.strip(';')
-    else: # Secondary with more than 1 unique taxid
+    else: # Secondary (with 1 unique taxid or more) 
         res_second_handling = handle_second(lineage_val)
         remark_eval = res_second_handling[0]
         if len(res_second_handling) == 1: # Problem (only trashes or unsolved)
@@ -323,7 +270,7 @@ if __name__ == "__main__":
     # ARGUMENTS:
     ARGS = docopt(__doc__, version='0.1')
     to_infile, infile_base, _, _, ext_infile = check.infile(ARGS["--inFile"], 
-                                                         ["csv", "tsv", "sam"])
+                                                ['csv', 'tsv', 'txt', 'sam'])
     taxo_cutoff = ARGS["--taxoCut"]
 
     # Common variables:
@@ -335,6 +282,74 @@ if __name__ == "__main__":
     import src.shared_fun as shared
     tupl_sets_levels = shared.generate_sets_zymo(taxo_cutoff)      
     print("Taxonomic Python module loaded !\n")
+
+    centri = True
+    if centri:
+        dict_gethered = {}
+        with open(to_infile, 'r') as in_tab_file:
+            in_tab_file.readline() # Skip header
+            for line in in_tab_file:
+                idx_first_tab = line.find('\t')
+                readID = line[0:idx_first_tab] 
+                rest = line[(idx_first_tab+1): ].rstrip('\n')
+                # print(readID)
+                # splitted_line = line.rstrip('\n').split('\t')
+                # readID, rest = splitted_line[0], '\t'.join(splitted_line[1:])
+
+                if readID not in dict_gethered.keys():
+                    dict_gethered[readID] = [rest]
+                else:
+                    dict_gethered[readID].append(rest)
+
+        # sys.exit()
+
+        readIDs, list_val, list_indexes = dict_gethered.keys(), [], []
+        for readID in readIDs:
+            list_indexes.append(readID)
+            if len(dict_gethered[readID]) > 1:
+                type_align = 'multi_hit'
+                list_taxids = list(map(lambda a_str: a_str.split('\t')[1], 
+                                   dict_gethered[readID]))
+                lineage = 's'.join(list_taxids)
+                # In the case of multiple hits, all hits have the same score, 
+                # 2ndBestScore etc, except for the hitLength, that can differ
+                (_, _, score, _, _, queryLength, 
+                 numMatches) = dict_gethered[readID][0].split('\t')
+                list_hitLength = list(map(lambda a_str: a_str.split('\t')[4], 
+                                    dict_gethered[readID]))
+                if len(set(list_hitLength)) == 1:
+                    hitLength = ';' + list_hitLength[0] + ';'
+                else:
+                    hitLength = 's'.join(list_hitLength)
+                secondBestScore = pd.np.nan
+
+            else:
+                type_align = 'single_hit'
+                tupl = dict_gethered[readID][0].split('\t')
+                (_, taxID, score, secondBestScore,
+                 pre_hitLength, queryLength, numMatches) = tupl
+                lineage = ';' + taxID + ';'
+                hitLength = ';' + pre_hitLength + ';'
+
+            list_val.append([type_align, lineage, score, secondBestScore,
+                             hitLength, queryLength, numMatches])
+        del readID
+
+        tupl_columns = ('type_align', 'lineage', 'score', 'secondBestScore',
+                        'hitLength', 'queryLength', 'numMatches')
+        my_csv = pd.DataFrame(data=None, columns=tupl_columns,
+                              index=list_indexes)
+        for i in range(len(tupl_columns)):
+            tmp_dict = {tupl_columns[i]:list(map(lambda sublist: sublist[i], 
+                                                 list_val))}
+            # Cuz df.assign() takes 1 single karg:
+            my_csv = my_csv.assign(**tmp_dict, index=list_indexes)
+        del i, tmp_dict, list_val, list_indexes
+
+        print(my_csv.loc["651945ef-2abe-44f4-9d8f-472c750d6724", :])
+        # my_csv = pd.read_csv(to_infile, header=0, index_col=0, sep='\t')
+        # print(my_csv.loc["302c5769-aa24-4872-a4a0-4f11b3b451a6",:])
+        sys.exit()
     
     # Guess the "mode":
     SAM_MODE = False
@@ -369,6 +384,7 @@ if __name__ == "__main__":
                 for line in seqid2taxid_file:
                     splitted_line = line.rstrip('\n').split('\t')
                     dict_seqid2taxid[splitted_line[0]] = int(splitted_line[1])
+                del line
 
             # Start SAM file parsing:
             print("Extracting information from SAM file...")
@@ -385,6 +401,19 @@ if __name__ == "__main__":
                 query_name = alignment.query_name
                 assert(query_name) # Different from ""
 
+                # if query_name == "33554479-ce56-4fcd-ab71-a3717f2dc478":
+                # if query_name == "496c8cf9-2928-4176-b088-c11a29026ae6":
+                # if query_name == "3ad22c53-f5f0-41a3-a41e-3328d86f8951":
+                # if query_name == "2c1dfe96-8e7f-4205-bcda-23fbcfb601f3":
+                # if query_name == "176fe4ea-1242-4a9d-87ad-00a317b19027":
+                # if query_name == "c673496a-143b-4533-bcd5-7ba19b428c83":
+                # if query_name == "ae5b17fd-87f1-49db-9197-c250cae3142e":
+                # if query_name == "bf05243b-34aa-4e6b-b4f2-ef73613de8b1":
+                # if query_name == "016f9156-5e83-400c-ade3-5f63dcd86e0e":
+                if query_name == "0518ae87-4040-4140-be9c-e6c3414ce180":
+                    print(round(alignment.get_tag('NM'), 4), alignment.get_cigar_stats())
+                    # print(alignment.cigartuples)
+
                 if alignment.is_unmapped:
                     list_unmapped.append(query_name)
                     dict_stats['FN'] += 1 # Count unmapped = 'FN'
@@ -396,9 +425,10 @@ if __name__ == "__main__":
                     else:
                         assert(query_name not in dict_gethered.keys())
                         dict_gethered[query_name] = [dict_align]
-                  
-                    
+                       
             input_samfile.close()
+            del idx, alignment
+
             print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
             print()
             assert(len(list_unmapped) == len(set(list_unmapped)))
@@ -436,10 +466,12 @@ if __name__ == "__main__":
                 # Write mapped reads:
                 for res_eval in results:
                     out_file.write(str_from_res_eval(res_eval) + '\n')
+                del res_eval
 
                 # Write unmapped reads:
                 for unmapped_read in list_unmapped:
                     out_file.write(unmapped_read + ',unmapped,no\n')
+                del unmapped_read
 
             print("CSV CONVERSION TIME:", t.time() - TOTO)
             sys.exit()
@@ -516,6 +548,7 @@ if __name__ == "__main__":
                     
             list_index_new_col.append(readID)
             list_val_new_col.append((species, res_eval, remark_evaluation))
+        del tupl_res
 
         tmp_df = pd.DataFrame({'species':[tupl[0] for tupl in list_val_new_col],
                                'res_eval':[tupl[1] for tupl in list_val_new_col],
@@ -556,6 +589,9 @@ if __name__ == "__main__":
         print("TP STATS:")
         print(my_csv[is_TP]['type_align'].value_counts().sort_index())
         # print(my_csv[is_TP]['nb_trashes'].value_counts().sort_index())
+
+        # for readID in my_csv[is_FP].index:
+        #     print(readID)
         # sys.exit()
 
         toto = my_csv[is_FP & (my_csv['type_align'] == 'second_plural')]['lineage']
@@ -571,9 +607,11 @@ if __name__ == "__main__":
                 # print(list(enumerate(felix)))
                 if 'Bacilli' in felix:
                     my_set = set([(classes, idx) for idx, classes in enumerate(felix) if classes != 'Bacilli'])
-                    if len(my_set) == 2:
+                    # if len(my_set) == 1:
+                    if len(my_set) in (2, 3, 4):
+                    # if len(my_set) > 4:
                         read_ID = toto.index[idx]
-                        print(read_ID, len(felix), my_set)#felix[felix.index('Bacilli')], my_set)
+                        print(len(my_set), read_ID, len(felix), my_set)#felix[felix.index('Bacilli')], my_set)
 
             except KeyError:
                 continue
