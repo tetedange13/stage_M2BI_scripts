@@ -180,8 +180,17 @@ if __name__ == "__main__":
     tupl_sets_levels = evaluate.generate_sets_zymo(taxo_cutoff)      
     print("Taxonomic Python module loaded !\n")
 
-    centri = False
-    if centri:
+    # Guess the "mode":
+    CLUST_MODE = True # Mode for handling of reads-clustering results
+    if "to_" in infile_base:
+        CLUST_MODE = False
+    IS_SAM_FILE = ext_infile == ".sam"
+
+    # centri = True
+    # if centri:
+    if not CLUST_MODE and not IS_SAM_FILE:
+        print("CENTRIFUGE MODE !\n")
+
         dict_gethered = {}
         with open(to_infile, 'r') as in_tab_file:
             in_tab_file.readline() # Skip header
@@ -221,10 +230,15 @@ if __name__ == "__main__":
                 secondBestScore = pd.np.nan
 
             else:
-                type_align = 'single_hit'
                 tupl = dict_gethered[readID][0].split('\t')
-                (_, taxID, score, secondBestScore,
+                (ref_name, taxID, score, secondBestScore,
                  pre_hitLength, queryLength, numMatches) = tupl
+                if ref_name == 'unclassified':
+                    type_align = ref_name
+                    (lineage, score, secondBestScore, hitLength, queryLength,
+                     numMatches) = ([pd.np.nan] * 6)
+                else:
+                    type_align = 'single_hit'    
                 lineage = ';' + taxID + ';'
                 hitLength = ';' + pre_hitLength + ';'
 
@@ -243,17 +257,28 @@ if __name__ == "__main__":
             my_csv = my_csv.assign(**tmp_dict, index=list_indexes)
         del i, tmp_dict, list_val, list_indexes
 
-        print(my_csv.loc["651945ef-2abe-44f4-9d8f-472c750d6724", :])
-        # my_csv = pd.read_csv(to_infile, header=0, index_col=0, sep='\t')
-        # print(my_csv.loc["302c5769-aa24-4872-a4a0-4f11b3b451a6",:])
+        print(set(my_csv['type_align']))
+
+        with_lineage = my_csv['lineage'].notnull()
+        my_csv_to_pll = my_csv[with_lineage][['lineage', 'type_align']]
+        partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
+                                          sets_levels=tupl_sets_levels,
+                                          taxonomic_cutoff=taxo_cutoff)
+
+        # Parallel version:
+        print()
+        print("PROCESSING CSV TO EVALUATE TAXO...")
+        # eval_pool = mp.Pool(15)
+        # results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
+        # eval_pool.close()
+        results = list(map(partial_eval, my_csv_to_pll.index))
+        del my_csv_to_pll
+        print("PLL PROCESS FINISHED !")
+
         sys.exit()
     
-    # Guess the "mode":
-    SAM_MODE = False
-    if ext_infile == ".sam":
-        SAM_MODE = True
 
-    if SAM_MODE:
+    if not CLUST_MODE and IS_SAM_FILE:
         print("SAM MODE !")
 
         # Guess the database used:
