@@ -63,14 +63,13 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
             list_taxid_target.append(taxid_target)
             de_list.append(alignment["de"])
     
-        set_taxid_target = set(list_taxid_target)
-        if len(set_taxid_target) == 1: # Mergeable directly
+        if set(list_taxid_target) == 1: # Mergeable directly
             type_alignment = 'second_uniq' 
-            taxo_to_write = ';' + str(next(iter(set_taxid_target))) + ';'
         else:
-            type_alignment = 'second_plural' 
-            taxo_to_write = 's'.join(str(taxid) for taxid in list_taxid_target)
+            type_alignment = 'second_plural'
             # print([shared.taxfoo.get_taxid_name(taxid) for taxid in set(list_taxid_target)])
+        
+        taxo_to_write = 's'.join(str(taxid) for taxid in list_taxid_target)          
 
         nb_trashes = sum(map(is_trash, list_taxid_target))
         # print([dico["de"] for dico in no_suppl_list], 
@@ -78,6 +77,9 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
         #       [dico["mapq"] for dico in no_suppl_list])
         de = max(de_list)
         # de = sum(de_list) / len(de_list)
+
+        # if readID == "33554479-ce56-4fcd-ab71-a3717f2dc478":
+        #     print([dico['len_align'] for dico in no_suppl_list])
 
     else: # Normal case
         type_alignment = 'normal' # i.e. not secondary
