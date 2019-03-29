@@ -204,6 +204,35 @@ class NCBI_TaxonomyFoo(object):
 
         return lineage
 
+
+    # FELIX BIDOUILLE:
+    def get_dict_lineage_as_taxids(self, taxid, want_taxonomy=None):
+        """
+        Extract the text taxonomic lineage in order (kingdom on down);
+        return in dictionary.
+        """
+        taxid = int(taxid)
+
+        lineage = {}
+        while 1:
+            if taxid not in self.node_to_info:
+                print('cannot find taxid {}; quitting.'.format(taxid))
+                break
+
+            rank = self.get_taxid_rank(taxid)
+            name = self.get_taxid_name(taxid)
+
+            if self.is_strain(taxid): # NCBI reports strain as 'no rank'...
+                rank = 'strain'
+            if not want_taxonomy or rank in want_taxonomy:
+                lineage[rank] = taxid
+            taxid = self.get_taxid_parent(taxid)
+            if taxid == 1:
+                break
+
+        return lineage
+
+
     def get_lowest_lineage(self, taxids, want_taxonomy):
         """\
         Find the taxid of the lowest taxonomic rank consonant with a bunch of
