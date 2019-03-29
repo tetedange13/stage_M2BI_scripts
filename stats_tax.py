@@ -156,7 +156,8 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
         print("SPECIFICITY:", calc_specificity(dict_stats_to_convert))
         # NPV = 1 - calc_FOR(dict_stats_to_convert)
         # print("FOR:", 1 - NPV, " | ", "NPV:", NPV)
-    print()
+    else:
+        return precision
 
 
 
@@ -182,15 +183,13 @@ if __name__ == "__main__":
 
     # Guess the "mode":
     CLUST_MODE = True # Mode for handling of reads-clustering results
-    if "to_" in infile_base:
+    if "_to" in infile_base:
         CLUST_MODE = False
     IS_SAM_FILE = ext_infile == ".sam"
 
-    # centri = True
-    # if centri:
     if not CLUST_MODE and not IS_SAM_FILE:
         print("CENTRIFUGE MODE !\n")
-
+        print(evaluate.taxfoo.get_taxid_name(1));sys.exit()
         dict_gethered = {}
         with open(to_infile, 'r') as in_tab_file:
             in_tab_file.readline() # Skip header
@@ -268,10 +267,10 @@ if __name__ == "__main__":
         # Parallel version:
         print()
         print("PROCESSING CSV TO EVALUATE TAXO...")
-        # eval_pool = mp.Pool(15)
-        # results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
-        # eval_pool.close()
-        results = list(map(partial_eval, my_csv_to_pll.index))
+        eval_pool = mp.Pool(15)
+        results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
+        eval_pool.close()
+        # results = list(map(partial_eval, my_csv_to_pll.index))
         del my_csv_to_pll
         print("PLL PROCESS FINISHED !")
 
@@ -332,8 +331,8 @@ if __name__ == "__main__":
                 # if query_name == "ae5b17fd-87f1-49db-9197-c250cae3142e":
                 # if query_name == "bf05243b-34aa-4e6b-b4f2-ef73613de8b1":
                 # if query_name == "016f9156-5e83-400c-ade3-5f63dcd86e0e":
-                if query_name == "0518ae87-4040-4140-be9c-e6c3414ce180":
-                    print(round(alignment.get_tag('NM'), 4), alignment.get_cigar_stats())
+                # if query_name == "0518ae87-4040-4140-be9c-e6c3414ce180":
+                #     print(round(alignment.get_tag('NM'), 4), alignment.get_cigar_stats())
                     # print(alignment.cigartuples)
 
                 if alignment.is_unmapped:
@@ -384,12 +383,10 @@ if __name__ == "__main__":
                 # Write header:
                 out_file.write(",type_align,lineage,nb_trashes,mapq,len_align," +
                                "ratio_len,de\n")
-
                 # Write mapped reads:
                 for res_conversion in results:
                     out_file.write(str_from_res_conv(res_conversion) + '\n')
                 del res_conversion
-
                 # Write unmapped reads:
                 for unmapped_read in list_unmapped:
                     out_file.write(unmapped_read + ',unmapped,no\n')
@@ -408,73 +405,65 @@ if __name__ == "__main__":
         my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
         print("CSV loaded !")
 
-        list_lineage_second = my_csv[my_csv['type_align'] == 'second_plural']['lineage']
-        list_second_len = list(map(lambda val: len(val.split('s')), list_lineage_second))
-        list_second_len = list(map(lambda val: len(set(val.split('s'))), list_lineage_second))
-        list_second_len += [1] * len(my_csv[my_csv['type_align'] == 'second_uniq'])
-        pd.Series(list_second_len, 
-                  name='Boxplot len_second (p1N300)').plot.box()#;plt.show()
-        # plot_thin_hist(list_second_len, "Distrib len_second", False, (-50, 650))
-        print("MEAN NB OF SECONDARIES:", sum(list_second_len)/len(list_second_len))
+        # list_lineage_second = my_csv[my_csv['type_align'] == 'second_plural']['lineage']
+        # list_second_len = list(map(lambda val: len(val.split('s')), list_lineage_second))
+        # list_second_len = list(map(lambda val: len(set(val.split('s'))), list_lineage_second))
+        # list_second_len += [1] * len(my_csv[my_csv['type_align'] == 'second_uniq'])
+        # pd.Series(list_second_len, 
+        #           name='Boxplot len_second (p1N300)').plot.box()#;plt.show()
+        # # plot_thin_hist(list_second_len, "Distrib len_second", False, (-50, 650))
+        # print("MEAN NB OF SECONDARIES:", sum(list_second_len)/len(list_second_len))
         # sys.exit()
 
         with_lineage = ((my_csv['type_align'] != 'unmapped') & 
-                (my_csv['type_align'] != 'only_suppl'))
+                        (my_csv['type_align'] != 'only_suppl'))
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
         partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
-                                          sets_levels=tupl_sets_levels,
-                                          taxonomic_cutoff=taxo_cutoff)
+                                              sets_levels=tupl_sets_levels,
+                                              taxonomic_cutoff=taxo_cutoff)
 
         # Parallel version:
         print()
         print("PROCESSING CSV TO EVALUATE TAXO...")
-        eval_pool = mp.Pool(15)
-        results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
-        eval_pool.close()
+        # eval_pool = mp.Pool(15)
+        # results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
+        # eval_pool.close()
+        results_eval = list(map(partial_eval, my_csv_to_pll.index)) 
         del my_csv_to_pll
         print("PLL PROCESS FINISHED !")
+        # sys.exit()
         
         # Compute counts:
-        nb_unmapped = sum(my_csv['type_align'] == 'unmapped')
-        nb_second_plur = sum(my_csv['type_align'] == 'second_plural')
-        nb_second_uniq = sum(my_csv['type_align'] == 'second_uniq')
-        dict_count = {"unmapped":nb_unmapped,
-                      "only_suppl":sum(my_csv['type_align'] == 'only_suppl'),
-                      "normal":sum(my_csv['type_align'] == 'normal'),
-                      'second_plural':nb_second_plur,
-                      'second_uniq':nb_second_uniq,
-                      'tot_second':nb_second_plur + nb_second_uniq,
-                      "unsolved_lca_pb":0, 'FPnotInKey':0, "only_trashes":0}
-        dict_count["tot_reads"] = (nb_unmapped + dict_count["tot_second"] +
+        dict_count = {}
+        counts_type_align = my_csv['type_align'].value_counts()
+        for type_aln, count in counts_type_align.items():
+            dict_count[type_aln] = count
+        del type_aln
+        dict_count['tot_second'] = (dict_count['second_plural'] + 
+                                    dict_count['second_uniq'])
+        dict_count["tot_reads"] = (dict_count['unmapped'] + 
+                                   dict_count["tot_second"] +
                                    dict_count["normal"])
-        dict_stats['FN'] += nb_unmapped
-
-        set_seen_prok = set()
+        # dict_count = {"unsolved_lca_pb":0, 'FPnotInKey':0, "only_trashes":0}
+        
+        dict_stats['FN'] += dict_count['unmapped']
         dict_species2res = {} # To access evaluation results of a given species
         list_index_new_col, list_val_new_col = [], []
-        problems = ('only_trashes', 'notDeterminable', 'unsolved_lca_pb')
 
         for tupl_res in results_eval:
             readID, species, res_eval, remark_evaluation = tupl_res
-
-            if species not in problems:
-                dict_species2res[species] = res_eval
-            else:
-                if species == 'notDeterminable':
-                    dict_count['FPnotInKey'] += 1
-                else:
-                    dict_count[species] += 1
-
-                if res_eval == 'TP':
-                    set_seen_prok.add(species)
+            dict_species2res[species] = res_eval
                     
             list_index_new_col.append(readID)
             list_val_new_col.append((species, res_eval, remark_evaluation))
         del tupl_res
 
-        tmp_df = pd.DataFrame({'species':[tupl[0] for tupl in list_val_new_col],
-                               'res_eval':[tupl[1] for tupl in list_val_new_col],
-                               'remark_eval':[tupl[2] for tupl in list_val_new_col]},
+        tmp_df = pd.DataFrame({'species':[tupl[0] 
+                                          for tupl in list_val_new_col],
+                               'res_eval':[tupl[1] 
+                                           for tupl in list_val_new_col],
+                               'remark_eval':[tupl[2] 
+                                              for tupl in list_val_new_col]},
                               index=list_index_new_col)
         my_csv = my_csv.assign(species=tmp_df['species'], 
                                res_eval=tmp_df['res_eval'],
@@ -482,8 +471,6 @@ if __name__ == "__main__":
         del tmp_df
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
-
-        # sys.exit()
 
         # list_MAPQ = my_csv['mapq'][my_csv['mapq'].notnull()]
         # plot_thin_hist(list_MAPQ, "Distrib MAPQ", True, (-1, 60))        
@@ -513,55 +500,28 @@ if __name__ == "__main__":
         # print(my_csv[is_TP]['nb_trashes'].value_counts().sort_index())
 
 
-        eval_taxfoo = evaluate.taxfoo
-        toto = my_csv[is_FP & (my_csv['type_align'] == 'second_plural')]['lineage']
+        # eval_taxfoo = evaluate.taxfoo
+        # toto = my_csv[is_FP & (my_csv['type_align'] == 'second_plural')]['lineage']
         # toto = toto.assign(bonj=len(toto['lineage'].))
         # print(toto.index);sys.exit()
-        for idx, val in enumerate(toto):
-            bonj = pd.Series([len(eval_taxfoo.get_lineage(int(taxid))) for taxid in set(val.split('s'))])
-            list_names = [eval_taxfoo.get_taxid_name(int(taxid)) for taxid in set(val.split('s'))]
+        # for idx, val in enumerate(toto):
+        #     bonj = pd.Series([len(eval_taxfoo.get_lineage(int(taxid))) for taxid in set(val.split('s'))])
+        #     list_names = [eval_taxfoo.get_taxid_name(int(taxid)) for taxid in set(val.split('s'))]
 
-            try:
-                felix = [eval_taxfoo.get_lineage_as_dict(int(taxid))[taxo_cutoff] 
-                             for taxid in val.split('s')]
-                # print(list(enumerate(felix)))
-                if 'Bacilli' in felix:
-                    my_set = set([(classes, idx) for idx, classes in enumerate(felix) if classes != 'Bacilli'])
-                    # if len(my_set) == 1:
-                    if len(my_set) in (2, 3, 4):
-                    # if len(my_set) > 4:
-                        read_ID = toto.index[idx]
-                        print(len(my_set), read_ID, len(felix), my_set)#felix[felix.index('Bacilli')], my_set)
+        #     try:
+        #         felix = [eval_taxfoo.get_lineage_as_dict(int(taxid))[taxo_cutoff] 
+        #                      for taxid in val.split('s')]
+        #         # print(list(enumerate(felix)))
+        #         if 'Bacilli' in felix:
+        #             my_set = set([(classes, idx) for idx, classes in enumerate(felix) if classes != 'Bacilli'])
+        #             # if len(my_set) == 1:
+        #             if len(my_set) in (2, 3, 4):
+        #             # if len(my_set) > 4:
+        #                 read_ID = toto.index[idx]
+        #                 # print(len(my_set), read_ID, len(felix), my_set)#felix[felix.index('Bacilli')], my_set)
 
-            except KeyError:
-                continue
-
-            try:
-                idxes_lower_taxo = list(bonj[(bonj == 9)].index)
-                if len(idxes_lower_taxo) == 1:
-                    # print(list_names[idxes_lower_taxo[0]], idxes_lower_taxo[0], len(bonj))
-                    pass
-                elif len(idxes_lower_taxo) == 2:
-                    if list_names[idxes_lower_taxo[0]] == 'Staphylococcus aureus':
-                        new_idx = idxes_lower_taxo[1]
-                        # print(list_names[(new_idx-1):(new_idx+2)])
-                        # print(list_names[new_idx], new_idx, len(bonj))
-                        pass
-                else:
-                    if len(idxes_lower_taxo) == 4:
-                    # print(len(idxes_lower_taxo))
-                        pass
-                        #print([list_names[idx] for idx in idxes_lower_taxo])
-
-                # idx_lower_taxo = bonj.index(9)
-                # 
-                # if list_names[idx_lower_taxo] ==:
-                    # if sum(map(lambda val: val == 9, bonj)) == 1:
-                        # print(list_names)
-                # print(list_names[idx_lower_taxo])
-            except ValueError:
-                # print(list_names, bonj)
-                continue
+        #     except KeyError:
+        #         continue
 
         # sys.exit()
 
@@ -578,73 +538,40 @@ if __name__ == "__main__":
         dict_stats['FP'] += sum(is_FP)
         dict_stats['FP'] += sum(my_csv['type_align'] == 'only_suppl')
         dict_stats['TP'] += sum(is_TP)
-        print(dict_count)
-        print(dict_stats)
-        print("TOT READS EVALUATED:", sum(dict_stats.values()))
+        # print(dict_stats)
+        # print("TOT READS EVALUATED:", sum(dict_stats.values()))
         print()
-
-        # true_FP = ((my_csv['res_eval'] == 'FP') & 
-        #            (my_csv['species'] != 'notDeterminable') &
-        #            (my_csv['species'] != 'unsolved_lca_pb'))
-        
-        # print(my_csv['species'][false_pos].)
-        # salut = eval_taxfoo.get_lineage_as_dict(list_taxids[-1])
-        # print(my_csv[is_FP & (my_csv['species'] == 'notDeterminable')]['type_align'].value_counts())
-        salut = my_csv[is_FP & 
-                       (my_csv['species'] == 'notDeterminable') &
-                       (my_csv['type_align'] == 'merged')]['lineage']
-        for taxid_lineage in salut:
-            # print(taxid_lineage.strip(';'))
-            pass
-            calc_taxo_shift(int(taxid_lineage.strip(';')), taxo_cutoff)
-            # lca = lca_last_try(taxid_lineage)
-            # if lca != 'only_trashes':
-            #     print(lca)
-
-                # if lca == 204429:
-                #     print(eval_taxfoo.get_lineage_as_dict(lca))
-
-            # calc_taxo_shift(val, taxo_cutoff)
-            # calc_taxo_shift()
-            #print(val)
-        
-        # plot_thin_hist(my_csv[is_TP]['mapq'], "Distrib MAPQ", True, (-1, 60))
-
-        # print(my_csv[is_TP]['type_align'].value_counts())
-        # print()
-        # print(my_csv[is_FP & 
-        #      (my_csv['species']=='notDeterminable') & 
-        #      (my_csv['type_align'] == 'merged')]['mapq'].value_counts())
-        # print(my_csv[is_FP]['species'].value_counts())
-        # print(my_csv[false_pos].groupby('species').count())
-
-
-        # sys.exit()
-
-
-        # list_len_align = []
-        # plot_thin_hist(list_len_align, "Distrib len_align TP", True)
-        
-
-
-        # AT THE TAXA LEVEL:
-        print("RESULTS AT THE TAXA LEVELS:")
-        recall_at_taxa_level = len(set_seen_prok)/len(tupl_sets_levels[0])
-        TP_list = [sp for sp in dict_species2res if dict_species2res[sp] == 'TP']
-        print("NB_TP", len(TP_list), " | NB_FP", len(dict_species2res))
-        dict_stats_sp_level = {'TP':len(TP_list),
-                               'FP':len(dict_species2res.keys())}
-        print("SENSITIVITY:", recall_at_taxa_level, " | ", "FNR:",
-              1 - recall_at_taxa_level)
-        compute_metrics(dict_stats_sp_level, True)
-        
 
 
         # Print general counting results:
+        print(dict_count)
         tot_reads = dict_count['tot_reads']
         print("TOT READS:", tot_reads)
-        print("% UNMAPPED:", dict_count["unmapped"]/tot_reads*100)
+        print("% UNMAPPED:", round(dict_count["unmapped"]/tot_reads*100, 4))
         print()
+
+
+        # AT THE TAXA LEVEL:
+        print("RESULTS AT THE TAXA LEVEL:")
+        list_FP = [val for val in dict_species2res 
+                   if dict_species2res[val] == 'FP']
+        list_TP = [val for val in dict_species2res 
+                   if dict_species2res[val] == 'TP']
+        nb_pos_to_find = len(tupl_sets_levels[0])
+        recall_at_taxa_level = len(list_TP)/nb_pos_to_find
+        print("NB TO FIND:", nb_pos_to_find)
+        print("NB_FP", len(list_FP), " | NB_TP", len(list_TP))
+        dict_stats_sp_level = {'TP':len(list_TP),
+                               'FP':len(list_FP)}
+        print(dict_stats_sp_level)
+        precision_at_taxa_level = compute_metrics(dict_stats_sp_level, True)
+        print("SENSITIVITY:", recall_at_taxa_level, " | ", "FNR:",
+              1 - recall_at_taxa_level)
+        calc_f1 = lambda tupl: round((2*tupl[0]*tupl[1])/(tupl[0]+tupl[1]), 4)
+        print("F1-SCORE:", 
+              calc_f1((precision_at_taxa_level, recall_at_taxa_level)))
+        print()
+
 
         # Print results of suppl handling:
         # nb_evaluated_suppl = len(list_res_suppl_handling)
@@ -655,13 +582,16 @@ if __name__ == "__main__":
         # print("REST (not mergeable):", nb_evaluated_suppl - len(mergeable_suppl))
         # print()
 
+
         sum_stats, sum_counts = sum(dict_stats.values()),sum(dict_count.values())
         # assert(sum_stats == tot_reads - nb_evaluated_suppl)
+        print("RESULTS AT THE READ LEVEL:")
         print(sorted(dict_stats.items()))
         dict_to_convert = dict_stats
 
 
     else:
+        print('PAS LAAAAAA');sys.exit()
         df_hits = pd.read_csv(to_infile, sep='\t', index_col=0, header=0)
         dict_stats_propag = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
 
@@ -742,3 +672,4 @@ if __name__ == "__main__":
 
     # COMPUTE METRICS:
     compute_metrics(dict_to_convert, False)
+    print()

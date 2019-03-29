@@ -13,7 +13,7 @@ import src.taxo_eval as eval
 def is_trash(taxid_to_eval):
     """
     """
-    taxid_name = shared.taxfoo.get_taxid_name(taxid_to_eval)
+    taxid_name = eval.taxfoo.get_taxid_name(taxid_to_eval)
     if ('metagenome' in taxid_name or 'uncultured' in taxid_name or 
         'unidentified' in taxid_name or 'phage' in taxid_name.lower() or
         taxid_name == 'synthetic construct' or 
@@ -55,6 +55,7 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
             for align_not_suppl in no_suppl_list:
                 assert(align_not_suppl["mapq"] == 0)
                 align_not_suppl["mapq"] = max_mapq
+            del align_not_suppl
 
         list_taxid_target, de_list = [], []
         for alignment in no_suppl_list:
@@ -62,15 +63,15 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
             assert(taxid_target) # If taxid not 'None'
             list_taxid_target.append(taxid_target)
             de_list.append(alignment["de"])
+        del alignment
     
-        if set(list_taxid_target) == 1: # Mergeable directly
+        if len(set(list_taxid_target)) == 1: # Mergeable directly
             type_alignment = 'second_uniq' 
         else:
             type_alignment = 'second_plural'
             # print([shared.taxfoo.get_taxid_name(taxid) for taxid in set(list_taxid_target)])
         
         taxo_to_write = 's'.join(str(taxid) for taxid in list_taxid_target)          
-
         nb_trashes = sum(map(is_trash, list_taxid_target))
         # print([dico["de"] for dico in no_suppl_list], 
         #       [dico["AS"] for dico in no_suppl_list], 
@@ -81,14 +82,11 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
     else: # Normal case
         type_alignment = 'normal' # i.e. not secondary
         de = representative["de"]
-        # if ratio_len >= cutoff_ratio:
         current_taxid = conv_seqid2taxid[representative["ref_name"]]
         nb_trashes = sum(map(is_trash, [current_taxid]))
         taxo_to_write = ';' + str(current_taxid) + ';' # Will be considered as an str
 
     common_to_return += [de]
-    # if type_alignment == 'normal':
-    #     return [readID, type_alignment, taxo_to_write, ""] + common_to_return
     return [readID, type_alignment, taxo_to_write, nb_trashes] + common_to_return
 
 
@@ -99,21 +97,32 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels,
     """
     lineage_val = two_col_from_csv.loc[one_csv_index_val, "lineage"]
     type_align = two_col_from_csv.loc[one_csv_index_val, "type_align"]
-    if lineage_val.startswith(';'): # Normal
+    remark_eval = type_align
+
+    # if lineage_val.startswith(';'): # Normal
+    if type_align == 'normal':
         taxid_to_eval = lineage_val.strip(';')
-    else: # Secondary (with 1 unique taxid or more) 
-        res_second_handling = eval.handle_second(lineage_val)
-        remark_eval = res_second_handling[0]
-        if len(res_second_handling) == 1: # Problem (only trashes or unsolved)
-            return (one_csv_index_val, remark_eval, 'FP', remark_eval)
-        else:
-            taxid_to_eval = res_second_handling[1]
+        
+    else: # Secondary (with 1 unique taxid or more)
+        list_taxid_target = list(map(int, lineage_val.split('s')))
+        if type_align == 'second_uniq':
+            taxid_to_eval = list_taxid_target[0]
+        else: # More than 1 unique taxid
+            # res_second_handling = eval.handle_second(lineage_val)
+            eval.majo_voting(list_taxid_target, taxonomic_cutoff)
+            res_second_handling = eval.make_lca(list_taxid_target)
+            remark_eval = res_second_handling[0]
+            if len(res_second_handling) == 1: # Problem (only trashes or unsolved)
+                return (one_csv_index_val, remark_eval, 'FP', remark_eval)
+            else:
+                taxid_to_eval = res_second_handling[1]
 
-    taxo_name, classif = eval.in_zymo(taxid_to_eval, sets_levels, 
-                                        taxonomic_cutoff)
+    taxo_name, classif, remark = eval.in_zymo(taxid_to_eval, sets_levels, 
+                                              taxonomic_cutoff)
+    remark_eval += ';' + remark
 
-    if lineage_val.startswith(';'):
-        return (one_csv_index_val, taxo_name, classif, type_align)
+    # if lineage_val.startswith(';'):
+    #     return (one_csv_index_val, taxo_name, classif, remark_eval)
     return (one_csv_index_val, taxo_name, classif, remark_eval)
 
 
@@ -146,6 +155,7 @@ def taxid_mapping(chunk, set_accession):
 
         if to_search in set_accession:
             to_return.append((to_search, taxid))
+    del line
 
     if to_return:
         return to_return

@@ -5,6 +5,7 @@ Aims to containing functions common to several scripts
 """
 
 
+from pandas import Series
 import src.ncbi_taxdump_utils as taxo_utils
 
 
@@ -41,6 +42,7 @@ def generate_sets_zymo(taxonomic_cutoff):
         prok_taxo_level = lineage_prok[taxonomic_cutoff]
         assert(prok_taxo_level)
         set_prok.add(prok_taxo_level)
+    del prok_name
 
     set_euk = set()
     for euk_name in dict_euk:
@@ -48,6 +50,7 @@ def generate_sets_zymo(taxonomic_cutoff):
         euk_taxo_level = lineage_euk[taxonomic_cutoff]
         assert(euk_taxo_level)
         set_euk.add(euk_taxo_level)
+    del euk_name
 
     return (set_prok, set_euk)
 
@@ -86,18 +89,19 @@ def lca_last_try(old_set_taxids):
             # print("PB:", taxid_name, taxid)
         else:
             new_set_taxids.add(taxid)
+    del taxid
 
     if not new_set_taxids:
         return 'only_trashes'
     return taxfoo.find_lca(new_set_taxids)
 
 
-def handle_second(str_list_taxids):
+def handle_second(list_taxid_target):
     """
     Take an alignment that has been found to be secondary and try to determine
     its taxonomy (i.e. 1 unique taxid)    
     """
-    set_taxid_target = set(map(int, str_list_taxids.split('s')))
+    set_taxid_target = set(list_taxid_target)
     lca = taxfoo.find_lca(set_taxid_target)
 
     if lca == 1: # If LCA searching fails, LCA==1
@@ -112,6 +116,67 @@ def handle_second(str_list_taxids):
     return ('lca', lca)
 
 
+def get_majo(list_of_things, cutoff_majo):
+    """
+    Given a list of things (could be numbers of list of strings), determine
+    wether there is one whose frequency is up to a given cutoff (so that can be
+    considered as majority)
+    """
+    val_counts = Series(list_of_things).value_counts()
+    freq_counts = val_counts/len(list_of_things)
+    are_up_to_cutoff  = freq_counts > cutoff_majo
+    nb_majo = sum(are_up_to_cutoff)
+    assert(nb_majo < 2)
+    # if len(set(val_counts)) == 1:
+    #     print([taxfoo.get_taxid_name(taxid) for taxid in val_counts.index])
+
+    to_return = [val for val in val_counts]
+    if nb_majo == 1: # 1 unique majoritary
+        return (str(freq_counts.idxmax()), to_return)
+    return ('noMajo', to_return) # NO majoritary
+
+
+def majo_voting(list_taxid_target, taxonomic_cutoff):
+    """
+    
+    """
+    dict_taxid2ancester = {}
+    for taxid in set(list_taxid_target):
+        lineage = taxfoo.get_dict_lineage_as_taxids(taxid)
+        if taxonomic_cutoff in lineage.keys():
+            dict_taxid2ancester[taxid] = lineage[taxonomic_cutoff]
+        else:
+            # dict_taxid2ancester[taxid] = 'notInKey'
+            dict_taxid2ancester[taxid] = 'notInKey_' + str(taxid)
+    del taxid
+
+    list_taxids_ancesters = [dict_taxid2ancester[taxid] 
+                             for taxid in list_taxid_target]
+    majo_ancester, _ = get_majo(list_taxids_ancesters, 0.5)
+
+    if majo_ancester == 'noMajo': # Still NO majoritary
+        return ('no_majo_found', )
+    else:
+        if 'notInKey' in majo_ancester:
+            return ('majo_notInKey', majo_ancester.split('_')[1])
+        # assert (majo_ancester != 'notInKey')
+        return ('majo_found', majo_ancester) # Majo found only after the 2nd round
+
+
+def make_lca(list_taxid_target):
+    """
+    Take an alignment that has been found to be secondary and try to determine
+    its taxonomy (i.e. 1 unique taxid)    
+    """
+    set_taxid_target = set(list_taxid_target)
+    lca = taxfoo.find_lca(set_taxid_target)
+
+    if lca == 1: # If LCA searching fails, LCA==1
+        return ('root_reached', )
+
+    return ('lca', lca)
+
+
 def in_zymo(taxo_taxid, tupl_sets, taxonomic_cutoff):
     """
     Given the taxid of a read (lowest one in the taxo), determine if the 
@@ -122,9 +187,10 @@ def in_zymo(taxo_taxid, tupl_sets, taxonomic_cutoff):
     taxo_levels = lineage.keys()
 
     if taxonomic_cutoff not in taxo_levels:
-        return ('notDeterminable', 'FP')
+        # return ('notDeterminable', 'FP')
+        return (taxfoo.get_taxid_name(int(taxo_taxid)), 'FP', 'notInKeys')
     else:
         taxo_name = lineage[taxonomic_cutoff]
         if taxo_name in set_levels_prok:
-            return (taxo_name, "TP")
-        return (taxo_name, "FP")
+            return (taxo_name, "TP", 'true_pos')
+        return (taxo_name, "FP", 'misassigned')
