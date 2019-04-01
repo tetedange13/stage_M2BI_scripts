@@ -108,21 +108,26 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels,
         if type_align == 'second_uniq':
             taxid_to_eval = list_taxid_target[0]
         else: # More than 1 unique taxid
-            # res_second_handling = eval.handle_second(lineage_val)
-            eval.majo_voting(list_taxid_target, taxonomic_cutoff)
-            res_second_handling = eval.make_lca(list_taxid_target)
+            res_second_handling = eval.majo_voting(list_taxid_target, 
+                                                   taxonomic_cutoff)
+            # res_second_handling = eval.make_lca(list_taxid_target)
             remark_eval = res_second_handling[0]
-            if len(res_second_handling) == 1: # Problem (only trashes or unsolved)
+            if len(res_second_handling) == 1: # Problem (root reached)
+                # list_sp_name = '&'.join([eval.taxfoo.get_taxid_name(taxid) 
+                #                          for taxid in list_taxid_target])
+                # return (one_csv_index_val, list_sp_name, 'FP', remark_eval)
                 return (one_csv_index_val, remark_eval, 'FP', remark_eval)
             else:
                 taxid_to_eval = res_second_handling[1]
+                if remark_eval == 'majo_notInKey':
+                    return (one_csv_index_val, 
+                            eval.taxfoo.get_taxid_name(int(taxid_to_eval)), 
+                            'FP', remark_eval)
 
     taxo_name, classif, remark = eval.in_zymo(taxid_to_eval, sets_levels, 
                                               taxonomic_cutoff)
     remark_eval += ';' + remark
 
-    # if lineage_val.startswith(';'):
-    #     return (one_csv_index_val, taxo_name, classif, remark_eval)
     return (one_csv_index_val, taxo_name, classif, remark_eval)
 
 

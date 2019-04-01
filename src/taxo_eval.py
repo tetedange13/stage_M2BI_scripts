@@ -172,7 +172,7 @@ def make_lca(list_taxid_target):
     lca = taxfoo.find_lca(set_taxid_target)
 
     if lca == 1: # If LCA searching fails, LCA==1
-        return ('root_reached', )
+        return ('lca;root_reached', )
 
     return ('lca', lca)
 
