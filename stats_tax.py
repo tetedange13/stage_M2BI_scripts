@@ -425,10 +425,10 @@ if __name__ == "__main__":
         # Parallel version:
         print()
         print("PROCESSING CSV TO EVALUATE TAXO...")
-        # eval_pool = mp.Pool(15)
-        # results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
-        # eval_pool.close()
-        results_eval = list(map(partial_eval, my_csv_to_pll.index)) 
+        eval_pool = mp.Pool(15)
+        results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
+        eval_pool.close()
+        # results_eval = list(map(partial_eval, my_csv_to_pll.index)) 
         del my_csv_to_pll
         print("PLL PROCESS FINISHED !")
         # sys.exit()
@@ -439,8 +439,12 @@ if __name__ == "__main__":
         for type_aln, count in counts_type_align.items():
             dict_count[type_aln] = count
         del type_aln
-        dict_count['tot_second'] = (dict_count['second_plural'] + 
-                                    dict_count['second_uniq'])
+
+        if 'second_plural' not in counts_type_align.index:
+            dict_count['tot_second'] = 0
+        else:
+            dict_count['tot_second'] = (dict_count['second_plural'] + 
+                                        dict_count['second_uniq'])
         dict_count["tot_reads"] = (dict_count['unmapped'] + 
                                    dict_count["tot_second"] +
                                    dict_count["normal"])
@@ -452,7 +456,8 @@ if __name__ == "__main__":
 
         for tupl_res in results_eval:
             readID, species, res_eval, remark_evaluation = tupl_res
-            dict_species2res[species] = res_eval
+            if remark_evaluation != 'no_majo_found':
+                dict_species2res[species] = res_eval
                     
             list_index_new_col.append(readID)
             list_val_new_col.append((species, res_eval, remark_evaluation))
@@ -492,15 +497,23 @@ if __name__ == "__main__":
         is_TP = ((my_csv['res_eval'] == 'TP') &
                  (my_csv['nb_trashes'] <= cutoff_nb_trashes))
         print("FP STATS:")
-        print(my_csv[is_FP]['remark_eval'].value_counts().sort_index())
-        # print(my_csv[is_FP & (my_csv['type_align'] == 'second_plural')]['remark_eval'].value_counts())
+        print(my_csv[is_FP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
+        # print(my_csv[is_FP]['remark_eval'].value_counts().sort_index())
+        # print(my_csv[is_FP & (my_csv['remark_eval'] == 'no_majo_found')]['species'].value_counts())
         print()
         print("TP STATS:")
-        print(my_csv[is_TP]['type_align'].value_counts().sort_index())
-        # print(my_csv[is_TP]['nb_trashes'].value_counts().sort_index())
+        # print(my_csv[is_TP]['type_align'].value_counts().sort_index())
+        print(my_csv[is_TP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
 
-
+        print()
+        
         # eval_taxfoo = evaluate.taxfoo
+        # toto = my_csv[is_FP & (my_csv['remark_eval'] == 'lca;notInKeys')]['lineage']
+        # for readID, val in toto.items():
+        #     if '1541959' in val:
+        #         print("TOT:", readID)
+        # print(eval_taxfoo.get_lineage_as_dict(1541959))
+
         # toto = my_csv[is_FP & (my_csv['type_align'] == 'second_plural')]['lineage']
         # toto = toto.assign(bonj=len(toto['lineage'].))
         # print(toto.index);sys.exit()
@@ -530,10 +543,6 @@ if __name__ == "__main__":
                       }).plot.bar(title="Distrib nb_trashes between FP and TP",
                                   color=('red', 'green'))
         # plt.show()
-        # my_csv[is_FP]['nb_trashes'].value_counts().plot(kind='bar', 
-        #                                                 colorbar=False,
-        #                                                 )
-        print()
 
         dict_stats['FP'] += sum(is_FP)
         dict_stats['FP'] += sum(my_csv['type_align'] == 'only_suppl')
@@ -553,17 +562,17 @@ if __name__ == "__main__":
 
         # AT THE TAXA LEVEL:
         print("RESULTS AT THE TAXA LEVEL:")
+        print(dict_species2res)
         list_FP = [val for val in dict_species2res 
                    if dict_species2res[val] == 'FP']
         list_TP = [val for val in dict_species2res 
                    if dict_species2res[val] == 'TP']
         nb_pos_to_find = len(tupl_sets_levels[0])
         recall_at_taxa_level = len(list_TP)/nb_pos_to_find
-        print("NB TO FIND:", nb_pos_to_find)
+        print("TO FIND:", list_TP)
         print("NB_FP", len(list_FP), " | NB_TP", len(list_TP))
         dict_stats_sp_level = {'TP':len(list_TP),
                                'FP':len(list_FP)}
-        print(dict_stats_sp_level)
         precision_at_taxa_level = compute_metrics(dict_stats_sp_level, True)
         print("SENSITIVITY:", recall_at_taxa_level, " | ", "FNR:",
               1 - recall_at_taxa_level)
