@@ -105,6 +105,8 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels,
         
     else: # Secondary (with 1 unique taxid or more)
         list_taxid_target = list(map(int, lineage_val.split('s')))
+        if 0 in list_taxid_target:
+            print(one_csv_index_val, list_taxid_target)
         if type_align == 'second_uniq':
             taxid_to_eval = list_taxid_target[0]
         else: # More than 1 unique taxid

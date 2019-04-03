@@ -189,8 +189,8 @@ if __name__ == "__main__":
 
     if not CLUST_MODE and not IS_SAM_FILE:
         print("CENTRIFUGE MODE !\n")
-        print(evaluate.taxfoo.get_taxid_name(1));sys.exit()
         dict_gethered = {}
+
         with open(to_infile, 'r') as in_tab_file:
             in_tab_file.readline() # Skip header
             for line in in_tab_file:
@@ -212,7 +212,6 @@ if __name__ == "__main__":
         for readID in readIDs:
             list_indexes.append(readID)
             if len(dict_gethered[readID]) > 1:
-                type_align = 'multi_hit'
                 list_taxids = list(map(lambda a_str: a_str.split('\t')[1], 
                                    dict_gethered[readID]))
                 lineage = 's'.join(list_taxids)
@@ -222,24 +221,25 @@ if __name__ == "__main__":
                  numMatches) = dict_gethered[readID][0].split('\t')
                 list_hitLength = list(map(lambda a_str: a_str.split('\t')[4], 
                                     dict_gethered[readID]))
-                if len(set(list_hitLength)) == 1:
-                    hitLength = ';' + list_hitLength[0] + ';'
+                if len(set(list_taxids)) == 1:
+                    type_align = 'second_uniq'
                 else:
-                    hitLength = 's'.join(list_hitLength)
+                    type_align = 'second_plural'
+                hitLength = 'm'.join(list_hitLength)
                 secondBestScore = pd.np.nan
 
             else:
                 tupl = dict_gethered[readID][0].split('\t')
-                (ref_name, taxID, score, secondBestScore,
-                 pre_hitLength, queryLength, numMatches) = tupl
+                ( ref_name, taxID, score, secondBestScore,
+                  pre_hitLength, queryLength, numMatches ) = tupl
                 if ref_name == 'unclassified':
-                    type_align = ref_name
+                    type_align = 'unmapped'
                     (lineage, score, secondBestScore, hitLength, queryLength,
-                     numMatches) = ([pd.np.nan] * 6)
+                     numMatches) = [pd.np.nan] * 6
                 else:
-                    type_align = 'single_hit'    
-                lineage = ';' + taxID + ';'
-                hitLength = ';' + pre_hitLength + ';'
+                    type_align = 'normal'    
+                    lineage = ';' + taxID + ';'
+                    hitLength = ';' + pre_hitLength + ';'
 
             list_val.append([type_align, lineage, score, secondBestScore,
                              hitLength, queryLength, numMatches])
@@ -256,24 +256,53 @@ if __name__ == "__main__":
             my_csv = my_csv.assign(**tmp_dict, index=list_indexes)
         del i, tmp_dict, list_val, list_indexes
 
-        print(set(my_csv['type_align']))
-
-        with_lineage = my_csv['lineage'].notnull()
-        my_csv_to_pll = my_csv[with_lineage][['lineage', 'type_align']]
+        with_lineage = ((my_csv['type_align'] != 'unmapped') & 
+                        (my_csv['type_align'] != 'only_suppl'))
+        my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
+        print(set(my_csv_to_pll[my_csv_to_pll['type_align']=='unmapped']['lineage']))
+        print(my_csv['type_align'].value_counts())
+        print(my_csv.loc["cf3744c4-4997-47c3-82e3-554d976b8cb3", :])
+        # sys.exit()
         partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
-                                          sets_levels=tupl_sets_levels,
-                                          taxonomic_cutoff=taxo_cutoff)
+                                              sets_levels=tupl_sets_levels,
+                                              taxonomic_cutoff=taxo_cutoff)
+        #c10320e2-e2f4-4fc9-a49d-5501f8931b5d
 
-        # Parallel version:
         print()
         print("PROCESSING CSV TO EVALUATE TAXO...")
+        # Serial version:
+        # results = list(map(partial_eval, my_csv_to_pll.index))
+        # Parallel version:
         eval_pool = mp.Pool(15)
         results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
         eval_pool.close()
-        # results = list(map(partial_eval, my_csv_to_pll.index))
         del my_csv_to_pll
         print("PLL PROCESS FINISHED !")
 
+        to_complete_lineage = "salut/taxids_complete_lineage"
+        with open(to_complete_lineage, 'r') as complete_lineage_file:
+            set_taxids_db = {line.rstrip('\n') for line in complete_lineage_file}
+        toto = my_csv[my_csv['type_align'] == 'second_plural']['lineage']
+        set_not_in_db = set()
+        set_readID_not_in_db = set()
+        for readID, lineage_val in toto.items():
+            list_taxids = lineage_val.split('s')
+            list_test = []
+            for taxid in list_taxids:
+                if taxid !=0 and taxid not in set_taxids_db:
+                    set_not_in_db.add(taxid)
+                    set_readID_not_in_db.add(readID)
+                    list_test.append("not_in_db")
+                else:
+                    list_test.append(taxid)
+            if "not_in_db" in list_test:
+                print(list_test, [taxid for taxid in list_taxids])
+            if len(set(list_test)) == 1 and list(set(list_test))[0] == "not_in_db":
+                print("TO_RM")
+        print(len(set_not_in_db))
+        print(len(set_readID_not_in_db))
+        
+        print(set_not_in_db)
         sys.exit()
     
 
