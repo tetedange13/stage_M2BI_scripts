@@ -127,7 +127,11 @@ if __name__ == "__main__":
 
 
     # GET TAXONOMY FILES:
-    if not (osp.isfile(dirOut+"nodes.dmp") and osp.isfile(dirOut+"names.dmp")):
+    if (not (osp.isfile(dirOut+"nodes.dmp") and
+        osp.isfile(dirOut + "names.dmp"))):
+        print("ERROR: Taxonomic files (.dmp) NOT FOUND in", dirOut, "\n")
+        sys.exit()
+
         print("\nGenerating taxonomic tree and names...")  
         # cmd_centriDl = ("centrifuge-download -v -o " + dirOut + " -t " + 
         #                 ','.join(list(set_taxids)) + " taxonomy")
@@ -143,7 +147,7 @@ if __name__ == "__main__":
     # BUILDING INDEX
     path_to_centriBuild = ("/home/sheldon/Applications/centrifuge-master21" +
                                "jan19/build/bin/centrifuge-build")
-    db_name = "silva"
+    db_name = "rrn"
     cmd_centriBuild = (path_to_centriBuild + " -p " + NB_THREADS + 
                        " --conversion-table " + dirOut + "seqid2taxid " + 
                        "--taxonomy-tree " + dirOut + 
