@@ -219,22 +219,28 @@ if __name__ == "__main__":
         
     
     elif DETER == "centri": # Classification using centrifuge:
+        # CMD COMPILATION CENTRIFUGE:
+        # /usr/bin/g++  -O3 -m64 -msse2 -funroll-loops -g3 -std=c++11 -DCOMPILER_OPTIONS="\"-O3 -m64 -msse2 -funroll-loops -g3 -std=c++11 -DPOPCNT_CAPABILITY\"" -DPOPCNT_CAPABILITY -fno-strict-aliasing -DCENTRIFUGE_VERSION="\"1.0.4\"" -DBUILD_HOST="\"`hostname`\"" -DBUILD_TIME="\"`date`\"" -DCOMPILER_VERSION="\"`/usr/bin/g++  -v 2>&1 | tail -1`\"" -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE   -DBOWTIE_MM   -DCENTRIFUGE -DBOWTIE2 -DBOWTIE_64BIT_INDEX -DNDEBUG -Wall  -I third_party  -o centrifuge-class centrifuge.cpp ccnt_lut.cpp ref_read.cpp alphabet.cpp shmem.cpp edit.cpp bt2_idx.cpp reference.cpp ds.cpp limit.cpp random_source.cpp tinythread.cpp qual.cpp pat.cpp read_qseq.cpp ref_coord.cpp mask.cpp pe.cpp aligner_seed_policy.cpp scoring.cpp presets.cpp simple_func.cpp random_util.cpp outq.cpp centrifuge_main.cpp -lpthread
+        
         to_Centri_idxes = to_dbs + "Centri_idxes/"
         dirOut_centri = path_proj + "3-deter_centri/"
+        centri_classif_path = (dirOut_centri + in_fq_base + "_to" +  
+                               DB_NAME.capitalize() + "_classif.tsv")
         
         cmd_centri = ("centrifuge -t -p " + nb_threads + " -q " + 
                       in_fq_path + " -x " + to_Centri_idxes + DB_NAME +
                       " --report-file " + dirOut_centri + in_fq_base + "_to" + 
-                      DB_NAME.capitalize() + "_report.tsv")
+                      DB_NAME.capitalize() + "_report.tsv -S " +
+                      centri_classif_path)
         # print(cmd_centri);sys.exit()
         
         centri_log_path = (dirOut_centri + in_fq_base + "_to" + 
                            DB_NAME.capitalize() + ".log")
-        centri_classif_path = (dirOut_centri + in_fq_base + "_to" +  
-                               DB_NAME.capitalize() + "_classif.tsv")
-        with open(centri_classif_path, 'w') as classif_centri, \
-             open(centri_log_path, 'w') as centri_log:
-            sub.Popen(cmd_centri.split(), stdout=classif_centri,
+        
+        # with open(centri_classif_path, 'w') as classif_centri, \
+        #      open(centri_log_path, 'w') as centri_log:
+        with open(centri_log_path, 'w') as centri_log:
+            sub.Popen(cmd_centri.split(),
                       stderr=centri_log).communicate()
     
     
