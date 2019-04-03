@@ -55,7 +55,7 @@ if __name__ == "__main__":
                                  ('fa', 'fasta', 'fq', 'fastq'))[0]
     dirOut = ARGS["--dirOut"]                            
     list_gi_path = ARGS["--accList"]
-    NB_THREADS = int(check.input_nb(ARGS["--threads"]))
+    NB_THREADS = check.input_nb(ARGS["--threads"]) # TYPE STRING
 
     # Common variables:
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
@@ -119,19 +119,21 @@ if __name__ == "__main__":
 
 
     else:
-        print("--> FOUND seqid2taxid file")
+        print("--> FOUND seqid2taxid file in", dirOut, "!")
 
     # Get list of taxids to give to 'centrifuge-download':
-    with open(to_seqid2taxid, 'r') as seqid2taxid_file:
-        set_taxids = {line.rstrip('\n').split('\t')[1] for line in seqid2taxid_file}
+    # with open(to_seqid2taxid, 'r') as seqid2taxid_file:
+    #     set_taxids = {line.rstrip('\n').split('\t')[1] for line in seqid2taxid_file}
 
 
     # GET TAXONOMY FILES:
     if not (osp.isfile(dirOut+"nodes.dmp") and osp.isfile(dirOut+"names.dmp")):
         print("\nGenerating taxonomic tree and names...")  
-        cmd_centriDl = ("centrifuge-download -v -o " + dirOut + " -t " + 
-                        ','.join(list(set_taxids)) + " taxonomy")
-        sub.Popen(cmd_centriDl.split(), shell=True)
+        # cmd_centriDl = ("centrifuge-download -v -o " + dirOut + " -t " + 
+        #                 ','.join(list(set_taxids)) + " taxonomy")
+        # sub.Popen(cmd_centriDl.split(), shell=True)
+        cmd_centriDl = "centrifuge-download -v -o ./ taxonomy"
+        os.system(cmd_centriDl)
         print("Done !\n")
     
     else:
@@ -142,11 +144,13 @@ if __name__ == "__main__":
     path_to_centriBuild = ("/home/sheldon/Applications/centrifuge-master21" +
                                "jan19/build/bin/centrifuge-build")
     db_name = "silva"
-    cmd_centriBuild = (path_to_centriBuild + " -p 7 --conversion-table " + 
-                       dirOut + "seqid2taxid " + "--taxonomy-tree " + 
-                       dirOut + "nodes.dmp --name-table " + dirOut + 
-                       "names.dmp " + input_db_path + " " + dirOut + db_name)
+    cmd_centriBuild = (path_to_centriBuild + " -p " + NB_THREADS + 
+                       " --conversion-table " + dirOut + "seqid2taxid " + 
+                       "--taxonomy-tree " + dirOut + 
+                       "nodes.dmp --name-table " + dirOut + "names.dmp " + 
+                       input_db_path + " " + dirOut + db_name)
     print("Building centrifuge index...")
+    # print(cmd_centriBuild);sys.exit()
     with open(dirOut + "centri-build.log", 'w') as centriBuild_log:
         sub.Popen(cmd_centriBuild.split(), stdout=centriBuild_log).communicate()
         
