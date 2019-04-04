@@ -91,9 +91,11 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
 
 
 def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels, 
-              taxonomic_cutoff):
+              taxonomic_cutoff, mode):
     """
     Do the parallel taxonomic evaluation on a given Pandas DataFrame
+    The 'mode' parameter allows to change between LCA and majo voting, for the
+    handling of multi-hits/mult-mapping
     """
     lineage_val = two_col_from_csv.loc[one_csv_index_val, "lineage"]
     type_align = two_col_from_csv.loc[one_csv_index_val, "type_align"]
@@ -105,14 +107,14 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels,
         
     else: # Secondary (with 1 unique taxid or more)
         list_taxid_target = list(map(int, lineage_val.split('s')))
-        if 0 in list_taxid_target:
-            print(one_csv_index_val, list_taxid_target)
         if type_align == 'second_uniq':
             taxid_to_eval = list_taxid_target[0]
         else: # More than 1 unique taxid
-            res_second_handling = eval.majo_voting(list_taxid_target, 
-                                                   taxonomic_cutoff)
-            # res_second_handling = eval.make_lca(list_taxid_target)
+            if mode == 'MAJO':
+                res_second_handling = eval.majo_voting(list_taxid_target, 
+                                                       taxonomic_cutoff)
+            elif mode == 'LCA':
+                res_second_handling = eval.make_lca(list_taxid_target)
             remark_eval = res_second_handling[0]
             if len(res_second_handling) == 1: # Problem (root reached)
                 # list_sp_name = '&'.join([eval.taxfoo.get_taxid_name(taxid) 
