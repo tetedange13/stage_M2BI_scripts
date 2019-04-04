@@ -262,31 +262,9 @@ if __name__ == "__main__":
             my_csv = my_csv.assign(**tmp_dict, index=list_indexes)
         del i, tmp_dict, list_val, list_indexes
 
-        # with_lineage = ((my_csv['type_align'] != 'unmapped') & 
-        #                 (my_csv['type_align'] != 'only_suppl'))
-        # my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
-        # print(my_csv['type_align'].value_counts())
+        print(my_csv['type_align'].value_counts())
 
         # # taxfoo = evaluate.taxfoo
-        # # for readID, lineage_val in my_csv[my_csv['type_align'] == 'second_plural']['lineage'].items():
-        # #     print(set([taxfoo.get_taxid_rank(int(taxid)) for taxid in lineage_val.split('s')]))
-
-        # partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
-        #                                       sets_levels=tupl_sets_levels,
-        #                                       taxonomic_cutoff=taxo_cutoff,
-        #                                       mode='LCA')
-        # #c10320e2-e2f4-4fc9-a49d-5501f8931b5d
-
-        # print()
-        # print("PROCESSING CSV TO EVALUATE TAXO...")
-        # # Serial version:
-        # # results = list(map(partial_eval, my_csv_to_pll.index))
-        # # Parallel version:
-        # eval_pool = mp.Pool(15)
-        # results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
-        # eval_pool.close()
-        # del my_csv_to_pll
-        # print("PLL PROCESS FINISHED !")
 
         # to_complete_lineage = "salut/taxids_complete_lineage"
         # with open(to_complete_lineage, 'r') as complete_lineage_file:
@@ -480,12 +458,12 @@ if __name__ == "__main__":
         for type_aln, count in counts_type_align.items():
             dict_count[type_aln] = count
         del type_aln
-
+        if 'second_uniq' not in counts_type_align.index:
+            dict_count['second_uniq'] = 0
         if 'second_plural' not in counts_type_align.index:
-            dict_count['tot_second'] = 0
-        else:
-            dict_count['tot_second'] = (dict_count['second_plural'] + 
-                                        dict_count['second_uniq'])
+            dict_count['second_plural'] = 0
+        dict_count['tot_second'] = (dict_count['second_plural'] + 
+                                    dict_count['second_uniq'])
         dict_count["tot_reads"] = (dict_count['unmapped'] + 
                                    dict_count["tot_second"] +
                                    dict_count["normal"])
