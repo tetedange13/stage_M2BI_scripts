@@ -13,7 +13,10 @@ import src.taxo_eval as eval
 def is_trash(taxid_to_eval):
     """
     """
-    taxid_name = eval.taxfoo.get_taxid_name(taxid_to_eval)
+    taxid_name = eval.taxfoo.get_taxid_name(int(taxid_to_eval))
+    if not taxid_name:
+        print(taxid_to_eval)
+    assert(taxid_name)
     if ('metagenome' in taxid_name or 'uncultured' in taxid_name or 
         'unidentified' in taxid_name or 'phage' in taxid_name.lower() or
         taxid_name == 'synthetic construct' or 
@@ -83,7 +86,7 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
         type_alignment = 'normal' # i.e. not secondary
         de = representative["de"]
         current_taxid = conv_seqid2taxid[representative["ref_name"]]
-        nb_trashes = sum(map(is_trash, [current_taxid]))
+        nb_trashes = int(is_trash(current_taxid))
         taxo_to_write = ';' + str(current_taxid) + ';' # Will be considered as an str
 
     common_to_return += [de]

@@ -220,6 +220,7 @@ if __name__ == "__main__":
             if len(dict_gethered[readID]) > 1:
                 list_taxids = list(map(lambda a_str: a_str.split('\t')[1], 
                                    dict_gethered[readID]))
+                nb_trashes = sum(map(pll.is_trash, list_taxids))
                 lineage = 's'.join(list_taxids)
                 # In the case of multiple hits, all hits have the same score, 
                 # 2ndBestScore etc, except for the hitLength, that can differ
@@ -238,21 +239,25 @@ if __name__ == "__main__":
                 tupl = dict_gethered[readID][0].split('\t')
                 ( ref_name, taxID, score, secondBestScore,
                   pre_hitLength, queryLength, numMatches ) = tupl
+
                 if ref_name == 'unclassified':
                     type_align = 'unmapped'
                     (lineage, score, secondBestScore, hitLength, queryLength,
-                     numMatches) = [pd.np.nan] * 6
+                     numMatches, nb_trashes) = [pd.np.nan] * 7
                 else:
                     type_align = 'normal'    
                     lineage = ';' + taxID + ';'
                     hitLength = ';' + pre_hitLength + ';'
+                    nb_trashes = int(pll.is_trash(taxID))
 
-            list_val.append([type_align, lineage, score, secondBestScore,
-                             hitLength, queryLength, numMatches])
+            list_val.append([type_align, lineage, nb_trashes, score, 
+                             secondBestScore, hitLength, queryLength, 
+                             numMatches])
         del readID
 
-        tupl_columns = ('type_align', 'lineage', 'score', 'secondBestScore',
-                        'hitLength', 'queryLength', 'numMatches')
+        tupl_columns = ('type_align', 'lineage', 'nb_trashes', 'score', 
+                        'secondBestScore', 'hitLength', 'queryLength', 
+                        'numMatches')
         my_csv = pd.DataFrame(data=None, columns=tupl_columns,
                               index=list_indexes)
         for i in range(len(tupl_columns)):
@@ -263,6 +268,7 @@ if __name__ == "__main__":
         del i, tmp_dict, list_val, list_indexes
 
         print(my_csv['type_align'].value_counts())
+        print(my_csv['nb_trashes'].value_counts())
 
         # # taxfoo = evaluate.taxfoo
 
@@ -496,10 +502,10 @@ if __name__ == "__main__":
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
       
-
+        cutoff_nb_trashes = max(my_csv['nb_trashes'])
         if IS_SAM_FILE:
             # cutoff_nb_trashes = 4
-            cutoff_nb_trashes = max(my_csv['nb_trashes'])
+            
             print("CUTOFF ON THE NB OF TRASHES:", cutoff_nb_trashes)
             is_FP = ((my_csv['res_eval'] == 'FP') &
                      (my_csv['nb_trashes'] <= cutoff_nb_trashes))
