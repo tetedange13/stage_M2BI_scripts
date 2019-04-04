@@ -227,7 +227,7 @@ if __name__ == "__main__":
         centri_classif_path = (dirOut_centri + in_fq_base + "_to" +  
                                DB_NAME.capitalize() + "_classif.tsv")
         
-        cmd_centri = ("centrifuge -t -p " + nb_threads + " -q " + 
+        cmd_centri = ("centrifuge -k 100 -t -p " + nb_threads + " -q " + 
                       in_fq_path + " -x " + to_Centri_idxes + DB_NAME +
                       " --report-file " + dirOut_centri + in_fq_base + "_to" + 
                       DB_NAME.capitalize() + "_report.tsv -S " +
