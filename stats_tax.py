@@ -182,9 +182,8 @@ if __name__ == "__main__":
     print("Taxonomic Python module loaded !\n")
 
     # Guess the "mode":
-    CLUST_MODE = True # Mode for handling of reads-clustering results
-    if "_to" in infile_base:
-        CLUST_MODE = False
+    # Mode for handling of reads-clustering results
+    CLUST_MODE = "_to" not in infile_base 
     IS_SAM_FILE = ext_infile == ".sam"
 
     if not CLUST_MODE and not IS_SAM_FILE:
@@ -193,20 +192,27 @@ if __name__ == "__main__":
 
         with open(to_infile, 'r') as in_tab_file:
             in_tab_file.readline() # Skip header
+            set_ignored_hits = set()
+            set_all_taxids = set()
+
             for line in in_tab_file:
                 idx_first_tab = line.find('\t')
                 readID = line[0:idx_first_tab] 
                 rest = line[(idx_first_tab+1): ].rstrip('\n')
-                # print(readID)
-                # splitted_line = line.rstrip('\n').split('\t')
-                # readID, rest = splitted_line[0], '\t'.join(splitted_line[1:])
+                set_all_taxids.add(readID)
 
-                if readID not in dict_gethered.keys():
-                    dict_gethered[readID] = [rest]
+                # /!\ We ignore hits with taxid=0 and ref_name='no rank':
+                if rest.split('\t')[0:2] == ["no rank", "0"]:
+                    set_ignored_hits.add(readID + '\t' + rest)
                 else:
-                    dict_gethered[readID].append(rest)
+                    if readID not in dict_gethered.keys():
+                        dict_gethered[readID] = [rest]
+                    else:
+                        dict_gethered[readID].append(rest)
 
-        # sys.exit()
+        # Be sure to don't exclude any read:
+        assert(len(set_all_taxids) == len(dict_gethered.keys()))
+        print("NB OF IGNORED HITS:", len(set_ignored_hits))
 
         readIDs, list_val, list_indexes = dict_gethered.keys(), [], []
         for readID in readIDs:
@@ -250,60 +256,61 @@ if __name__ == "__main__":
         my_csv = pd.DataFrame(data=None, columns=tupl_columns,
                               index=list_indexes)
         for i in range(len(tupl_columns)):
+            # Cuz df.assign() takes 1 single karg:
             tmp_dict = {tupl_columns[i]:list(map(lambda sublist: sublist[i], 
                                                  list_val))}
-            # Cuz df.assign() takes 1 single karg:
             my_csv = my_csv.assign(**tmp_dict, index=list_indexes)
         del i, tmp_dict, list_val, list_indexes
 
-        with_lineage = ((my_csv['type_align'] != 'unmapped') & 
-                        (my_csv['type_align'] != 'only_suppl'))
-        my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
-        print(set(my_csv_to_pll[my_csv_to_pll['type_align']=='unmapped']['lineage']))
-        print(my_csv['type_align'].value_counts())
-        print(my_csv.loc["cf3744c4-4997-47c3-82e3-554d976b8cb3", :])
-        # sys.exit()
-        partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
-                                              sets_levels=tupl_sets_levels,
-                                              taxonomic_cutoff=taxo_cutoff)
-        #c10320e2-e2f4-4fc9-a49d-5501f8931b5d
+        # with_lineage = ((my_csv['type_align'] != 'unmapped') & 
+        #                 (my_csv['type_align'] != 'only_suppl'))
+        # my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
+        # print(my_csv['type_align'].value_counts())
 
-        print()
-        print("PROCESSING CSV TO EVALUATE TAXO...")
-        # Serial version:
-        # results = list(map(partial_eval, my_csv_to_pll.index))
-        # Parallel version:
-        eval_pool = mp.Pool(15)
-        results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
-        eval_pool.close()
-        del my_csv_to_pll
-        print("PLL PROCESS FINISHED !")
+        # # taxfoo = evaluate.taxfoo
+        # # for readID, lineage_val in my_csv[my_csv['type_align'] == 'second_plural']['lineage'].items():
+        # #     print(set([taxfoo.get_taxid_rank(int(taxid)) for taxid in lineage_val.split('s')]))
 
-        to_complete_lineage = "salut/taxids_complete_lineage"
-        with open(to_complete_lineage, 'r') as complete_lineage_file:
-            set_taxids_db = {line.rstrip('\n') for line in complete_lineage_file}
-        toto = my_csv[my_csv['type_align'] == 'second_plural']['lineage']
-        set_not_in_db = set()
-        set_readID_not_in_db = set()
-        for readID, lineage_val in toto.items():
-            list_taxids = lineage_val.split('s')
-            list_test = []
-            for taxid in list_taxids:
-                if taxid !=0 and taxid not in set_taxids_db:
-                    set_not_in_db.add(taxid)
-                    set_readID_not_in_db.add(readID)
-                    list_test.append("not_in_db")
-                else:
-                    list_test.append(taxid)
-            if "not_in_db" in list_test:
-                print(list_test, [taxid for taxid in list_taxids])
-            if len(set(list_test)) == 1 and list(set(list_test))[0] == "not_in_db":
-                print("TO_RM")
-        print(len(set_not_in_db))
-        print(len(set_readID_not_in_db))
-        
-        print(set_not_in_db)
-        sys.exit()
+        # partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
+        #                                       sets_levels=tupl_sets_levels,
+        #                                       taxonomic_cutoff=taxo_cutoff,
+        #                                       mode='LCA')
+        # #c10320e2-e2f4-4fc9-a49d-5501f8931b5d
+
+        # print()
+        # print("PROCESSING CSV TO EVALUATE TAXO...")
+        # # Serial version:
+        # # results = list(map(partial_eval, my_csv_to_pll.index))
+        # # Parallel version:
+        # eval_pool = mp.Pool(15)
+        # results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
+        # eval_pool.close()
+        # del my_csv_to_pll
+        # print("PLL PROCESS FINISHED !")
+
+        # to_complete_lineage = "salut/taxids_complete_lineage"
+        # with open(to_complete_lineage, 'r') as complete_lineage_file:
+        #     set_taxids_db = {line.rstrip('\n') for line in complete_lineage_file}
+        # toto = my_csv[my_csv['type_align'] == 'second_plural']['lineage']
+        # set_not_in_db = set()
+        # set_readID_not_in_db = set()
+        # for readID, lineage_val in toto.items():
+        #     list_taxids = lineage_val.split('s')
+        #     list_test = []
+        #     for taxid in list_taxids:
+        #         if taxid !=0 and taxid not in set_taxids_db:
+        #             set_not_in_db.add(taxid)
+        #             set_readID_not_in_db.add(readID)
+        #             list_test.append("not_in_db")
+        #         else:
+        #             list_test.append(taxid)
+        #     if "not_in_db" in list_test:
+        #         print(list_test, [taxid for taxid in list_taxids])
+        #     if len(set(list_test)) == 1 and list(set(list_test))[0] == "not_in_db":
+        #         print("TO_RM")
+        # print(len(set_not_in_db))
+        # print(len(set_readID_not_in_db))
+        # print(set_not_in_db)
     
 
     if not CLUST_MODE and IS_SAM_FILE:
@@ -427,12 +434,10 @@ if __name__ == "__main__":
                     
         else:
             print("FOUND CSV FILE !")
-
-
-        TIME_CSV_TREATMENT = t.time()
-        print("Loading CSV file...")
-        my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
-        print("CSV loaded !")
+            print("Loading CSV file...")
+            my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
+            print("CSV loaded !")
+        
 
         # list_lineage_second = my_csv[my_csv['type_align'] == 'second_plural']['lineage']
         # list_second_len = list(map(lambda val: len(val.split('s')), list_lineage_second))
@@ -444,12 +449,19 @@ if __name__ == "__main__":
         # print("MEAN NB OF SECONDARIES:", sum(list_second_len)/len(list_second_len))
         # sys.exit()
 
+    if not CLUST_MODE:
+        TIME_CSV_TREATMENT = t.time()
         with_lineage = ((my_csv['type_align'] != 'unmapped') & 
                         (my_csv['type_align'] != 'only_suppl'))
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
+        MODE = 'LCA'
+        if IS_SAM_FILE:
+            MODE = 'MAJO'
+
         partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
                                               sets_levels=tupl_sets_levels,
-                                              taxonomic_cutoff=taxo_cutoff)
+                                              taxonomic_cutoff=taxo_cutoff,
+                                              mode=MODE)
 
         # Parallel version:
         print()
@@ -505,34 +517,27 @@ if __name__ == "__main__":
         del tmp_df
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
+      
 
-        # list_MAPQ = my_csv['mapq'][my_csv['mapq'].notnull()]
-        # plot_thin_hist(list_MAPQ, "Distrib MAPQ", True, (-1, 60))        
-
-        # FIXED_MAPQ_CUTOFF = 0
-        # print(sum(map(lambda mapq_val: mapq_val>=FIXED_MAPQ_CUTOFF, 
-        #               my_csv["mapq"])))
-        # CUTOFF_ON_RATIO = 0.9
-        # CUTOFF_ON_RATIO = 0
-        # print("Cutoff on alignment length of:", CUTOFF_ON_RATIO)
-
-        # cutoff_nb_trashes = 4
-        cutoff_nb_trashes = max(my_csv['nb_trashes'])
-        print("CUTOFF ON THE NB OF TRASHES:", cutoff_nb_trashes)
-        print()
-
-        is_FP = ((my_csv['res_eval'] == 'FP') &
-                 (my_csv['nb_trashes'] <= cutoff_nb_trashes))
-        is_TP = ((my_csv['res_eval'] == 'TP') &
-                 (my_csv['nb_trashes'] <= cutoff_nb_trashes))
+        if IS_SAM_FILE:
+            # cutoff_nb_trashes = 4
+            cutoff_nb_trashes = max(my_csv['nb_trashes'])
+            print("CUTOFF ON THE NB OF TRASHES:", cutoff_nb_trashes)
+            is_FP = ((my_csv['res_eval'] == 'FP') &
+                     (my_csv['nb_trashes'] <= cutoff_nb_trashes))
+            is_TP = ((my_csv['res_eval'] == 'TP') &
+                     (my_csv['nb_trashes'] <= cutoff_nb_trashes))
+        else:
+            is_FP = my_csv['res_eval'] == 'FP'
+            is_TP = my_csv['res_eval'] == 'TP'
         print("FP STATS:")
-        print(my_csv[is_FP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
-        # print(my_csv[is_FP]['remark_eval'].value_counts().sort_index())
+        # print(my_csv[is_FP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
+        print(my_csv[is_FP]['remark_eval'].value_counts().sort_index())
         # print(my_csv[is_FP & (my_csv['remark_eval'] == 'no_majo_found')]['species'].value_counts())
         print()
         print("TP STATS:")
-        # print(my_csv[is_TP]['type_align'].value_counts().sort_index())
-        print(my_csv[is_TP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
+        print(my_csv[is_TP]['type_align'].value_counts().sort_index())
+        # print(my_csv[is_TP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
 
         print()
         
@@ -566,12 +571,12 @@ if __name__ == "__main__":
         #         continue
 
         # sys.exit()
-
-        pd.DataFrame({'TP_nb_trashes':my_csv[is_TP]['nb_trashes'].value_counts(), 
-                      'FP_nb_trashes':my_csv[is_FP]['nb_trashes'].value_counts()
-                      }).plot.bar(title="Distrib nb_trashes between FP and TP",
-                                  color=('red', 'green'))
-        # plt.show()
+        if IS_SAM_FILE:
+            pd.DataFrame({'TP_nb_trashes':my_csv[is_TP]['nb_trashes'].value_counts(), 
+                          'FP_nb_trashes':my_csv[is_FP]['nb_trashes'].value_counts()
+                          }).plot.bar(title="Distrib nb_trashes between FP and TP",
+                                      color=('red', 'green'))
+            # plt.show()
 
         dict_stats['FP'] += sum(is_FP)
         dict_stats['FP'] += sum(my_csv['type_align'] == 'only_suppl')
@@ -628,7 +633,7 @@ if __name__ == "__main__":
         dict_to_convert = dict_stats
 
 
-    else:
+    if CLUST_MODE:
         print('PAS LAAAAAA');sys.exit()
         df_hits = pd.read_csv(to_infile, sep='\t', index_col=0, header=0)
         dict_stats_propag = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
