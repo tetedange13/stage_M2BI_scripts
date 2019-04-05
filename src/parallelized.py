@@ -48,6 +48,18 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
 
         if not no_suppl_list: # Only supplementaries entries for this read
             return (readID, 'only_suppl', 'no')
+
+
+        repr_AS = no_suppl_list[0]["AS"]
+        toto = [(idx, dico["AS"]) for idx, dico in enumerate(no_suppl_list) 
+                if dico["AS"] == repr_AS and idx != 0]
+        # Contains ONLY equivalent (same AS score) align
+        only_equiv_list = [dico for dico in no_suppl_list 
+                           if dico["AS"] == repr_AS]
+        if toto:
+            print("LAST_EQUIV:", toto[-1][0])
+        else:
+            print("NO_EQUIV")
         # Need to propagate max value of MAPQ to all secondaries:
         if representative["has_SA"]:
             # print(readID, "suppl_as_repr")
@@ -55,13 +67,13 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
                             if align_obj["has_SA"]])
             mapq = max_mapq
             list_taxid_target = []
-            for align_not_suppl in no_suppl_list:
+            for align_not_suppl in only_equiv_list:
                 assert(align_not_suppl["mapq"] == 0)
                 align_not_suppl["mapq"] = max_mapq
             del align_not_suppl
 
         list_taxid_target, de_list = [], []
-        for alignment in no_suppl_list:
+        for alignment in only_equiv_list:
             taxid_target = conv_seqid2taxid[alignment["ref_name"]]
             assert(taxid_target) # If taxid not 'None'
             list_taxid_target.append(taxid_target)
