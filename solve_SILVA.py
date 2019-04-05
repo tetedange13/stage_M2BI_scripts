@@ -102,6 +102,7 @@ def detect_problems(to_seqid2taxid, to_seqid2acc, to_target_list, dirOut="./"):
                                      dict_seqid2acc[ref_name] + '\n')
                     done_taxids.add(current_taxid)
 
+    print()
     if set_problems:
         print("PROBLEMS FOUND..")
         with open(osp.join(dirOut, "problems.txt"), 'w') as pbs_file:
@@ -355,8 +356,8 @@ if __name__ == "__main__":
 
     # test(to_dbs_SILVA + "wrong2good_taxids", "seqid2taxid")
 
-    # detect_problems("seqid2taxid", to_dbs_SILVA + "seqid2acc", 
-    #                 to_dbs_SILVA + "headers.txt")
+    detect_problems("seqid2taxid", to_dbs_SILVA + "seqid2acc", 
+                    to_dbs_SILVA + "headers.txt")
 
     # local_taxid_search("wgs", "problems.txt")
     # local_taxid_search("gb", "wgs_need_remote")
@@ -367,7 +368,7 @@ if __name__ == "__main__":
     # correct_seqid2taxid("old_seqid2taxid", "wrong2good_taxids")
 
     # write_complete_lineage("seqid2taxid")
-    parse_and_rewrite_names(to_dbs_nt + "names.dmp", 
-                            "taxids_complete_lineage")
+    # parse_and_rewrite_names(to_dbs_nt + "names.dmp", 
+    #                         "taxids_complete_lineage")
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
     #                         "taxids_complete_lineage")
