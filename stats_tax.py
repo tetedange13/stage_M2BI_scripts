@@ -70,6 +70,19 @@ def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
     plt.show()
 
 
+def plot_pie_chart(pdSeries_to_plot, arg_title=""):
+    fig, axis = plt.subplots(subplot_kw=dict(aspect="equal"))
+    axis.set_ylabel('') # To remove auto legends sided to the chart
+    # plt.axis('equal') # To have a well round chart
+    axis.set_title(arg_title)
+# autopct=lambda pct: func(pct, data)
+    patches, _ = axis.pie(pdSeries_to_plot, startangle=90, counterclock=False,
+                          autopct=lambda pct: "{:.1f}".format(pct))    
+    plt.legend(patches, pdSerie_to_plot.index, loc='best', fontsize='x-small')
+
+    plt.tight_layout()
+
+
 def str_from_res_conv(tupl_res_conv):
     """
     Generate a string (ready to write) from an evaluation result
@@ -220,6 +233,8 @@ if __name__ == "__main__":
             if len(dict_gethered[readID]) > 1:
                 list_taxids = list(map(lambda a_str: a_str.split('\t')[1], 
                                    dict_gethered[readID]))
+                if '0' in list_taxids:
+                    print(readID);sys.exit()
                 nb_trashes = sum(map(pll.is_trash, list_taxids))
                 lineage = 's'.join(list_taxids)
                 # In the case of multiple hits, all hits have the same score, 
@@ -272,31 +287,6 @@ if __name__ == "__main__":
 
         # # taxfoo = evaluate.taxfoo
 
-        # to_complete_lineage = "salut/taxids_complete_lineage"
-        # with open(to_complete_lineage, 'r') as complete_lineage_file:
-        #     set_taxids_db = {line.rstrip('\n') for line in complete_lineage_file}
-        # toto = my_csv[my_csv['type_align'] == 'second_plural']['lineage']
-        # set_not_in_db = set()
-        # set_readID_not_in_db = set()
-        # for readID, lineage_val in toto.items():
-        #     list_taxids = lineage_val.split('s')
-        #     list_test = []
-        #     for taxid in list_taxids:
-        #         if taxid !=0 and taxid not in set_taxids_db:
-        #             set_not_in_db.add(taxid)
-        #             set_readID_not_in_db.add(readID)
-        #             list_test.append("not_in_db")
-        #         else:
-        #             list_test.append(taxid)
-        #     if "not_in_db" in list_test:
-        #         print(list_test, [taxid for taxid in list_taxids])
-        #     if len(set(list_test)) == 1 and list(set(list_test))[0] == "not_in_db":
-        #         print("TO_RM")
-        # print(len(set_not_in_db))
-        # print(len(set_readID_not_in_db))
-        # print(set_not_in_db)
-    
-
     if not CLUST_MODE and IS_SAM_FILE:
         print("SAM MODE !")
 
@@ -342,19 +332,6 @@ if __name__ == "__main__":
                 query_name = alignment.query_name
                 assert(query_name) # Different from ""
 
-                # if query_name == "33554479-ce56-4fcd-ab71-a3717f2dc478":
-                # if query_name == "496c8cf9-2928-4176-b088-c11a29026ae6":
-                # if query_name == "3ad22c53-f5f0-41a3-a41e-3328d86f8951":
-                # if query_name == "2c1dfe96-8e7f-4205-bcda-23fbcfb601f3":
-                # if query_name == "176fe4ea-1242-4a9d-87ad-00a317b19027":
-                # if query_name == "c673496a-143b-4533-bcd5-7ba19b428c83":
-                # if query_name == "ae5b17fd-87f1-49db-9197-c250cae3142e":
-                # if query_name == "bf05243b-34aa-4e6b-b4f2-ef73613de8b1":
-                # if query_name == "016f9156-5e83-400c-ade3-5f63dcd86e0e":
-                # if query_name == "0518ae87-4040-4140-be9c-e6c3414ce180":
-                #     print(round(alignment.get_tag('NM'), 4), alignment.get_cigar_stats())
-                    # print(alignment.cigartuples)
-
                 if alignment.is_unmapped:
                     list_unmapped.append(query_name)
                     dict_stats['FN'] += 1 # Count unmapped = 'FN'
@@ -390,11 +367,11 @@ if __name__ == "__main__":
             partial_func = partial(pll.SAM_to_CSV, 
                                    conv_seqid2taxid=dict_seqid2taxid)
                                                # Parallel version:
-            my_pool = mp.Pool(15)
-            results = my_pool.map(partial_func, dict_gethered.items())
-            my_pool.close()
+            # my_pool = mp.Pool(15)
+            # results = my_pool.map(partial_func, dict_gethered.items())
+            # my_pool.close()
             # Serial version (need list casting to have output):
-            # results = list(map(partial_func, dict_gethered.items())) 
+            results = list(map(partial_func, dict_gethered.items())) 
 
             # sys.exit()
 
@@ -417,7 +394,7 @@ if __name__ == "__main__":
 
                     
         else:
-            print("FOUND CSV FILE !")
+            print("FOUND CSV FILE:", to_out_file)
             print("Loading CSV file...")
             my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
             print("CSV loaded !")
@@ -442,14 +419,15 @@ if __name__ == "__main__":
         if IS_SAM_FILE:
             MODE = 'MAJO'
 
+        print()
+        print("MODE FOR HANDLING OF THE MULTI-HITS =", MODE)
+
         partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
                                               sets_levels=tupl_sets_levels,
                                               taxonomic_cutoff=taxo_cutoff,
                                               mode=MODE)
-
-        # Parallel version:
-        print()
         print("PROCESSING CSV TO EVALUATE TAXO...")
+        # Parallel version:
         eval_pool = mp.Pool(15)
         results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
         eval_pool.close()
@@ -476,9 +454,10 @@ if __name__ == "__main__":
         # dict_count = {"unsolved_lca_pb":0, 'FPnotInKey':0, "only_trashes":0}
         
         dict_stats['FN'] += dict_count['unmapped']
+
+        # Add the results of the evaluation to the csv:
         dict_species2res = {} # To access evaluation results of a given species
         list_index_new_col, list_val_new_col = [], []
-
         for tupl_res in results_eval:
             readID, species, res_eval, remark_evaluation = tupl_res
             if remark_evaluation != 'no_majo_found':
@@ -501,6 +480,26 @@ if __name__ == "__main__":
         del tmp_df
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
+
+        # Draw pie chart of abundances (simple countings):
+        counts_species = my_csv['species'].value_counts()
+        plot_pie_chart(counts_species, "MON BEAU CAMEMBERT")
+
+        # Gether all FP into a 'missassiged' category:
+        # /!\ 'no_majo_found' are ignored /!\
+        dict_species2count = {'misassigned':0}
+        for counted_item, foo in counts_species.items():
+            if counted_item != 'no_majo_found':
+                if dict_species2res[counted_item] == 'FP':
+                    dict_species2count['misassigned'] += foo
+                else:
+                    dict_species2count[counted_item] = foo
+        del counted_item
+
+        plot_pie_chart(pd.Series(dict_species2count).sort_values(), "MON BEAU CAMEMBERT")
+        plt.show()
+
+        # sys.exit()
       
         cutoff_nb_trashes = max(my_csv['nb_trashes'])
         if IS_SAM_FILE:
