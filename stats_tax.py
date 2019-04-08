@@ -70,17 +70,23 @@ def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
     plt.show()
 
 
-def plot_pie_chart(pdSeries_to_plot, arg_title=""):
+def plot_pie_chart(pdSeries_to_plot, print_percents, arg_title=""):
     fig, axis = plt.subplots(subplot_kw=dict(aspect="equal"))
-    axis.set_ylabel('') # To remove auto legends sided to the chart
-    # plt.axis('equal') # To have a well round chart
-    axis.set_title(arg_title)
-# autopct=lambda pct: func(pct, data)
-    patches, _ = axis.pie(pdSeries_to_plot, startangle=90, counterclock=False,
-                          autopct=lambda pct: "{:.1f}".format(pct))    
-    plt.legend(patches, pdSerie_to_plot.index, loc='best', fontsize='x-small')
 
-    plt.tight_layout()
+    if print_percents:
+        patches, _ , _= axis.pie(pdSeries_to_plot, startangle=90, 
+                                 counterclock=True, 
+                                 autopct=lambda pct: "{:.1f}%".format(pct))
+    else:
+        patches, _ = axis.pie(pdSeries_to_plot, startangle=90, 
+                                 counterclock=True)
+
+    # Lists containing info for legend need to be reverted   
+    axis.legend(patches[::-1], pdSeries_to_plot.index[::-1], loc="center left", 
+              bbox_to_anchor=(1, 0, 0.5, 1), fontsize='x-small')
+    axis.set_ylabel('') # To remove auto legends sided to the chart
+    fig.subplots_adjust(left=-0.3)
+    axis.set_title(arg_title)
 
 
 def str_from_res_conv(tupl_res_conv):
@@ -410,7 +416,7 @@ if __name__ == "__main__":
         # print("MEAN NB OF SECONDARIES:", sum(list_second_len)/len(list_second_len))
         # sys.exit()
 
-    if not CLUST_MODE:
+    if not CLUST_MODE:  
         TIME_CSV_TREATMENT = t.time()
         with_lineage = ((my_csv['type_align'] != 'unmapped') & 
                         (my_csv['type_align'] != 'only_suppl'))
@@ -450,9 +456,7 @@ if __name__ == "__main__":
                                     dict_count['second_uniq'])
         dict_count["tot_reads"] = (dict_count['unmapped'] + 
                                    dict_count["tot_second"] +
-                                   dict_count["normal"])
-        # dict_count = {"unsolved_lca_pb":0, 'FPnotInKey':0, "only_trashes":0}
-        
+                                   dict_count["normal"])        
         dict_stats['FN'] += dict_count['unmapped']
 
         # Add the results of the evaluation to the csv:
@@ -481,9 +485,15 @@ if __name__ == "__main__":
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
 
+        # for readID, lin_val in my_csv[my_csv['type_align']=='second_uniq']['lineage'].items():
+        #     if 's' not in lin_val.strip(';'):
+        #         pass
+        #         print("coucou", my_csv.loc[readID, 'res_eval'])
+        # sys.exit()
         # Draw pie chart of abundances (simple countings):
         counts_species = my_csv['species'].value_counts()
-        plot_pie_chart(counts_species, "MON BEAU CAMEMBERT")
+        print(counts_species)
+        plot_pie_chart(counts_species, False, "MON BEAU CAMEMBERT")
 
         # Gether all FP into a 'missassiged' category:
         # /!\ 'no_majo_found' are ignored /!\
@@ -496,10 +506,12 @@ if __name__ == "__main__":
                     dict_species2count[counted_item] = foo
         del counted_item
 
-        plot_pie_chart(pd.Series(dict_species2count).sort_values(), "MON BEAU CAMEMBERT")
+        plot_pie_chart(pd.Series(dict_species2count).sort_values(), True,
+                       "MON BEAU CAMEMBERT")
+        print(pd.Series(dict_species2count).sort_values(ascending=False))
         plt.show()
 
-        # sys.exit()
+        sys.exit()
       
         cutoff_nb_trashes = max(my_csv['nb_trashes'])
         if IS_SAM_FILE:
