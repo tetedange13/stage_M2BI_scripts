@@ -34,12 +34,10 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
     representative = align_list[0]
     mapq, ratio_len = representative["mapq"], representative["ratio_len"]
     len_align = representative["len_align"]
-    common_to_return = [mapq, len_align, ratio_len]
 
     if nb_alignments_for_readID > 1: # Secondary alignment
         assert(not representative["is_suppl"])
         assert(not representative["is_second"])
-
         no_suppl_list = [align_obj for align_obj in align_list 
                          if not align_obj["has_SA"]]
         # Check if they are all secondaries (1st one can be the representative):
@@ -49,60 +47,64 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
         if not no_suppl_list: # Only supplementaries entries for this read
             return (readID, 'only_suppl', 'no')
 
-
-        repr_AS = no_suppl_list[0]["AS"]
-        toto = [(idx, dico["AS"]) for idx, dico in enumerate(no_suppl_list) 
-                if dico["AS"] == repr_AS and idx != 0]
-        # Contains ONLY equivalent (same AS score) align
+        max_AS = max(map(lambda dico: dico["AS"], no_suppl_list))
+        # toto = [(idx, dico["AS"]) for idx, dico in enumerate(no_suppl_list) 
+        #         if dico["AS"] == max_AS and idx != 0]
+        # # Contains ONLY equivalent (same AS score) align
         only_equiv_list = [dico for dico in no_suppl_list 
-                           if dico["AS"] == repr_AS]
-        if toto:
-            print("LAST_EQUIV:", toto[-1][0])
-        else:
-            print("NO_EQUIV")
-        # Need to propagate max value of MAPQ to all secondaries:
+                           if dico["AS"] == max_AS]
+        # if toto:
+        #     print("LAST_EQUIV:", toto[-1][0])
+        # else:
+        #     print("NO_EQUIV")
+
+        list_taxid_target, de_list = [], []
         if representative["has_SA"]:
             # print(readID, "suppl_as_repr")
             max_mapq = max([align_obj["mapq"] for align_obj in align_list 
                             if align_obj["has_SA"]])
             mapq = max_mapq
-            list_taxid_target = []
+            # for align_not_suppl in no_suppl_list:
             for align_not_suppl in only_equiv_list:
                 assert(align_not_suppl["mapq"] == 0)
+                # Need to propagate max value of MAPQ to all secondaries:
                 align_not_suppl["mapq"] = max_mapq
+                taxid_target = conv_seqid2taxid[align_not_suppl["ref_name"]]
+                assert(taxid_target) # If taxid not 'None'
+                list_taxid_target.append(taxid_target)
+                de_list.append(align_not_suppl["de"])
             del align_not_suppl
-
-        list_taxid_target, de_list = [], []
-        for alignment in only_equiv_list:
-            taxid_target = conv_seqid2taxid[alignment["ref_name"]]
-            assert(taxid_target) # If taxid not 'None'
-            list_taxid_target.append(taxid_target)
-            de_list.append(alignment["de"])
-        del alignment
-    
+        else:
+            # for align_not_suppl in no_suppl_list:
+            for align_not_suppl in only_equiv_list:
+                taxid_target = conv_seqid2taxid[align_not_suppl["ref_name"]]
+                assert(taxid_target) # If taxid not 'None'
+                list_taxid_target.append(taxid_target)
+                de_list.append(align_not_suppl["de"])
+            del align_not_suppl
+        de = max(de_list)
+        # de = sum(de_list) / len(de_list)
         if len(set(list_taxid_target)) == 1: # Mergeable directly
             type_alignment = 'second_uniq' 
         else:
             type_alignment = 'second_plural'
-            # print([shared.taxfoo.get_taxid_name(taxid) for taxid in set(list_taxid_target)])
-        
-        taxo_to_write = 's'.join(str(taxid) for taxid in list_taxid_target)          
         nb_trashes = sum(map(is_trash, list_taxid_target))
         # print([dico["de"] for dico in no_suppl_list], 
         #       [dico["AS"] for dico in no_suppl_list], 
         #       [dico["mapq"] for dico in no_suppl_list])
-        de = max(de_list)
-        # de = sum(de_list) / len(de_list)
-
+        
     else: # Normal case
         type_alignment = 'normal' # i.e. not secondary
         de = representative["de"]
         current_taxid = conv_seqid2taxid[representative["ref_name"]]
+        list_taxid_target = [current_taxid]
         nb_trashes = int(is_trash(current_taxid))
-        taxo_to_write = ';' + str(current_taxid) + ';' # Will be considered as an str
-
-    common_to_return += [de]
-    return [readID, type_alignment, taxo_to_write, nb_trashes] + common_to_return
+    
+     # Taxid has to be considered as an str:
+    taxo_to_write = (';' + 
+                     's'.join(str(taxid) for taxid in list_taxid_target) + ';')
+    return [readID, type_alignment, taxo_to_write, nb_trashes, mapq, len_align,
+            ratio_len, de]
 
 
 def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels, 
@@ -121,7 +123,7 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels,
         taxid_to_eval = lineage_val.strip(';')
         
     else: # Secondary (with 1 unique taxid or more)
-        list_taxid_target = list(map(int, lineage_val.split('s')))
+        list_taxid_target = list(map(int, lineage_val.strip(';').split('s')))
         if type_align == 'second_uniq':
             taxid_to_eval = list_taxid_target[0]
         else: # More than 1 unique taxid
