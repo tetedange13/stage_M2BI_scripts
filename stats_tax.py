@@ -72,20 +72,21 @@ def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
 
 def plot_pie_chart(pdSeries_to_plot, print_percents, arg_title=""):
     fig, axis = plt.subplots(subplot_kw=dict(aspect="equal"))
-
     if print_percents:
         patches, _ , _= axis.pie(pdSeries_to_plot, startangle=90, 
-                                 counterclock=True, 
+                                 counterclock=False, 
                                  autopct=lambda pct: "{:.1f}%".format(pct))
     else:
         patches, _ = axis.pie(pdSeries_to_plot, startangle=90, 
-                                 counterclock=True)
-
-    # Lists containing info for legend need to be reverted   
-    axis.legend(patches[::-1], pdSeries_to_plot.index[::-1], loc="center left", 
-              bbox_to_anchor=(1, 0, 0.5, 1), fontsize='x-small')
+                                 counterclock=False)
+    
+    lim_nb_items_leg, nb_items, y_val = 31, len(pdSeries_to_plot.index), 0
+    if nb_items > lim_nb_items_leg:
+        y_val = -0.015 * (nb_items - lim_nb_items_leg)
+    axis.legend(patches, pdSeries_to_plot.index, loc="center left", 
+                bbox_to_anchor=(1, y_val, 0.5, 1), fontsize='x-small')
     axis.set_ylabel('') # To remove auto legends sided to the chart
-    fig.subplots_adjust(left=-0.3)
+    fig.subplots_adjust(left=-0.4)
     axis.set_title(arg_title)
 
 
@@ -178,7 +179,36 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
     else:
         return precision
 
+# def log_modulus(observed_abund, expected_abund):
+#     """
+#     log-modulus = sign(y)*log10(1 + |y|)
+#     """
+#     diff = observed_abund - expected_abund
+#     return pd.np.sign(diff) * pd.np.log10(1 + pd.np.abs(diff))
 
+def calc_L1dist_logModulus(pdSeries_obs_abund, pdSeries_expect_abund):
+    """
+    Compute both the L1-distance and the vector of log-modulus values between 
+    expected and observed abundances
+
+    From: https://genomebiology.biomedcentral.com/track/pdf/10.1186/s13059-017-1299-7
+    "While the log-modulus examines a fold-change, the L1 distance shows the 
+    distance between relative abundance vectors by dataset"
+    """
+    print(pdSeries_obs_abund)
+    print(pdSeries_expect_abund)
+    log_modulus = lambda difference: (pd.np.sign(difference) * 
+                                      pd.np.log10(1 + pd.np.abs(difference)))
+
+    dict_L1dist,dict_log_modulus = {}, {}
+    for sp_name in pdSeries_obs_abund.index:
+        diff = pdSeries_obs_abund[sp_name] - pdSeries_expect_abund[sp_name]
+        dict_L1dist[sp_name] = pd.np.abs(diff)
+        dict_log_modulus[sp_name] = log_modulus(diff)
+
+    print(dict_L1dist)
+    return (sum(dict_L1dist.values()), 
+            pd.Series(dict_log_modulus).sort_values(ascending = False))
 
 
 # MAIN:
@@ -289,8 +319,6 @@ if __name__ == "__main__":
         del i, tmp_dict, list_val, list_indexes
 
         print(my_csv['type_align'].value_counts())
-        print(my_csv['nb_trashes'].value_counts())
-
         # # taxfoo = evaluate.taxfoo
 
     if not CLUST_MODE and IS_SAM_FILE:
@@ -373,11 +401,11 @@ if __name__ == "__main__":
             partial_func = partial(pll.SAM_to_CSV, 
                                    conv_seqid2taxid=dict_seqid2taxid)
                                                # Parallel version:
-            # my_pool = mp.Pool(15)
-            # results = my_pool.map(partial_func, dict_gethered.items())
-            # my_pool.close()
+            my_pool = mp.Pool(15)
+            results = my_pool.map(partial_func, dict_gethered.items())
+            my_pool.close()
             # Serial version (need list casting to have output):
-            results = list(map(partial_func, dict_gethered.items())) 
+            # results = list(map(partial_func, dict_gethered.items())) 
 
             # sys.exit()
 
@@ -412,16 +440,27 @@ if __name__ == "__main__":
         # list_second_len += [1] * len(my_csv[my_csv['type_align'] == 'second_uniq'])
         # pd.Series(list_second_len, 
         #           name='Boxplot len_second (p1N300)').plot.box()#;plt.show()
-        # # plot_thin_hist(list_second_len, "Distrib len_second", False, (-50, 650))
-        # print("MEAN NB OF SECONDARIES:", sum(list_second_len)/len(list_second_len))
-        # sys.exit()
 
-    if not CLUST_MODE:  
+
+    if not CLUST_MODE:
+        # test=my_csv[list(map(lambda val: len(val.strip(';').split('s'))==100, my_csv['lineage']))]
+        # for felix in test.index:
+        #     print(my_csv.loc[felix, 'lineage'])
+        # sys.exit()
         TIME_CSV_TREATMENT = t.time()
         with_lineage = ((my_csv['type_align'] != 'unmapped') & 
                         (my_csv['type_align'] != 'only_suppl'))
+        if not IS_SAM_FILE:
+            cutoff_on_centriScore, cutoff_on_centriHitLength = 300, 50
+            with_lineage = ((my_csv['type_align'] != 'unmapped') & 
+                            (my_csv['type_align'] != 'only_suppl') &
+                            (pd.to_numeric(my_csv['score']) >= cutoff_on_centriHitLength))
+            print("CUTOFF CENTRI SCORE:", cutoff_on_centriScore)
+            print("NUMBER OF READS EVALUATED:", sum(with_lineage))
+
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
         MODE = 'LCA'
+        # MODE = 'MAJO'
         if IS_SAM_FILE:
             MODE = 'MAJO'
 
@@ -452,6 +491,8 @@ if __name__ == "__main__":
             dict_count['second_uniq'] = 0
         if 'second_plural' not in counts_type_align.index:
             dict_count['second_plural'] = 0
+        if 'unmapped' not in counts_type_align.index:
+            dict_count['unmapped'] = 0
         dict_count['tot_second'] = (dict_count['second_plural'] + 
                                     dict_count['second_uniq'])
         dict_count["tot_reads"] = (dict_count['unmapped'] + 
@@ -492,10 +533,10 @@ if __name__ == "__main__":
         # sys.exit()
         # Draw pie chart of abundances (simple countings):
         counts_species = my_csv['species'].value_counts()
-        print(counts_species)
-        plot_pie_chart(counts_species, False, "MON BEAU CAMEMBERT")
+        # print(counts_species)
+        # plot_pie_chart(counts_species[0:35], False, "MON BEAU CAMEMBERT")
 
-        # Gether all FP into a 'missassiged' category:
+        # Gether all FP into a 'misassigned' category:
         # /!\ 'no_majo_found' are ignored /!\
         dict_species2count = {'misassigned':0}
         for counted_item, foo in counts_species.items():
@@ -506,25 +547,42 @@ if __name__ == "__main__":
                     dict_species2count[counted_item] = foo
         del counted_item
 
-        plot_pie_chart(pd.Series(dict_species2count).sort_values(), True,
-                       "MON BEAU CAMEMBERT")
-        print(pd.Series(dict_species2count).sort_values(ascending=False))
-        plt.show()
+        if taxo_cutoff == 'species':
+            counts_only_zymo = pd.Series(dict_species2count).sort_values(ascending=False)
+            plot_pie_chart(counts_only_zymo, True, "MON BEAU CAMEMBERT")
+            # print(counts_only_zymo.drop(['misassigned']))
+            expected_percents = {"Pseudomonas aeruginosa":4.6,
+                                 "Bacillus subtilis":15.7,
+                                 "Lactobacillus fermentum":18.8,
+                                 "Escherichia coli":10.0,
+                                 "Enterococcus faecalis":10.4,
+                                 "Salmonella enterica":11.3,
+                                 "Listeria monocytogenes":15.9,
+                                 "Staphylococcus aureus":13.3}
+            no_misassigned = counts_only_zymo.drop(['misassigned'])
+            tot_reads_zymo = sum(no_misassigned)
+            foo_dict = {sp_name:expected_percents[sp_name]*tot_reads_zymo/100 
+                        for sp_name in expected_percents.keys()}
+            # print(pd.Series(test))
+            a_tupl = calc_L1dist_logModulus(no_misassigned, 
+                                            pd.Series(foo_dict))
+            L1dist, vect_logModulus = a_tupl
+            print("L1-distance =", L1dist)
+            print()
+            print(vect_logModulus)
+            # print(counts_species[map(lambda val: val.split()[0] == 'Bacillus', counts_species.index)])
+            # plt.show()
+            # sys.exit()
 
-        sys.exit()
       
         cutoff_nb_trashes = max(my_csv['nb_trashes'])
-        if IS_SAM_FILE:
-            # cutoff_nb_trashes = 4
-            
-            print("CUTOFF ON THE NB OF TRASHES:", cutoff_nb_trashes)
-            is_FP = ((my_csv['res_eval'] == 'FP') &
-                     (my_csv['nb_trashes'] <= cutoff_nb_trashes))
-            is_TP = ((my_csv['res_eval'] == 'TP') &
-                     (my_csv['nb_trashes'] <= cutoff_nb_trashes))
-        else:
-            is_FP = my_csv['res_eval'] == 'FP'
-            is_TP = my_csv['res_eval'] == 'TP'
+        # cutoff_nb_trashes = 4
+        print("CUTOFF ON THE NB OF TRASHES:", cutoff_nb_trashes)
+        is_FP = ((my_csv['res_eval'] == 'FP') &
+                 (my_csv['nb_trashes'] <= cutoff_nb_trashes))
+        is_TP = ((my_csv['res_eval'] == 'TP') &
+                 (my_csv['nb_trashes'] <= cutoff_nb_trashes))
+
         print("FP STATS:")
         # print(my_csv[is_FP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
         print(my_csv[is_FP]['remark_eval'].value_counts().sort_index())
@@ -537,41 +595,21 @@ if __name__ == "__main__":
         print()
         
         # eval_taxfoo = evaluate.taxfoo
-        # toto = my_csv[is_FP & (my_csv['remark_eval'] == 'lca;notInKeys')]['lineage']
-        # for readID, val in toto.items():
-        #     if '1541959' in val:
-        #         print("TOT:", readID)
-        # print(eval_taxfoo.get_lineage_as_dict(1541959))
 
-        # toto = my_csv[is_FP & (my_csv['type_align'] == 'second_plural')]['lineage']
-        # toto = toto.assign(bonj=len(toto['lineage'].))
-        # print(toto.index);sys.exit()
-        # for idx, val in enumerate(toto):
-        #     bonj = pd.Series([len(eval_taxfoo.get_lineage(int(taxid))) for taxid in set(val.split('s'))])
-        #     list_names = [eval_taxfoo.get_taxid_name(int(taxid)) for taxid in set(val.split('s'))]
+        # pd.DataFrame({'TP_nb_trashes':my_csv[is_TP]['nb_trashes'].value_counts(), 
+        #               'FP_nb_trashes':my_csv[is_FP]['nb_trashes'].value_counts()
+        #               }).plot.bar(title="Distrib nb_trashes between FP and TP",
+        #                           color=('red', 'green'))
+        # plt.show()
 
-        #     try:
-        #         felix = [eval_taxfoo.get_lineage_as_dict(int(taxid))[taxo_cutoff] 
-        #                      for taxid in val.split('s')]
-        #         # print(list(enumerate(felix)))
-        #         if 'Bacilli' in felix:
-        #             my_set = set([(classes, idx) for idx, classes in enumerate(felix) if classes != 'Bacilli'])
-        #             # if len(my_set) == 1:
-        #             if len(my_set) in (2, 3, 4):
-        #             # if len(my_set) > 4:
-        #                 read_ID = toto.index[idx]
-        #                 # print(len(my_set), read_ID, len(felix), my_set)#felix[felix.index('Bacilli')], my_set)
-
-        #     except KeyError:
-        #         continue
-
-        # sys.exit()
-        if IS_SAM_FILE:
-            pd.DataFrame({'TP_nb_trashes':my_csv[is_TP]['nb_trashes'].value_counts(), 
-                          'FP_nb_trashes':my_csv[is_FP]['nb_trashes'].value_counts()
-                          }).plot.bar(title="Distrib nb_trashes between FP and TP",
-                                      color=('red', 'green'))
+        # if not IS_SAM_FILE:
+            # tupl_columns = ('type_align', 'lineage', 'nb_trashes', 'score', 
+            #             'secondBestScore', 'hitLength', 'queryLength', 
+            #             'numMatches')
+            # my_series = pd.to_numeric(my_csv[is_TP]['score'])
+            # my_series.plot.hist(bins=max(my_series), log=True)
             # plt.show()
+
 
         dict_stats['FP'] += sum(is_FP)
         dict_stats['FP'] += sum(my_csv['type_align'] == 'only_suppl')
