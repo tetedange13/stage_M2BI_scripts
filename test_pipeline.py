@@ -39,7 +39,8 @@ if __name__ == "__main__":
     
     # Get arguments:
     ARGS = docopt(__doc__, version='0.1')
-    tuple_check_fq = check.infile(ARGS["--inputFqFile"], ('fq', 'fastq'))
+    tuple_check_fq = check.infile(ARGS["--inputFqFile"], 
+                                  ('fq', 'fastq', 'fa', 'fasta', 'mfasta'))
     in_fq_path, in_fq_base, _, tail_input_fq, in_fq_ext = tuple_check_fq
     DB_NAME = check.acceptable_str(ARGS["--db"], 
                                    ["rrn", "zymo", "silva", "gg"])
@@ -193,7 +194,7 @@ if __name__ == "__main__":
         # dirOut_minimap = path_proj + "3-deter_minimap2/"
         dirOut_minimap = path_proj + "3-deter_minimap2_second/"
 
-        args_minimap2_map = "-N5000 -t" + nb_threads + " -x map-ont "
+        args_minimap2_map = "-N25 -t" + nb_threads + " -x map-ont "
         # if DB_NAME == "gg":
         #     args_minimap2_map = ("-K100M --secondary=no -t" + nb_threads + 
         #                          " -x map-ont ")
@@ -224,14 +225,16 @@ if __name__ == "__main__":
         
         to_Centri_idxes = to_dbs + "Centri_idxes/"
         dirOut_centri = path_proj + "3-deter_centri/"
-        centri_classif_path = (dirOut_centri + in_fq_base + "_to" +  
-                               DB_NAME.capitalize() + "_classif.tsv")
+        centri_outfile_root = (dirOut_centri + in_fq_base + "_to" +  
+                               DB_NAME.capitalize() )
         
-        cmd_centri = ("centrifuge -t -p " + nb_threads + " -q " + 
+        param_infile = ' -q '
+        if in_fq_ext.lstrip('.') in ('fasta', 'fa', 'mfasta'):
+            param_infile = ' -f '
+        cmd_centri = ("centrifuge -t -p " + nb_threads + param_infile + 
                       in_fq_path + " -x " + to_Centri_idxes + DB_NAME +
-                      " --report-file " + dirOut_centri + in_fq_base + "_to" + 
-                      DB_NAME.capitalize() + "_report.tsv -S " +
-                      centri_classif_path)
+                      " --report-file " + centri_outfile_root + "_report.tsv " + 
+                      "-S " + centri_outfile_root + "_classif.tsv")
         # print(cmd_centri);sys.exit()
         
         centri_log_path = (dirOut_centri + in_fq_base + "_to" + 
@@ -279,6 +282,7 @@ if __name__ == "__main__":
         print(cmd_carnac)
     
     sys.exit()
+
         
     # Mapping using NGMLR:
     NGMLR_TIME =  t.time()
@@ -290,7 +294,10 @@ if __name__ == "__main__":
     print('\n', cmd_ngmlr, '\n')
     print("Mapping with NGMLR finished !")
     print("TIME NGMLR =", t.time()-NGMLR_TIME, '\n')
-    
+
+
+    # Correct reads with CANU:
+    path_to_canu = "/home/sheldon/SEGO/canu/Linux-amd64/bin/"
     
     
     # Mapping with LordFAST:*
