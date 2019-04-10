@@ -5,7 +5,7 @@ Aims to containing functions common to several scripts
 """
 
 
-from pandas import Series
+import pandas as pd
 import src.ncbi_taxdump_utils as taxo_utils
 
 
@@ -122,7 +122,7 @@ def get_majo(list_of_things, cutoff_majo):
     wether there is one whose frequency is up to a given cutoff (so that can be
     considered as majority)
     """
-    val_counts = Series(list_of_things).value_counts()
+    val_counts = pd.Series(list_of_things).value_counts()
     freq_counts = val_counts/len(list_of_things)
     are_up_to_cutoff  = freq_counts > cutoff_majo
     nb_majo = sum(are_up_to_cutoff)
@@ -172,7 +172,7 @@ def make_lca(list_taxid_target):
     lca = taxfoo.find_lca(set_taxid_target)
 
     if lca == 1: # If LCA searching fails, LCA==1
-        return ('lca;root_reached', )
+        return ('lca;root_reached', lca)
 
     return ('lca', lca)
 
