@@ -15,7 +15,9 @@ names_mem_cache = {}
 nodes_mem_cache = {}
 
 
-default_want_taxonomy = ['superkingdom', 'phylum', 'order', 'class', 'family', 'genus', 'species']
+#default_want_taxonomy = ['superkingdom', 'phylum', 'order', 'class', 'family', 'genus', 'species']
+#Felix bidouille:
+default_want_taxonomy = ['superkingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species']
 
 
 class NCBI_TaxonomyFoo(object):
