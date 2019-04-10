@@ -17,7 +17,6 @@ Options:
 
 import sys, os
 import os.path as osp
-import pandas as pd
 import time as t
 import subprocess as sub
 import pysam as pys
@@ -105,6 +104,34 @@ def str_from_res_conv(tupl_res_conv):
         # lineage_to_write = ';'.join(str(taxid) for taxid in lineage)
 
     return ",".join(to_return + [lineage_to_write] + [str(x) for x in rest])
+
+
+def taxo_from_taxid(arg_taxid):
+    """
+    Given a taxid, return a str of the complete taxonomy, with the GreenGenes
+    format:
+    k__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Streptococcaceae;g__Streptococcus;s__agalactiae
+    """
+    lineage = evaluate.taxfoo.get_lineage_as_dict(arg_taxid)
+    possible_lvls = lineage.keys()
+    list_lvls = []
+
+    for taxo_lvl in evaluate.want_taxo:
+        if taxo_lvl in possible_lvls:
+            first_letter = taxo_lvl[0]
+            if taxo_lvl == "superkingdom":
+                first_letter = 'k'
+
+            taxo_str = '-'.join(lineage[taxo_lvl].split())
+            if taxo_lvl == 'species':
+                taxo_str = '-'.join(lineage[taxo_lvl].split()[1:])
+            list_lvls.append(first_letter +'__' + taxo_str)
+
+        else:
+            list_lvls.append('Other')
+
+    # DO NOT add 'Root', cuz pb of length with summarize_taxa.py
+    return ';'.join(list_lvls)
 
 
 def dict_stats_to_vectors(dict_res):
@@ -217,7 +244,6 @@ if __name__ == "__main__":
     ARGS = docopt(__doc__, version='0.1')
     to_infile, infile_base, _, _, ext_infile = check.infile(ARGS["--inFile"], 
                                                 ['csv', 'tsv', 'txt', 'sam'])
-    taxo_cutoff = ARGS["--taxoCut"]
 
     # Common variables:
     to_apps = "/home/sheldon/Applications/"
@@ -227,8 +253,12 @@ if __name__ == "__main__":
     print("Loading taxonomic Python module...")
     import src.parallelized as pll
     evaluate = pll.eval
-    tupl_sets_levels = evaluate.generate_sets_zymo(taxo_cutoff)      
+    pd = evaluate.pd
     print("Taxonomic Python module loaded !\n")
+
+    taxo_cutoff = check.acceptable_str(ARGS["--taxoCut"], evaluate.want_taxo)
+    tupl_sets_levels = evaluate.generate_sets_zymo(taxo_cutoff)      
+
 
     # Guess the "mode":
     # Mode for handling of reads-clustering results
@@ -319,26 +349,24 @@ if __name__ == "__main__":
         del i, tmp_dict, list_val, list_indexes
 
         print(my_csv['type_align'].value_counts())
+        print()
         # # taxfoo = evaluate.taxfoo
 
     if not CLUST_MODE and IS_SAM_FILE:
         print("SAM MODE !")
 
         # Guess the database used:
-        root_to_seqid2taxid = to_dbs + "Centri_idxes/"
         if "toZymo" in infile_base:
-            print("DB GUESSED: Zymo")
-            root_to_seqid2taxid += "Zymo"
+            guessed_db = "Zymo"
         elif "toRrn" in infile_base:
-            print("DB GUESSED: rrn")
-            root_to_seqid2taxid += "rrn"
+            guessed_db = "rrn"
         elif "toSilva" in infile_base:
-            print("DB GUESSED: SILVA")
-            root_to_seqid2taxid += "SILVA"
+            guessed_db = "SILVA"
         else:
             print("Unkown database !\n")
             sys.exit(2)
-        to_seqid2taxid = root_to_seqid2taxid + "/seqid2taxid"
+        print("DB GUESSED:", guessed_db)
+        to_seqid2taxid = to_dbs + "Centri_idxes/" + guessed_db + "/seqid2taxid"
         print()
 
         to_out_file = infile_base + ".csv"
@@ -451,10 +479,10 @@ if __name__ == "__main__":
         with_lineage = ((my_csv['type_align'] != 'unmapped') & 
                         (my_csv['type_align'] != 'only_suppl'))
         if not IS_SAM_FILE:
-            cutoff_on_centriScore, cutoff_on_centriHitLength = 300, 50
+            cutoff_on_centriScore, cutoff_on_centriHitLength = 0, 50
             with_lineage = ((my_csv['type_align'] != 'unmapped') & 
                             (my_csv['type_align'] != 'only_suppl') &
-                            (pd.to_numeric(my_csv['score']) >= cutoff_on_centriHitLength))
+                            (pd.to_numeric(my_csv['score']) >= cutoff_on_centriScore))
             print("CUTOFF CENTRI SCORE:", cutoff_on_centriScore)
             print("NUMBER OF READS EVALUATED:", sum(with_lineage))
 
@@ -504,33 +532,87 @@ if __name__ == "__main__":
         dict_species2res = {} # To access evaluation results of a given species
         list_index_new_col, list_val_new_col = [], []
         for tupl_res in results_eval:
-            readID, species, res_eval, remark_evaluation = tupl_res
+            readID, final_taxid, species, res_eval, remark_evaluation = tupl_res
             if remark_evaluation != 'no_majo_found':
                 dict_species2res[species] = res_eval
                     
             list_index_new_col.append(readID)
-            list_val_new_col.append((species, res_eval, remark_evaluation))
+            list_val_new_col.append((final_taxid, species, res_eval, 
+                                     remark_evaluation))
         del tupl_res
 
-        tmp_df = pd.DataFrame({'species':[tupl[0] 
+        tmp_df = pd.DataFrame({'final_taxid':[tupl[0] 
                                           for tupl in list_val_new_col],
-                               'res_eval':[tupl[1] 
+                               'species':[tupl[1] 
+                                          for tupl in list_val_new_col],
+                               'res_eval':[tupl[2] 
                                            for tupl in list_val_new_col],
-                               'remark_eval':[tupl[2] 
+                               'remark_eval':[tupl[3] 
                                               for tupl in list_val_new_col]},
                               index=list_index_new_col)
-        my_csv = my_csv.assign(species=tmp_df['species'], 
+        my_csv = my_csv.assign(final_taxid=tmp_df['final_taxid'],
+                               species=tmp_df['species'], 
                                res_eval=tmp_df['res_eval'],
                                remark_eval=tmp_df['remark_eval'])
-        del tmp_df
+        del tmp_df, list_val_new_col
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
 
+        with open('my_otu_table.tsv', 'w') as my_otu_table:
+            my_otu_table.write("#OTUID" + '\t' + 'mes_couilles' + '\n')
+            for fin_taxid, count in my_csv['final_taxid'].value_counts().items():
+                fin_taxid_to_write = fin_taxid
+                if fin_taxid != 'noTaxid':
+                    fin_taxid_to_write = str(int(fin_taxid))
+                my_otu_table.write(fin_taxid_to_write + '\t' + str(count) + '\n')
+        
+        # NaN values are automatically EXCLUDED during the 'groupby':
+        grped_by_fin_taxid = my_csv.groupby(by=['final_taxid'])
+        tool_used = 'centri'
+        if IS_SAM_FILE:
+            tool_used = 'mapper'
+        sampl_prefix = tool_used + guessed_db.capitalize()
+
+        with open('my_map.tsv', 'w') as my_map, \
+             open('my_metadat.tsv', 'w')  as my_metadat:
+            # my_metadat.write('#OTU ID\ttaxonomy\n')
+            # my_map.write('#OTU ID\t' + sampl_prefix + '\n')
+            for taxid_grp, grp in grped_by_fin_taxid:
+                readIDs_to_write = map(lambda readID: sampl_prefix + '_' + 
+                                                      readID, 
+                                       grp.index)
+                my_map.write(str(taxid_grp) + '\t' + 
+                             '\t'.join(readIDs_to_write) + '\n')
+                
+                taxo_to_write = 'NA'
+                if taxid_grp != 'noTaxid':
+                    taxo_to_write = taxo_from_taxid(taxid_grp)
+                my_metadat.write(str(taxid_grp) + '\t' + taxo_to_write + '\n')
+
+            # try:
+            #     pd.np.isnan(taxid_gp)
+            # except TypeError:
+            #     print(taxid_gp)
+            
+            # print(taxid_gp,gp['final_taxid']);break
+        sys.exit()
+
+        with open('id_to_taxonomy.txt', 'w') as on_sen_fout:
+            for readID, fin_taxid in my_csv['final_taxid'].items():
+                felix = 'NA'
+                if not pd.np.isnan(fin_taxid):
+                    felix = taxo_from_taxid(fin_taxid)
+                on_sen_fout.write(readID + "\t" + felix + '\n')
+
+                    
         # for readID, lin_val in my_csv[my_csv['type_align']=='second_uniq']['lineage'].items():
         #     if 's' not in lin_val.strip(';'):
         #         pass
         #         print("coucou", my_csv.loc[readID, 'res_eval'])
-        # sys.exit()
+        
+        sys.exit()
+
+
         # Draw pie chart of abundances (simple countings):
         counts_species = my_csv['species'].value_counts()
         # print(counts_species)
