@@ -48,15 +48,8 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
             return (readID, 'only_suppl', 'no')
 
         max_AS = max(map(lambda dico: dico["AS"], no_suppl_list))
-        # toto = [(idx, dico["AS"]) for idx, dico in enumerate(no_suppl_list) 
-        #         if dico["AS"] == max_AS and idx != 0]
-        # # Contains ONLY equivalent (same AS score) align
         only_equiv_list = [dico for dico in no_suppl_list 
                            if dico["AS"] == max_AS]
-        # if toto:
-        #     print("LAST_EQUIV:", toto[-1][0])
-        # else:
-        #     print("NO_EQUIV")
 
         list_taxid_target, de_list = [], []
         if representative["has_SA"]:
@@ -118,7 +111,6 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels,
     type_align = two_col_from_csv.loc[one_csv_index_val, "type_align"]
     remark_eval = type_align
 
-    # if lineage_val.startswith(';'): # Normal
     if type_align == 'normal':
         taxid_to_eval = lineage_val.strip(';')
         
@@ -133,15 +125,16 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels,
             elif mode == 'LCA':
                 res_second_handling = eval.make_lca(list_taxid_target)
             remark_eval = res_second_handling[0]
-            if len(res_second_handling) == 1: # Problem (root reached)
+            if len(res_second_handling) == 1: # Problem ('no_majo_found')
                 # list_sp_name = '&'.join([eval.taxfoo.get_taxid_name(taxid) 
                 #                          for taxid in list_taxid_target])
                 # return (one_csv_index_val, list_sp_name, 'FP', remark_eval)
-                return (one_csv_index_val, remark_eval, 'FP', remark_eval)
+                return (one_csv_index_val, 'noTaxid', remark_eval, 'FP', 
+                        remark_eval)
             else:
                 taxid_to_eval = res_second_handling[1]
                 if remark_eval == 'majo_notInKey':
-                    return (one_csv_index_val, 
+                    return (one_csv_index_val, int(taxid_to_eval),
                             eval.taxfoo.get_taxid_name(int(taxid_to_eval)), 
                             'FP', remark_eval)
 
@@ -149,7 +142,8 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels,
                                               taxonomic_cutoff)
     remark_eval += ';' + remark
 
-    return (one_csv_index_val, taxo_name, classif, remark_eval)
+    return (one_csv_index_val, int(taxid_to_eval), taxo_name, classif, 
+            remark_eval)
 
 
 
