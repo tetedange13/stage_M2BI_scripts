@@ -5,13 +5,13 @@
 Mapping statistics computation
 
 Usage:
-  main.py (-i <inFile>) (-l <taxoCut>)
+  stats_tax.py (-i <inFile>) (-l <taxoCut>)
   
 Options:
   -h --help                  help
   --version                  version of the script
   -i --inFile=input_file     input file
-  -l --taxoCut=taxo_cutoff   cutoff for the taxonomic level [default: none]
+  -l --taxoCut=taxo_cutoff   cutoff for the taxonomic level
 """
 
 
@@ -69,26 +69,6 @@ def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
     plt.show()
 
 
-def plot_pie_chart(pdSeries_to_plot, print_percents, arg_title=""):
-    fig, axis = plt.subplots(subplot_kw=dict(aspect="equal"))
-    if print_percents:
-        patches, _ , _= axis.pie(pdSeries_to_plot, startangle=90, 
-                                 counterclock=False, 
-                                 autopct=lambda pct: "{:.1f}%".format(pct))
-    else:
-        patches, _ = axis.pie(pdSeries_to_plot, startangle=90, 
-                                 counterclock=False)
-    
-    lim_nb_items_leg, nb_items, y_val = 31, len(pdSeries_to_plot.index), 0
-    if nb_items > lim_nb_items_leg:
-        y_val = -0.015 * (nb_items - lim_nb_items_leg)
-    axis.legend(patches, pdSeries_to_plot.index, loc="center left", 
-                bbox_to_anchor=(1, y_val, 0.5, 1), fontsize='x-small')
-    axis.set_ylabel('') # To remove auto legends sided to the chart
-    fig.subplots_adjust(left=-0.45)
-    axis.set_title(arg_title)
-
-
 def str_from_res_conv(tupl_res_conv):
     """
     Generate a string (ready to write) from an evaluation result
@@ -104,34 +84,6 @@ def str_from_res_conv(tupl_res_conv):
         # lineage_to_write = ';'.join(str(taxid) for taxid in lineage)
 
     return ",".join(to_return + [lineage_to_write] + [str(x) for x in rest])
-
-
-def taxo_from_taxid(arg_taxid):
-    """
-    Given a taxid, return a str of the complete taxonomy, with the GreenGenes
-    format:
-    k__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Streptococcaceae;g__Streptococcus;s__agalactiae
-    """
-    lineage = evaluate.taxfoo.get_lineage_as_dict(arg_taxid)
-    possible_lvls = lineage.keys()
-    list_lvls = []
-
-    for taxo_lvl in evaluate.want_taxo:
-        if taxo_lvl in possible_lvls:
-            first_letter = taxo_lvl[0]
-            if taxo_lvl == "superkingdom":
-                first_letter = 'k'
-
-            taxo_str = '-'.join(lineage[taxo_lvl].split())
-            if taxo_lvl == 'species':
-                taxo_str = '-'.join(lineage[taxo_lvl].split()[1:])
-            list_lvls.append(first_letter +'__' + taxo_str)
-
-        else:
-            list_lvls.append('Other')
-
-    # DO NOT add 'Root', cuz pb of length with summarize_taxa.py
-    return ';'.join(list_lvls)
 
 
 def dict_stats_to_vectors(dict_res):
@@ -206,36 +158,6 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
     else:
         return precision
 
-# def log_modulus(observed_abund, expected_abund):
-#     """
-#     log-modulus = sign(y)*log10(1 + |y|)
-#     """
-#     diff = observed_abund - expected_abund
-#     return pd.np.sign(diff) * pd.np.log10(1 + pd.np.abs(diff))
-
-def calc_L1dist_logModulus(pdSeries_obs_abund, pdSeries_expect_abund):
-    """
-    Compute both the L1-distance and the vector of log-modulus values between 
-    expected and observed abundances
-
-    From: https://genomebiology.biomedcentral.com/track/pdf/10.1186/s13059-017-1299-7
-    "While the log-modulus examines a fold-change, the L1 distance shows the 
-    distance between relative abundance vectors by dataset"
-    """
-    # print(pdSeries_obs_abund)
-    # print(pdSeries_expect_abund)
-    log_modulus = lambda difference: (pd.np.sign(difference) * 
-                                      pd.np.log10(1 + pd.np.abs(difference)))
-
-    dict_L1dist,dict_log_modulus = {}, {}
-    for sp_name in pdSeries_obs_abund.index:
-        diff = pdSeries_obs_abund[sp_name] - pdSeries_expect_abund[sp_name]
-        dict_L1dist[sp_name] = pd.np.abs(diff)
-        dict_log_modulus[sp_name] = log_modulus(diff)
-
-    # print(dict_L1dist)
-    return (sum(dict_L1dist.values()), 
-            pd.Series(dict_log_modulus).sort_values(ascending = False))
 
 
 # MAIN:
@@ -257,7 +179,15 @@ if __name__ == "__main__":
     print("Taxonomic Python module loaded !\n")
 
     taxo_cutoff = check.acceptable_str(ARGS["--taxoCut"], evaluate.want_taxo)
-    tupl_sets_levels = evaluate.generate_sets_zymo(taxo_cutoff)      
+    df_proks = evaluate.generate_df_zymo()
+    # Generate set of taxa names that belongs to the Zymo at the given level:
+    set_proks = set(map(lambda a_str: a_str[3:], df_proks[taxo_cutoff]))
+    # If 'species', str for genus need to be concatenated to the one for species
+    if taxo_cutoff == 'species': 
+        list_s = map(lambda a_str: a_str[3:], df_proks[taxo_cutoff])
+        list_g = map(lambda a_str: a_str[3:], df_proks['genus'])
+        set_proks = set([tupl[0] + " " + tupl[1] 
+                         for tupl in zip(list_g, list_s)])
 
 
     # Guess the "mode":
@@ -345,7 +275,7 @@ if __name__ == "__main__":
             # Cuz df.assign() takes 1 single karg:
             tmp_dict = {tupl_columns[i]:list(map(lambda sublist: sublist[i], 
                                                  list_val))}
-            my_csv = my_csv.assign(**tmp_dict, index=list_indexes)
+            my_csv = my_csv.assign(**tmp_dict)
         del i, tmp_dict, list_val, list_indexes
 
         print(my_csv['type_align'].value_counts())
@@ -460,12 +390,7 @@ if __name__ == "__main__":
             print("Loading CSV file...")
             my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
             print("CSV loaded !")
-        
 
-        # list_lineage_second = my_csv[my_csv['type_align'] == 'second_plural']['lineage']
-        # list_second_len = list(map(lambda val: len(val.split('s')), list_lineage_second))
-        # list_second_len = list(map(lambda val: len(set(val.split('s'))), list_lineage_second))
-        # list_second_len += [1] * len(my_csv[my_csv['type_align'] == 'second_uniq'])
         # pd.Series(list_second_len, 
         #           name='Boxplot len_second (p1N300)').plot.box()#;plt.show()
 
@@ -479,8 +404,10 @@ if __name__ == "__main__":
         # print("% DE + DE 25 SECOND:", sum(felix > 26)/len(felix)*100)
         # plt.plot([100]*bins_val)
         # plt.show()
+        # print(my_csv['type_align'].value_counts())
+        # print(sum(my_csv['type_align']))
         # sys.exit()
-        
+
         TIME_CSV_TREATMENT = t.time()
         with_lineage = ((my_csv['type_align'] != 'unmapped') & 
                         (my_csv['type_align'] != 'only_suppl'))
@@ -502,7 +429,7 @@ if __name__ == "__main__":
         print("MODE FOR HANDLING OF THE MULTI-HITS =", MODE)
 
         partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
-                                              sets_levels=tupl_sets_levels,
+                                              set_levels_prok=set_proks,
                                               taxonomic_cutoff=taxo_cutoff,
                                               mode=MODE)
         print("PROCESSING CSV TO EVALUATE TAXO...")
@@ -564,17 +491,9 @@ if __name__ == "__main__":
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
 
-        with open('my_otu_table.tsv', 'w') as my_otu_table:
-            my_otu_table.write("#OTUID" + '\t' + 'mes_couilles' + '\n')
-            for fin_taxid, count in my_csv['final_taxid'].value_counts().items():
-                fin_taxid_to_write = fin_taxid
-                if fin_taxid != 'noTaxid':
-                    fin_taxid_to_write = str(int(fin_taxid))
-                else:
-                    print(count)
-                my_otu_table.write(fin_taxid_to_write + '\t' + str(count) + '\n')
         
-        # NaN values are automatically EXCLUDED during the 'groupby':
+        # OTU mapping + taxonomy mapping files writting:
+        # (NaN values are automatically EXCLUDED during the 'groupby')
         grped_by_fin_taxid = my_csv.groupby(by=['final_taxid'])
         tool_used = 'centri'
         if IS_SAM_FILE:
@@ -582,7 +501,7 @@ if __name__ == "__main__":
         sampl_prefix = tool_used + guessed_db.capitalize()
 
         with open('my_map.tsv', 'w') as my_map, \
-             open('my_metadat.tsv', 'w')  as my_metadat:
+             open('metadat_tax.tsv', 'w')  as my_metadat:
             # my_metadat.write('#OTU ID\ttaxonomy\n')
             # my_map.write('#OTU ID\t' + sampl_prefix + '\n')
             for taxid_grp, grp in grped_by_fin_taxid:
@@ -592,77 +511,15 @@ if __name__ == "__main__":
                 my_map.write(str(taxid_grp) + '\t' + 
                              '\t'.join(readIDs_to_write) + '\n')
                 
-                taxo_to_write = 'NA'
-                if taxid_grp != 'noTaxid':
-                    taxo_to_write = taxo_from_taxid(taxid_grp)
+                taxo_to_write = ';'.join(['Other'] * 7)
+                if taxid_grp != 'no_majo_found':
+                    taxo_to_write = evaluate.taxo_from_taxid(taxid_grp)
+                else:
+                    print("NB OF 'NO_MAJO':", len(grp))
                 my_metadat.write(str(taxid_grp) + '\t' + taxo_to_write + '\n')
 
-            # try:
-            #     pd.np.isnan(taxid_gp)
-            # except TypeError:
-            #     print(taxid_gp)
-            
-            # print(taxid_gp,gp['final_taxid']);break
-        # sys.exit()
 
-        # with open('id_to_taxonomy.txt', 'w') as on_sen_fout:
-        #     for readID, fin_taxid in my_csv['final_taxid'].items():
-        #         felix = 'NA'
-        #         if not pd.np.isnan(fin_taxid):
-        #             felix = taxo_from_taxid(fin_taxid)
-        #         on_sen_fout.write(readID + "\t" + felix + '\n')
-
-                    
-        # for readID, lin_val in my_csv[my_csv['type_align']=='second_uniq']['lineage'].items():
-        #     if 's' not in lin_val.strip(';'):
-        #         pass
-        #         print("coucou", my_csv.loc[readID, 'res_eval'])
-        
-
-        # Draw pie chart of abundances (simple countings):
-        counts_species = my_csv['species'].value_counts()
-        # print(counts_species)
-        # plot_pie_chart(counts_species[0:35], False, "MON BEAU CAMEMBERT")
-
-        # Gether all FP into a 'misassigned' category:
-        # /!\ 'no_majo_found' are ignored /!\
-        dict_species2count = {'misassigned':0}
-        for counted_item, foo in counts_species.items():
-            if counted_item != 'no_majo_found':
-                if dict_species2res[counted_item] == 'FP':
-                    dict_species2count['misassigned'] += foo
-                else:
-                    dict_species2count[counted_item] = foo
-        del counted_item
-
-        if taxo_cutoff == 'species':
-            counts_only_zymo = pd.Series(dict_species2count).sort_values(ascending=False)
-            plot_pie_chart(counts_only_zymo, True, "MON BEAU CAMEMBERT")
-            # print(counts_only_zymo.drop(['misassigned']))
-            expected_percents = {"Pseudomonas aeruginosa":4.6,
-                                 "Bacillus subtilis":15.7,
-                                 "Lactobacillus fermentum":18.8,
-                                 "Escherichia coli":10.0,
-                                 "Enterococcus faecalis":10.4,
-                                 "Salmonella enterica":11.3,
-                                 "Listeria monocytogenes":15.9,
-                                 "Staphylococcus aureus":13.3}
-            no_misassigned = counts_only_zymo.drop(['misassigned'])
-            tot_reads_zymo = sum(no_misassigned)
-            foo_dict = {sp_name:expected_percents[sp_name]*tot_reads_zymo/100 
-                        for sp_name in expected_percents.keys()}
-            # print(pd.Series(test))
-            a_tupl = calc_L1dist_logModulus(no_misassigned, 
-                                            pd.Series(foo_dict))
-            L1dist, vect_logModulus = a_tupl
-            # print("L1-distance =", L1dist)
-            print()
-            # print(vect_logModulus)
-            # print(counts_species[map(lambda val: val.split()[0] == 'Bacillus', counts_species.index)])
-            # plt.show()
-            # sys.exit()
-
-      
+        # Count TP and FP for statistics:
         cutoff_nb_trashes = max(my_csv['nb_trashes'])
         # cutoff_nb_trashes = 4
         print("CUTOFF ON THE NB OF TRASHES:", cutoff_nb_trashes)
@@ -682,8 +539,8 @@ if __name__ == "__main__":
 
         print()
         
-        # eval_taxfoo = evaluate.taxfoo
 
+        # eval_taxfoo = evaluate.taxfoo
         # pd.DataFrame({'TP_nb_trashes':my_csv[is_TP]['nb_trashes'].value_counts(), 
         #               'FP_nb_trashes':my_csv[is_FP]['nb_trashes'].value_counts()
         #               }).plot.bar(title="Distrib nb_trashes between FP and TP",
@@ -722,7 +579,7 @@ if __name__ == "__main__":
                    if dict_species2res[val] == 'FP']
         list_TP = [val for val in dict_species2res 
                    if dict_species2res[val] == 'TP']
-        nb_pos_to_find = len(tupl_sets_levels[0])
+        nb_pos_to_find = len(set_proks)
         recall_at_taxa_level = len(list_TP)/nb_pos_to_find
         print("TO FIND:", list_TP)
         print("NB_FP", len(list_FP), " | NB_TP", len(list_TP))
@@ -735,16 +592,6 @@ if __name__ == "__main__":
         print("F1-SCORE:", 
               calc_f1((precision_at_taxa_level, recall_at_taxa_level)))
         print()
-
-
-        # Print results of suppl handling:
-        # nb_evaluated_suppl = len(list_res_suppl_handling)
-        # total_suppl_entries = dict_count["suppl_entries"] + nb_evaluated_suppl
-        # print("TOTAL EVALUATED (grouped) SUPPL:", nb_evaluated_suppl)
-        # mergeable_suppl = [elem for elem in list_res_suppl_handling if elem]
-        # print("MERGEABLE SUPPL:", len(mergeable_suppl))    
-        # print("REST (not mergeable):", nb_evaluated_suppl - len(mergeable_suppl))
-        # print()
 
 
         sum_stats, sum_counts = sum(dict_stats.values()),sum(dict_count.values())

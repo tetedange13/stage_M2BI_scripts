@@ -21,38 +21,69 @@ taxfoo.load_nodes_dmp(nodes_path)
 taxfoo.load_names_dmp(names_path)
 
 
-def generate_sets_zymo(taxonomic_cutoff):
+def taxo_from_taxid(arg_taxid):
+    """
+    Given a taxid, return a str of the complete taxonomy, with the GreenGenes
+    format:
+    k__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Streptococcaceae;g__Streptococcus;s__agalactiae
+    """
+    lineage = taxfoo.get_lineage_as_dict(arg_taxid)
+    possible_lvls = lineage.keys()
+    list_lvls = []
+
+    for taxo_lvl in want_taxo:
+        if taxo_lvl in possible_lvls:
+            first_letter = taxo_lvl[0]
+            if taxo_lvl == "superkingdom":
+                first_letter = 'k'
+
+            taxo_str = '-'.join(lineage[taxo_lvl].split())
+            if taxo_lvl == 'species':
+                taxo_str = '-'.join(lineage[taxo_lvl].split()[1:])
+            list_lvls.append(first_letter +'__' + taxo_str)
+
+        else:
+            list_lvls.append('Other')
+
+    # DO NOT add 'Root', cuz pb of length with summarize_taxa.py
+    return ';'.join(list_lvls)
+
+
+def generate_df_zymo():
     """
     """
     # Define the species contained within the Zymo mock community:
-    dict_prok = {'Listeria monocytogenes':1639, 
-                 'Bacillus subtilis':1423, 
-                 'Staphylococcus aureus':1280, 
-                 'Escherichia coli':562, 
-                 'Lactobacillus fermentum':1613, 
-                 'Enterococcus faecalis':1351,
-                 'Pseudomonas aeruginosa':287, 
-                 'Salmonella enterica':28901}
-    dict_euk = {'Cryptococcus neoformans':5207, 
-                'Saccharomyces cerevisiae':4932}
+    # dict_name2taxid = {'Listeria monocytogenes':1639, 
+    #                    'Bacillus subtilis':1423, 
+    #                    'Staphylococcus aureus':1280, 
+    #                    'Escherichia coli':562, 
+    #                    'Lactobacillus fermentum':1613, 
+    #                    'Enterococcus faecalis':1351,
+    #                    'Pseudomonas aeruginosa':287, 
+    #                    'Salmonella enterica':28901}
+    # dict_euk = {'Cryptococcus neoformans':5207, 
+    #             'Saccharomyces cerevisiae':4932}
 
-    set_prok = set()
-    for prok_name in dict_prok:
-        lineage_prok = taxfoo.get_lineage_as_dict(dict_prok[prok_name])
-        prok_taxo_level = lineage_prok[taxonomic_cutoff]
-        assert(prok_taxo_level)
-        set_prok.add(prok_taxo_level)
-    del prok_name
+    dict_prok = {1639 : 15.9, 
+                 1423 : 15.7, 
+                 1280 : 13.3, 
+                 562 : 10.0, 
+                 1613 : 18.8, 
+                 1351 : 10.4,
+                 287 : 4.6, 
+                 28901 : 11.3}
+    set_taxids_prok = set(dict_prok.keys())
+    dict_tmp = {}
 
-    set_euk = set()
-    for euk_name in dict_euk:
-        lineage_euk = taxfoo.get_lineage_as_dict(dict_euk[euk_name])
-        euk_taxo_level = lineage_euk[taxonomic_cutoff]
-        assert(euk_taxo_level)
-        set_euk.add(euk_taxo_level)
-    del euk_name
+    for taxid in set_taxids_prok:
+        dict_tmp[taxid] = taxo_from_taxid(taxid).split(';')
+        dict_tmp[taxid] += [dict_prok[taxid]]
+        # print(list_taxa_names)
+    del taxid
 
-    return (set_prok, set_euk)
+    return pd.DataFrame.from_dict(data=dict_tmp, 
+                                  columns=want_taxo+['rel_count'], 
+                                  orient='index')
 
 
 def calc_taxo_shift(arg_taxid, taxonomic_cutoff):
@@ -133,12 +164,11 @@ def make_lca(list_taxid_target):
     return ('lca', lca)
 
 
-def in_zymo(taxo_taxid, tupl_sets, taxonomic_cutoff):
+def in_zymo(taxo_taxid, set_levels_prok, taxonomic_cutoff):
     """
     Given the taxid of a read (lowest one in the taxo), determine if the 
     organism belongs to the Zymo mock comm, at a given taxonomic cutoff 
     """
-    set_levels_prok, set_levels_euk = tupl_sets
     lineage = taxfoo.get_lineage_as_dict(taxo_taxid)
     taxo_levels = lineage.keys()
 
