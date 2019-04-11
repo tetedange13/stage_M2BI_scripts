@@ -100,7 +100,7 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
             ratio_len, de]
 
 
-def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels, 
+def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok, 
               taxonomic_cutoff, mode):
     """
     Do the parallel taxonomic evaluation on a given Pandas DataFrame
@@ -121,7 +121,7 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels,
         else: # More than 1 unique taxid
             if mode == 'MAJO':
                 res_second_handling = eval.majo_voting(list_taxid_target, 
-                                                       taxonomic_cutoff)
+                                                       'species')
             elif mode == 'LCA':
                 res_second_handling = eval.make_lca(list_taxid_target)
             remark_eval = res_second_handling[0]
@@ -129,7 +129,7 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels,
                 # list_sp_name = '&'.join([eval.taxfoo.get_taxid_name(taxid) 
                 #                          for taxid in list_taxid_target])
                 # return (one_csv_index_val, list_sp_name, 'FP', remark_eval)
-                return (one_csv_index_val, 'noTaxid', remark_eval, 'FP', 
+                return (one_csv_index_val, 'no_majo_found', remark_eval, 'FP', 
                         remark_eval)
             else:
                 taxid_to_eval = res_second_handling[1]
@@ -138,7 +138,7 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, sets_levels,
                             eval.taxfoo.get_taxid_name(int(taxid_to_eval)), 
                             'FP', remark_eval)
 
-    taxo_name, classif, remark = eval.in_zymo(taxid_to_eval, sets_levels, 
+    taxo_name, classif, remark = eval.in_zymo(taxid_to_eval, set_levels_prok, 
                                               taxonomic_cutoff)
     remark_eval += ';' + remark
 
