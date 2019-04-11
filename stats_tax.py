@@ -85,7 +85,7 @@ def plot_pie_chart(pdSeries_to_plot, print_percents, arg_title=""):
     axis.legend(patches, pdSeries_to_plot.index, loc="center left", 
                 bbox_to_anchor=(1, y_val, 0.5, 1), fontsize='x-small')
     axis.set_ylabel('') # To remove auto legends sided to the chart
-    fig.subplots_adjust(left=-0.4)
+    fig.subplots_adjust(left=-0.45)
     axis.set_title(arg_title)
 
 
@@ -222,8 +222,8 @@ def calc_L1dist_logModulus(pdSeries_obs_abund, pdSeries_expect_abund):
     "While the log-modulus examines a fold-change, the L1 distance shows the 
     distance between relative abundance vectors by dataset"
     """
-    print(pdSeries_obs_abund)
-    print(pdSeries_expect_abund)
+    # print(pdSeries_obs_abund)
+    # print(pdSeries_expect_abund)
     log_modulus = lambda difference: (pd.np.sign(difference) * 
                                       pd.np.log10(1 + pd.np.abs(difference)))
 
@@ -233,7 +233,7 @@ def calc_L1dist_logModulus(pdSeries_obs_abund, pdSeries_expect_abund):
         dict_L1dist[sp_name] = pd.np.abs(diff)
         dict_log_modulus[sp_name] = log_modulus(diff)
 
-    print(dict_L1dist)
+    # print(dict_L1dist)
     return (sum(dict_L1dist.values()), 
             pd.Series(dict_log_modulus).sort_values(ascending = False))
 
@@ -472,9 +472,15 @@ if __name__ == "__main__":
 
     if not CLUST_MODE:
         # test=my_csv[list(map(lambda val: len(val.strip(';').split('s'))==100, my_csv['lineage']))]
-        # for felix in test.index:
-        #     print(my_csv.loc[felix, 'lineage'])
+        # test = my_csv[my_csv['lineage'].notnull()]['lineage']
+        # felix = pd.Series(map(lambda lin: len(lin.split('s')), test))
+        # bins_val = max(felix)
+        # felix.plot.hist(bins=bins_val, log=True)
+        # print("% DE + DE 25 SECOND:", sum(felix > 26)/len(felix)*100)
+        # plt.plot([100]*bins_val)
+        # plt.show()
         # sys.exit()
+        
         TIME_CSV_TREATMENT = t.time()
         with_lineage = ((my_csv['type_align'] != 'unmapped') & 
                         (my_csv['type_align'] != 'only_suppl'))
@@ -564,6 +570,8 @@ if __name__ == "__main__":
                 fin_taxid_to_write = fin_taxid
                 if fin_taxid != 'noTaxid':
                     fin_taxid_to_write = str(int(fin_taxid))
+                else:
+                    print(count)
                 my_otu_table.write(fin_taxid_to_write + '\t' + str(count) + '\n')
         
         # NaN values are automatically EXCLUDED during the 'groupby':
@@ -595,14 +603,14 @@ if __name__ == "__main__":
             #     print(taxid_gp)
             
             # print(taxid_gp,gp['final_taxid']);break
-        sys.exit()
+        # sys.exit()
 
-        with open('id_to_taxonomy.txt', 'w') as on_sen_fout:
-            for readID, fin_taxid in my_csv['final_taxid'].items():
-                felix = 'NA'
-                if not pd.np.isnan(fin_taxid):
-                    felix = taxo_from_taxid(fin_taxid)
-                on_sen_fout.write(readID + "\t" + felix + '\n')
+        # with open('id_to_taxonomy.txt', 'w') as on_sen_fout:
+        #     for readID, fin_taxid in my_csv['final_taxid'].items():
+        #         felix = 'NA'
+        #         if not pd.np.isnan(fin_taxid):
+        #             felix = taxo_from_taxid(fin_taxid)
+        #         on_sen_fout.write(readID + "\t" + felix + '\n')
 
                     
         # for readID, lin_val in my_csv[my_csv['type_align']=='second_uniq']['lineage'].items():
@@ -610,8 +618,6 @@ if __name__ == "__main__":
         #         pass
         #         print("coucou", my_csv.loc[readID, 'res_eval'])
         
-        sys.exit()
-
 
         # Draw pie chart of abundances (simple countings):
         counts_species = my_csv['species'].value_counts()
@@ -649,9 +655,9 @@ if __name__ == "__main__":
             a_tupl = calc_L1dist_logModulus(no_misassigned, 
                                             pd.Series(foo_dict))
             L1dist, vect_logModulus = a_tupl
-            print("L1-distance =", L1dist)
+            # print("L1-distance =", L1dist)
             print()
-            print(vect_logModulus)
+            # print(vect_logModulus)
             # print(counts_species[map(lambda val: val.split()[0] == 'Bacillus', counts_species.index)])
             # plt.show()
             # sys.exit()
