@@ -72,50 +72,6 @@ def calc_taxo_shift(arg_taxid, taxonomic_cutoff):
     # print(len(taxfoo.))
 
 
-def lca_last_try(old_set_taxids):
-    """
-    Try to produce a LCA from a set of taxid, by eliminating
-    """
-    # old_set_taxids = list(map(int, str_list_taxids.split('&')))
-    new_set_taxids = set()
-    list_ranks = []
-    for taxid in old_set_taxids:
-        taxid_name = taxfoo.get_taxid_name(taxid)
-        if ('metagenome' in taxid_name or 'uncultured' in taxid_name or 
-            'unidentified' in taxid_name or 'phage' in taxid_name.lower() or
-            taxid_name == 'synthetic construct' or 
-            'virus' in taxid_name.lower()):
-            pass
-            # print("PB:", taxid_name, taxid)
-        else:
-            new_set_taxids.add(taxid)
-    del taxid
-
-    if not new_set_taxids:
-        return 'only_trashes'
-    return taxfoo.find_lca(new_set_taxids)
-
-
-def handle_second(list_taxid_target):
-    """
-    Take an alignment that has been found to be secondary and try to determine
-    its taxonomy (i.e. 1 unique taxid)    
-    """
-    set_taxid_target = set(list_taxid_target)
-    lca = taxfoo.find_lca(set_taxid_target)
-
-    if lca == 1: # If LCA searching fails, LCA==1
-        lca_attempt = lca_last_try(set_taxid_target)
-        if lca_attempt == 'only_trashes':
-            return (lca_attempt, )
-        elif lca_attempt == 1:
-            return ('unsolved_lca_pb', )
-        else:
-            return ('lca_last_try', lca_attempt)
-
-    return ('lca', lca)
-
-
 def get_majo(list_of_things, cutoff_majo):
     """
     Given a list of things (could be numbers of list of strings), determine
@@ -172,7 +128,7 @@ def make_lca(list_taxid_target):
     lca = taxfoo.find_lca(set_taxid_target)
 
     if lca == 1: # If LCA searching fails, LCA==1
-        return ('lca;root_reached', lca)
+        return ('lca_reached_root', lca)
 
     return ('lca', lca)
 
