@@ -262,6 +262,8 @@ def correct_seqid2taxid(to_old_seqid2taxid, to_wrong2good_taxids, dirOut='./'):
 
 def write_complete_lineage(to_seqid2taxid):
     """
+    Write the file containing the list of all the taxids (complete lineage) of
+    a given seqid2taxid file
     """
     with open(to_seqid2taxid, 'r') as seqid2taxid_file:
         set_taxids_db = {line.rstrip('\n').split('\t')[1] 
@@ -286,10 +288,9 @@ def write_complete_lineage(to_seqid2taxid):
 
 
 def parse_and_rewrite_nodes(filename, to_complete_lineage):
-    "Parse the NCBI nodes_dmp file."
-    # child_to_parent = dict()
-    # node_to_info = dict()
-
+    """"
+    Parse the NCBI nodes_dmp file.
+    """
     with open(to_complete_lineage, 'r') as complete_lineage_file:
         set_taxids_to_keep = {line.rstrip('\n') 
                               for line in complete_lineage_file}
@@ -297,21 +298,11 @@ def parse_and_rewrite_nodes(filename, to_complete_lineage):
     with open(filename, 'r') as fp, \
          open("nodes.dmp", 'w') as new_nodes_file:
         for line in fp:
-            # x = line.split('\t|\t')
 
             node_id = line.split('\t|\t')[0]
             if node_id in set_taxids_to_keep:
                 new_nodes_file.write(line)
         del line
-
-            # node_id, parent_node_id, rank, embl, div_id, div_flag, gencode, mgc_inherit, mgc_flag, mgc_id, hidden_flag, subtree_flag, comments = x
-            # node_id = int(node_id)
-            # parent_node_id = int(parent_node_id)
-
-            # child_to_parent[node_id] = parent_node_id
-            # node_to_info[node_id] = rank, embl, div_id, div_flag, comments
-
-    # return child_to_parent, node_to_info
 
 
 def parse_and_rewrite_names(filename, to_complete_lineage):
@@ -321,7 +312,6 @@ def parse_and_rewrite_names(filename, to_complete_lineage):
     with open(to_complete_lineage, 'r') as complete_lineage_file:
         set_taxids_to_keep = {line.rstrip('\n') for line in complete_lineage_file}
 
-    # taxid_to_names = dict()
     with open(filename, 'r') as fp, \
          open("names.dmp", 'w') as new_names_file:
 
@@ -333,14 +323,32 @@ def parse_and_rewrite_names(filename, to_complete_lineage):
             taxid, name, uniqname, name_class = line.split('\t|\t')
             # taxid = int(taxid)
 
-            # if name_class == 'scientific name':
             if (name_class == 'scientific name' and 
                 taxid in set_taxids_to_keep):
-                # taxid_to_names[taxid] = (name, uniqname, name_class)
                 new_names_file.write(line + '\t|\n')
         del line
 
-    # return taxid_to_names
+
+def write_metadat_file(to_seqid2taxid, base_used):
+    """
+    Given a complete lineage as the set of taxids, writes the complete lineage
+    list of taxids and the
+    """
+    write_complete_lineage(to_seqid2taxid)
+
+    with open('taxids_complete_lineage', 'r') as complete_lineage, \
+         open(base_used + '_tax_metadat.tsv', 'w') as metadat_file:
+        metadat_file.write('no_majo_found' + '\t' + ';'.join(['Other'] * 7) + 
+                           '\n')
+        # my_metadat.write('#OTU ID\ttaxonomy\n')
+
+        for line in complete_lineage:
+            taxid_grp = line.rstrip('\n')
+            metadat_file.write(taxid_grp + '\t' + 
+                               pll.eval.taxo_from_taxid(taxid_grp) + '\n') 
+        del line
+
+    os.remove('taxids_complete_lineage')
 
 
 
@@ -356,8 +364,8 @@ if __name__ == "__main__":
 
     # test(to_dbs_SILVA + "wrong2good_taxids", "seqid2taxid")
 
-    detect_problems("seqid2taxid", to_dbs_SILVA + "seqid2acc", 
-                    to_dbs_SILVA + "headers.txt")
+    # detect_problems("seqid2taxid", to_dbs_SILVA + "seqid2acc", 
+    #                 to_dbs_SILVA + "headers.txt")
 
     # local_taxid_search("wgs", "problems.txt")
     # local_taxid_search("gb", "wgs_need_remote")
@@ -368,6 +376,7 @@ if __name__ == "__main__":
     # correct_seqid2taxid("old_seqid2taxid", "wrong2good_taxids")
 
     # write_complete_lineage("seqid2taxid")
+    write_metadat_file(to_dbs + 'Centri_idxes/Zymo/seqid2taxid', 'ZYMO')
     # parse_and_rewrite_names(to_dbs_nt + "names.dmp", 
     #                         "taxids_complete_lineage")
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
