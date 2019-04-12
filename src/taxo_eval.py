@@ -125,8 +125,9 @@ def get_majo(list_of_things, cutoff_majo):
 
 def majo_voting(list_taxid_target, taxonomic_cutoff):
     """
-    
-    """
+    Proceed to the majo determination for a list of given taxids, at the a
+    given taxonomic cutoff
+    """   
     dict_taxid2ancester = {}
     for taxid in set(list_taxid_target):
         lineage = taxfoo.get_dict_lineage_as_taxids(taxid)

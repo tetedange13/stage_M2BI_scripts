@@ -179,6 +179,19 @@ if __name__ == "__main__":
     print("Taxonomic Python module loaded !\n")
 
     taxo_cutoff = check.acceptable_str(ARGS["--taxoCut"], evaluate.want_taxo)
+    # Guess the database used:
+    if "toZymo" in infile_base:
+        guessed_db = "Zymo"
+    elif "toRrn" in infile_base:
+        guessed_db = "rrn"
+    elif "toSilva" in infile_base:
+        guessed_db = "SILVA"
+    else:
+        print("Unkown database !\n")
+        sys.exit(2)
+    print("DB GUESSED:", guessed_db)
+
+
     df_proks = evaluate.generate_df_zymo()
     # Generate set of taxa names that belongs to the Zymo at the given level:
     set_proks = set(map(lambda a_str: a_str[3:], df_proks[taxo_cutoff]))
@@ -278,24 +291,14 @@ if __name__ == "__main__":
             my_csv = my_csv.assign(**tmp_dict)
         del i, tmp_dict, list_val, list_indexes
 
-        print(my_csv['type_align'].value_counts())
+        print(my_csv.type_align.value_counts())
         print()
         # # taxfoo = evaluate.taxfoo
 
     if not CLUST_MODE and IS_SAM_FILE:
         print("SAM MODE !")
 
-        # Guess the database used:
-        if "toZymo" in infile_base:
-            guessed_db = "Zymo"
-        elif "toRrn" in infile_base:
-            guessed_db = "rrn"
-        elif "toSilva" in infile_base:
-            guessed_db = "SILVA"
-        else:
-            print("Unkown database !\n")
-            sys.exit(2)
-        print("DB GUESSED:", guessed_db)
+        # Path to the needed 'seqid2taxid' file:
         to_seqid2taxid = to_dbs + "Centri_idxes/" + guessed_db + "/seqid2taxid"
         print()
 
@@ -409,21 +412,21 @@ if __name__ == "__main__":
         # sys.exit()
 
         TIME_CSV_TREATMENT = t.time()
-        with_lineage = ((my_csv['type_align'] != 'unmapped') & 
-                        (my_csv['type_align'] != 'only_suppl'))
+        with_lineage = ((my_csv.type_align != 'unmapped') & 
+                        (my_csv.type_align != 'only_suppl'))
         if not IS_SAM_FILE:
             cutoff_on_centriScore, cutoff_on_centriHitLength = 0, 50
-            with_lineage = ((my_csv['type_align'] != 'unmapped') & 
-                            (my_csv['type_align'] != 'only_suppl') &
+            with_lineage = ((my_csv.type_align != 'unmapped') & 
+                            (my_csv.type_align != 'only_suppl') &
                             (pd.to_numeric(my_csv['score']) >= cutoff_on_centriScore))
             print("CUTOFF CENTRI SCORE:", cutoff_on_centriScore)
             print("NUMBER OF READS EVALUATED:", sum(with_lineage))
 
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
-        MODE = 'LCA'
-        # MODE = 'MAJO'
-        if IS_SAM_FILE:
-            MODE = 'MAJO'
+        # MODE = 'LCA'
+        MODE = 'MAJO'
+        # if IS_SAM_FILE:
+        #     MODE = 'MAJO'
 
         print()
         print("MODE FOR HANDLING OF THE MULTI-HITS =", MODE)
@@ -444,7 +447,7 @@ if __name__ == "__main__":
         
         # Compute counts:
         dict_count = {}
-        counts_type_align = my_csv['type_align'].value_counts()
+        counts_type_align = my_csv.type_align.value_counts()
         for type_aln, count in counts_type_align.items():
             dict_count[type_aln] = count
         del type_aln
@@ -483,27 +486,26 @@ if __name__ == "__main__":
                                'remark_eval':[tupl[3] 
                                               for tupl in list_val_new_col]},
                               index=list_index_new_col)
-        my_csv = my_csv.assign(final_taxid=tmp_df['final_taxid'],
-                               species=tmp_df['species'], 
-                               res_eval=tmp_df['res_eval'],
-                               remark_eval=tmp_df['remark_eval'])
+        my_csv = my_csv.assign(final_taxid=tmp_df.final_taxid,
+                               species=tmp_df.species, 
+                               res_eval=tmp_df.res_eval,
+                               remark_eval=tmp_df.remark_eval)
         del tmp_df, list_val_new_col
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
 
         
-        # OTU mapping + taxonomy mapping files writting:
+        # OTU mapping file writting:
         # (NaN values are automatically EXCLUDED during the 'groupby')
         grped_by_fin_taxid = my_csv.groupby(by=['final_taxid'])
         tool_used = 'centri'
         if IS_SAM_FILE:
             tool_used = 'mapper'
-        sampl_prefix = tool_used + guessed_db.capitalize()
+        sampl_prefix = (tool_used + guessed_db.capitalize() + 
+                        MODE.lower().capitalize())
 
-        with open('my_map.tsv', 'w') as my_map, \
-             open('metadat_tax.tsv', 'w')  as my_metadat:
-            # my_metadat.write('#OTU ID\ttaxonomy\n')
-            # my_map.write('#OTU ID\t' + sampl_prefix + '\n')
+        with open(infile_base + '_' + MODE + '.map', 'w') as my_map:
+            #my_map.write('#OTU ID\t' + 'SampleID' + '\n')
             for taxid_grp, grp in grped_by_fin_taxid:
                 readIDs_to_write = map(lambda readID: sampl_prefix + '_' + 
                                                       readID, 
@@ -511,30 +513,32 @@ if __name__ == "__main__":
                 my_map.write(str(taxid_grp) + '\t' + 
                              '\t'.join(readIDs_to_write) + '\n')
                 
-                taxo_to_write = ';'.join(['Other'] * 7)
+                # taxo_to_write = ';'.join(['Other'] * 7)
                 if taxid_grp != 'no_majo_found':
-                    taxo_to_write = evaluate.taxo_from_taxid(taxid_grp)
+                    pass
+                    # taxo_to_write = evaluate.taxo_from_taxid(taxid_grp)
                 else:
                     print("NB OF 'NO_MAJO':", len(grp))
-                my_metadat.write(str(taxid_grp) + '\t' + taxo_to_write + '\n')
+        print("--> Wrote OTUs mapping file for '{}' !".format(sampl_prefix))
+        sys.exit()
 
 
         # Count TP and FP for statistics:
-        cutoff_nb_trashes = max(my_csv['nb_trashes'])
+        cutoff_nb_trashes = max(my_csv.nb_trashes)
         # cutoff_nb_trashes = 4
         print("CUTOFF ON THE NB OF TRASHES:", cutoff_nb_trashes)
-        is_FP = ((my_csv['res_eval'] == 'FP') &
-                 (my_csv['nb_trashes'] <= cutoff_nb_trashes))
-        is_TP = ((my_csv['res_eval'] == 'TP') &
-                 (my_csv['nb_trashes'] <= cutoff_nb_trashes))
+        is_FP = ((my_csv.res_eval == 'FP') &
+                 (my_csv.nb_trashes <= cutoff_nb_trashes))
+        is_TP = ((my_csv.res_eval == 'TP') &
+                 (my_csv.nb_trashes <= cutoff_nb_trashes))
 
         print("FP STATS:")
         # print(my_csv[is_FP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
-        print(my_csv[is_FP]['remark_eval'].value_counts().sort_index())
+        print(my_csv[is_FP].remark_eval.value_counts().sort_index())
         # print(my_csv[is_FP & (my_csv['remark_eval'] == 'no_majo_found')]['species'].value_counts())
         print()
         print("TP STATS:")
-        print(my_csv[is_TP]['type_align'].value_counts().sort_index())
+        print(my_csv[is_TP].type_align.value_counts().sort_index())
         # print(my_csv[is_TP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
 
         print()
