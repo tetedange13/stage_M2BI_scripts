@@ -251,7 +251,7 @@ if __name__ == "__main__":
                 (_, _, score, _, _, queryLength, 
                  numMatches) = dict_gethered[readID][0].split('\t')
                 list_hitLength = list(map(lambda a_str: a_str.split('\t')[4], 
-                                    dict_gethered[readID]))
+                                      dict_gethered[readID]))
                 if len(set(list_taxids)) == 1:
                     type_align = 'second_uniq'
                 else:
@@ -294,6 +294,7 @@ if __name__ == "__main__":
         print(my_csv.type_align.value_counts())
         print()
         # # taxfoo = evaluate.taxfoo
+
 
     if not CLUST_MODE and IS_SAM_FILE:
         print("SAM MODE !")
@@ -399,28 +400,31 @@ if __name__ == "__main__":
 
 
     if not CLUST_MODE:
-        # test=my_csv[list(map(lambda val: len(val.strip(';').split('s'))==100, my_csv['lineage']))]
-        # test = my_csv[my_csv['lineage'].notnull()]['lineage']
-        # felix = pd.Series(map(lambda lin: len(lin.split('s')), test))
-        # bins_val = max(felix)
-        # felix.plot.hist(bins=bins_val, log=True)
-        # print("% DE + DE 25 SECOND:", sum(felix > 26)/len(felix)*100)
-        # plt.plot([100]*bins_val)
-        # plt.show()
-        # print(my_csv['type_align'].value_counts())
-        # print(sum(my_csv['type_align']))
-        # sys.exit()
+        print_distrib = False
+        if print_distrib:
+            test = my_csv[my_csv['lineage'].notnull()]['lineage']
+            felix = pd.Series(map(lambda lin: len(lin.split('s')), test))
+            bins_val = felix.max()
+            felix.plot.hist(bins=bins_val, log=True)
+            print("% DE + DE 25 SECOND:", sum(felix > 26)/len(felix)*100)
+            # plt.plot([100]*bins_val)
+            plt.show()
+            # print(my_csv['type_align'].value_counts())
+            # print(sum(my_csv['type_align']))
+            sys.exit()
 
         TIME_CSV_TREATMENT = t.time()
         with_lineage = ((my_csv.type_align != 'unmapped') & 
                         (my_csv.type_align != 'only_suppl'))
-        if not IS_SAM_FILE:
-            cutoff_on_centriScore, cutoff_on_centriHitLength = 0, 50
+        # if not IS_SAM_FILE:
+        if False:
+            cutoff_on_centriScore, cutoff_on_centriHitLength = 300, 50
             with_lineage = ((my_csv.type_align != 'unmapped') & 
                             (my_csv.type_align != 'only_suppl') &
-                            (pd.to_numeric(my_csv['score']) >= cutoff_on_centriScore))
+                            (pd.to_numeric(my_csv['score']) > cutoff_on_centriScore))
             print("CUTOFF CENTRI SCORE:", cutoff_on_centriScore)
-            print("NUMBER OF READS EVALUATED:", sum(with_lineage))
+            print("NUMBER OF READS REMAINING:", sum(with_lineage), " | ",
+                  "NB REMOVED:", len(with_lineage)-sum(with_lineage))
 
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
         # MODE = 'LCA'
@@ -494,6 +498,9 @@ if __name__ == "__main__":
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
 
+        # print(my_csv[pd.to_numeric(my_csv.score) <= 300]['res_eval'].value_counts())
+        # sys.exit()
+
         
         # OTU mapping file writting:
         # (NaN values are automatically EXCLUDED during the 'groupby')
@@ -520,11 +527,12 @@ if __name__ == "__main__":
                 else:
                     print("NB OF 'NO_MAJO':", len(grp))
         print("--> Wrote OTUs mapping file for '{}' !".format(sampl_prefix))
-        sys.exit()
+        print()
+        # sys.exit()
 
 
         # Count TP and FP for statistics:
-        cutoff_nb_trashes = max(my_csv.nb_trashes)
+        cutoff_nb_trashes = my_csv.nb_trashes.max()
         # cutoff_nb_trashes = 4
         print("CUTOFF ON THE NB OF TRASHES:", cutoff_nb_trashes)
         is_FP = ((my_csv.res_eval == 'FP') &
@@ -542,6 +550,14 @@ if __name__ == "__main__":
         # print(my_csv[is_TP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
 
         print()
+
+
+        test = my_csv[is_FP & (my_csv.final_taxid.notnull())]['final_taxid']
+        print(test.value_counts());sys.exit()
+        for readID, lin_val in test.items():
+            # print([evaluate.taxfoo.get_taxid_name(int(taxid)) for taxid in lin_val.split('s')])
+            my_lca = evaluate.taxfoo.find_lca(map(int, lin_val.split('s')))
+            print(evaluate.taxfoo.get_taxid_rank(my_lca), evaluate.taxfoo.get_taxid_name(my_lca))
         
 
         # eval_taxfoo = evaluate.taxfoo
