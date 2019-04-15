@@ -345,7 +345,7 @@ def write_metadat_file(to_seqid2taxid, base_used):
         for line in complete_lineage:
             taxid_grp = line.rstrip('\n')
             metadat_file.write(taxid_grp + '\t' + 
-                               pll.eval.taxo_from_taxid(taxid_grp) + '\n') 
+                               pll.eval.taxo_from_taxid(taxid_grp) + '\n')
         del line
 
     os.remove('taxids_complete_lineage')
@@ -376,7 +376,7 @@ if __name__ == "__main__":
     # correct_seqid2taxid("old_seqid2taxid", "wrong2good_taxids")
 
     # write_complete_lineage("seqid2taxid")
-    write_metadat_file(to_dbs + 'Centri_idxes/Zymo/seqid2taxid', 'ZYMO')
+    write_metadat_file(to_dbs + 'Centri_idxes/rrn/seqid2taxid', 'toRrn')
     # parse_and_rewrite_names(to_dbs_nt + "names.dmp", 
     #                         "taxids_complete_lineage")
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 

@@ -38,8 +38,15 @@ def taxo_from_taxid(arg_taxid):
                 first_letter = 'k'
 
             taxo_str = '-'.join(lineage[taxo_lvl].split())
+
             if taxo_lvl == 'species':
-                taxo_str = '-'.join(lineage[taxo_lvl].split()[1:])
+                found_taxa_lvls = set(list_lvls)
+                # if len(found_taxa_lvls) == 3 and 'Other' in set(list_lvls):
+                if 'Other' in found_taxa_lvls: # If taxo is found incomplete
+                    pass # taxo_str kept as a jointure of all 'species' words
+                else: # Else we keep only all 'species' words except the 1st one
+                    taxo_str = '-'.join(lineage[taxo_lvl].split()[1:])
+
             list_lvls.append(first_letter +'__' + taxo_str)
 
         else:
