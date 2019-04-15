@@ -31,6 +31,8 @@ def gether_counts(a_taxo_csv, taxonomic_cutoff, name_series):
     tmp_dict = {}
     for idx, row in a_taxo_csv.iterrows():
         taxa_name = row[taxonomic_cutoff]
+        if taxonomic_cutoff == 'species':
+            taxa_name = row['genus'] + " " + row[taxonomic_cutoff]
         if taxa_name not in tmp_dict.keys():
             tmp_dict[taxa_name] = int(row['abs_count'])
         else:
@@ -78,7 +80,15 @@ if __name__ == '__main__':
     # ( here, it says sep = ';' OR '\t' ):
     my_taxo_csv = pd.read_csv(to_infile, sep=';|\t', skiprows=[0, 1], 
                          engine='python', names=eval.want_taxo+['abs_count'])
+    print(my_taxo_csv.nlargest(10, 'abs_count')[['genus', 'species', 'abs_count']])
+    print()
+    print(my_taxo_csv[my_taxo_csv.species == 's__'])
+
     counts_sp_obs = gether_counts(my_taxo_csv, taxo_cutoff, 'tot_sp_obs')
+    # print(counts_sp_obs)
+
+    tot_nb_mapped = sum(counts_sp_obs)
+    print("TOT NB OF MAPPED READS:", tot_nb_mapped)
 
     # Draw pie chart of abundances (simple counts):
     # plot_pie_chart(counts_sp_obs, False, "MON BEAU CAMEMBERT")
@@ -86,8 +96,8 @@ if __name__ == '__main__':
 
     df_prok_ref = eval.generate_df_zymo()
     df_prok_ref = df_prok_ref.assign(abs_count=df_prok_ref.rel_count * 
-                                               sum(counts_sp_obs) / 100)
-
+                                               tot_nb_mapped / 100)
+    # print(df_prok_ref)
     df_counts = pd.DataFrame(gether_counts(df_prok_ref, taxo_cutoff, 
                              'expect_counts')) 
     
