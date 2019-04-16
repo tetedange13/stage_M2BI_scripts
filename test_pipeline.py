@@ -43,7 +43,7 @@ if __name__ == "__main__":
                                   ('fq', 'fastq', 'fa', 'fasta', 'mfasta'))
     in_fq_path, in_fq_base, _, tail_input_fq, in_fq_ext = tuple_check_fq
     DB_NAME = check.acceptable_str(ARGS["--db"], 
-                                   ["rrn", "zymo", "silva", "gg"])
+                                   ['rrn', 'zymo', 'silva', 'p_compressed'])
     TRIM = check.acceptable_str(ARGS["--trim"], ["porechop", "no"])
     CHIM = check.acceptable_str(ARGS["--chim"], ["yacrd", "no"])
     DETER = check.acceptable_str(ARGS["--deter"], 
