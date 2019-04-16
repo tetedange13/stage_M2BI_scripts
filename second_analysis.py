@@ -81,8 +81,6 @@ if __name__ == '__main__':
     my_taxo_csv = pd.read_csv(to_infile, sep=';|\t', skiprows=[0, 1], 
                          engine='python', names=eval.want_taxo+['abs_count'])
     print(my_taxo_csv.nlargest(10, 'abs_count')[['genus', 'species', 'abs_count']])
-    print()
-    print(my_taxo_csv[my_taxo_csv.species == 's__'])
 
     counts_sp_obs = gether_counts(my_taxo_csv, taxo_cutoff, 'tot_sp_obs')
     # print(counts_sp_obs)
