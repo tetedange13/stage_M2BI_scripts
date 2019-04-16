@@ -11,6 +11,7 @@ import src.parallelized as pll
 
 
 taxfoo = pll.eval.taxfoo
+pd = pll.eval.pd
 
 
 global problematic_taxids # taxid that need direct remote on taxo DB
@@ -351,6 +352,24 @@ def write_metadat_file(to_seqid2taxid, base_used):
     os.remove('taxids_complete_lineage')
 
 
+def stats_base(to_seqid2taxid):
+    """
+    """
+    with open(to_seqid2taxid, 'r') as seqid2taxid_file:
+        set_taxids = {line.rstrip('\n').split('\t')[1] 
+                      for line in seqid2taxid_file}
+    
+    dict_tmp = {}
+    for taxid in set_taxids:
+        dict_tmp[taxid] = taxfoo.get_taxid_rank(int(taxid))
+        if taxfoo.is_strain(int(taxid)): # Strain => rk='no rank' && rk_parent='species'
+            dict_tmp[taxid] = 'strain'
+    del taxid
+        
+    #print(pd.DataFrame.from_dict(dict_tmp, orient='index')[0])
+    print(pd.Series(dict_tmp).value_counts())
+    del dict_tmp
+
 
 # MAIN:
 if __name__ == "__main__":
@@ -376,8 +395,11 @@ if __name__ == "__main__":
     # correct_seqid2taxid("old_seqid2taxid", "wrong2good_taxids")
 
     # write_complete_lineage("seqid2taxid")
-    write_metadat_file(to_dbs + 'Centri_idxes/rrn/seqid2taxid', 'toRrn')
+    # write_metadat_file(to_dbs + 'Centri_idxes/rrn/seqid2taxid', 'toRrn')
     # parse_and_rewrite_names(to_dbs_nt + "names.dmp", 
     #                         "taxids_complete_lineage")
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
     #                         "taxids_complete_lineage")
+
+
+    stats_base(to_dbs + 'Centri_idxes/SILVA/seqid2taxid')
