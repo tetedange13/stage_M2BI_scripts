@@ -14,10 +14,13 @@ do
     base_filename=$(basename $file_path .map)
     echo Creating OTUs table 'for:' $base_filename.. with $to_metadat_file
     out_file=$OTUs_outDir/$base_filename.biom
-    #make_otu_table.py -i $file_path -t $to_metadat_file -o $out_file
+    make_otu_table.py -i $file_path -t $to_metadat_file -o $out_file
+    summarize_taxa.py -i $out_file -o $OTUs_outDir --level 7 --absolute_abundance --suppress_biom_table_output
     my_list+="$out_file,"
 done
 my_list=$(echo $my_list | sed 's/,$//')
+
+exit 1
 
 echo ""
 echo Merging OTUs tables..
