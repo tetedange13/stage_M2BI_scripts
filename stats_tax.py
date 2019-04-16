@@ -43,11 +43,13 @@ def alignment_to_dict(align_obj):
                  "ref_name": align_obj.reference_name,
                  "len_align":align_obj.infer_query_length(),
                  "ratio_len":ratio_len,
-                 "de":round(align_obj.get_tag("de"), 4),
                  "is_suppl":align_obj.is_supplementary,
                  "has_SA": align_obj.has_tag("SA"),
                  "AS":align_obj.get_tag("AS"),
                  "is_second":align_obj.is_secondary}
+                 
+    if align_obj.has_tag('de'):
+        to_return['de'] = round(align_obj.get_tag("de"), 4)
 
     return to_return
 
