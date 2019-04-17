@@ -71,21 +71,27 @@ def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
     plt.show()
 
 
-def str_from_res_conv(tupl_res_conv):
+def str_from_res_conv(dict_res_conv):
     """
     Generate a string (ready to write) from an evaluation result
     """
-    readID, type_res, lineage = tupl_res_conv[0:3]
-    rest = tupl_res_conv[3: ]
-    to_return = [readID, type_res]
+    to_extract = ['readID', 'type_align', 'lineage']
+    # ,type_align,lineage,nb_trashes,mapq,len_align," +
+                #                "ratio_len,de\n")
+    rest = [(a_key, dict_res_conv[a_key]) for a_key in dict_res_conv 
+                                          if a_key not in to_extract]
+    to_return = [dict_res_conv['readID'], dict_res_conv['type_align']]
      
-    if type_res == 'ratio' or type_res == 'pb_lca':
-        lineage_to_write = lineage
+    if ( dict_res_conv['type_align'] == 'ratio' or 
+         dict_res_conv['type_align'] == 'pb_lca' ):
+        lineage_to_write = dict_res_conv['lineage']
     else:
-        lineage_to_write = lineage
+        lineage_to_write = dict_res_conv['lineage']
         # lineage_to_write = ';'.join(str(taxid) for taxid in lineage)
 
-    return ",".join(to_return + [lineage_to_write] + [str(x) for x in rest])
+    return (",".join(to_return + [lineage_to_write] + 
+                     [str(x[1]) for x in rest]), 
+            to_extract[1:] + list(map(lambda x: x[0], rest)))
 
 
 def dict_stats_to_vectors(dict_res):
@@ -183,11 +189,13 @@ if __name__ == "__main__":
     taxo_cutoff = check.acceptable_str(ARGS["--taxoCut"], evaluate.want_taxo)
     # Guess the database used:
     if "toZymo" in infile_base:
-        guessed_db = "Zymo"
+        guessed_db = 'zymo'
     elif "toRrn" in infile_base:
-        guessed_db = "rrn"
+        guessed_db = 'rrn'
     elif "toSilva" in infile_base:
-        guessed_db = "SILVA"
+        guessed_db = 'silva'
+    elif "toP_compressed" in infile_base:
+        guessed_db = 'p_compressed'
     else:
         print("Unkown database !\n")
         sys.exit(2)
@@ -217,13 +225,13 @@ if __name__ == "__main__":
         with open(to_infile, 'r') as in_tab_file:
             in_tab_file.readline() # Skip header
             set_ignored_hits = set()
-            set_all_taxids = set()
+            set_all_readIDs = set()
 
             for line in in_tab_file:
                 idx_first_tab = line.find('\t')
                 readID = line[0:idx_first_tab] 
                 rest = line[(idx_first_tab+1): ].rstrip('\n')
-                set_all_taxids.add(readID)
+                set_all_readIDs.add(readID)
 
                 # /!\ We ignore hits with taxid=0 and ref_name='no rank':
                 if rest.split('\t')[0:2] == ["no rank", "0"]:
@@ -235,10 +243,12 @@ if __name__ == "__main__":
                         dict_gethered[readID].append(rest)
 
         # Be sure to don't exclude any read:
-        assert(len(set_all_taxids) == len(dict_gethered.keys()))
+        assert(len(set_all_readIDs) == len(dict_gethered.keys()))
         print("NB OF IGNORED HITS:", len(set_ignored_hits))
 
         readIDs, list_val, list_indexes = dict_gethered.keys(), [], []
+        dict_problems = {'2071623':'37482', '585494':'573', '595593':'656366'}
+
         for readID in readIDs:
             list_indexes.append(readID)
             if len(dict_gethered[readID]) > 1:
@@ -247,6 +257,7 @@ if __name__ == "__main__":
                 if '0' in list_taxids:
                     print(readID);sys.exit()
                 nb_trashes = sum(map(pll.is_trash, list_taxids))
+                # nb_trashes = 0
                 lineage = 's'.join(list_taxids)
                 # In the case of multiple hits, all hits have the same score, 
                 # 2ndBestScore etc, except for the hitLength, that can differ
@@ -266,6 +277,9 @@ if __name__ == "__main__":
                 ( ref_name, taxID, score, secondBestScore,
                   pre_hitLength, queryLength, numMatches ) = tupl
 
+                if taxID in dict_problems.keys():
+                    taxID = dict_problems[taxID]
+
                 if ref_name == 'unclassified':
                     type_align = 'unmapped'
                     (lineage, score, secondBestScore, hitLength, queryLength,
@@ -275,6 +289,7 @@ if __name__ == "__main__":
                     lineage = ';' + taxID + ';'
                     hitLength = ';' + pre_hitLength + ';'
                     nb_trashes = int(pll.is_trash(taxID))
+                    # nb_trashes = 0
 
             list_val.append([type_align, lineage, nb_trashes, score, 
                              secondBestScore, hitLength, queryLength, 
@@ -336,10 +351,11 @@ if __name__ == "__main__":
 
                 else:
                     dict_align = alignment_to_dict(alignment)
-                    if alignment.is_secondary or alignment.is_supplementary:
+                    if query_name in dict_gethered.keys():
+                    # if alignment.is_secondary or alignment.is_supplementary:
                         dict_gethered[query_name].append(dict_align)
                     else:
-                        assert(query_name not in dict_gethered.keys())
+                        #assert(query_name not in dict_gethered.keys())
                         dict_gethered[query_name] = [dict_align]
                        
             input_samfile.close()
@@ -375,17 +391,32 @@ if __name__ == "__main__":
 
             # Write outfile:
             with open(to_out_file, 'w') as out_file:
-                # Write header:
-                out_file.write(",type_align,lineage,nb_trashes,mapq,len_align," +
-                               "ratio_len,de\n")
+                
                 # Write mapped reads:
                 for res_conversion in results:
-                    out_file.write(str_from_res_conv(res_conversion) + '\n')
+                    to_write, list_header = str_from_res_conv(res_conversion)
+                    if len(res_conversion) > 3:
+                        # list_header = [a_key for a_key in res_conversion.keys() 
+                        #                      if a_key != 'readID']
+                        header_for_file = ','.join([''] + list_header)
+                    out_file.write(to_write + '\n')
                 del res_conversion
+                # print(header_for_file);sys.exit()
+
                 # Write unmapped reads:
-                for unmapped_read in list_unmapped:
-                    out_file.write(unmapped_read + ',unmapped,no\n')
-                del unmapped_read
+                # if list_unmapped:
+                if False:
+                    for unmapped_read in list_unmapped:
+                        out_file.write(unmapped_read + ',unmapped,no\n')
+                    del unmapped_read
+
+            # Write header:
+            with open(to_out_file, 'r+') as out_file:
+                content = out_file.read()
+                out_file.seek(0)
+                out_file.write(header_for_file + '\n' + content)
+                # out_file.write(",type_align,lineage,nb_trashes,mapq,len_align," +
+                #                "ratio_len,de\n")
 
             print("CSV CONVERSION TIME:", t.time() - TOTO)
             sys.exit()
@@ -418,8 +449,10 @@ if __name__ == "__main__":
         TIME_CSV_TREATMENT = t.time()
         with_lineage = ((my_csv.type_align != 'unmapped') & 
                         (my_csv.type_align != 'only_suppl'))
-        # if not IS_SAM_FILE:
-        if False:
+                        # (my_csv.type_align != 'only_suppl'),
+                        # (my_csv.type_align != 'second_plural')
+        if not IS_SAM_FILE:
+        # if False:
             cutoff_on_centriScore, cutoff_on_centriHitLength = 300, 50
             with_lineage = ((my_csv.type_align != 'unmapped') & 
                             (my_csv.type_align != 'only_suppl') &
@@ -509,7 +542,7 @@ if __name__ == "__main__":
         grped_by_fin_taxid = my_csv.groupby(by=['final_taxid'])
         tool_used = 'centri'
         if IS_SAM_FILE:
-            tool_used = 'mapper'
+            tool_used = 'last'
         sampl_prefix = (tool_used + guessed_db.capitalize() + 
                         MODE.lower().capitalize())
 
@@ -517,7 +550,7 @@ if __name__ == "__main__":
             #my_map.write('#OTU ID\t' + 'SampleID' + '\n')
             for taxid_grp, grp in grped_by_fin_taxid:
                 readIDs_to_write = map(lambda readID: sampl_prefix + '_' + 
-                                                      readID, 
+                                                      str(readID), 
                                        grp.index)
                 my_map.write(str(taxid_grp) + '\t' + 
                              '\t'.join(readIDs_to_write) + '\n')
@@ -544,22 +577,24 @@ if __name__ == "__main__":
 
         print("FP STATS:")
         # print(my_csv[is_FP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
-        print(my_csv[is_FP].remark_eval.value_counts().sort_index())
+        # print(my_csv[is_FP].remark_eval.value_counts().sort_index())
+        print(my_csv[is_FP].nb_trashes.value_counts().sort_index())
         # print(my_csv[is_FP & (my_csv['remark_eval'] == 'no_majo_found')]['species'].value_counts())
         print()
         print("TP STATS:")
-        print(my_csv[is_TP].type_align.value_counts().sort_index())
+        print(my_csv[is_TP].species.value_counts())
+        # print(my_csv[is_TP].type_align.value_counts().sort_index())
         # print(my_csv[is_TP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
 
         print()
 
 
-        test = my_csv[is_FP & (my_csv.final_taxid.notnull())]['final_taxid']
-        print(test.value_counts());sys.exit()
-        for readID, lin_val in test.items():
-            # print([evaluate.taxfoo.get_taxid_name(int(taxid)) for taxid in lin_val.split('s')])
-            my_lca = evaluate.taxfoo.find_lca(map(int, lin_val.split('s')))
-            print(evaluate.taxfoo.get_taxid_rank(my_lca), evaluate.taxfoo.get_taxid_name(my_lca))
+        # test = my_csv[is_FP & (my_csv.final_taxid.notnull())]['final_taxid']
+        # print(test.value_counts());sys.exit()
+        # for readID, lin_val in test.items():
+        #     # print([evaluate.taxfoo.get_taxid_name(int(taxid)) for taxid in lin_val.split('s')])
+        #     my_lca = evaluate.taxfoo.find_lca(map(int, lin_val.split('s')))
+        #     print(evaluate.taxfoo.get_taxid_rank(my_lca), evaluate.taxfoo.get_taxid_name(my_lca))
         
 
         # eval_taxfoo = evaluate.taxfoo

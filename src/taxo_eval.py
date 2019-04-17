@@ -178,13 +178,17 @@ def in_zymo(taxo_taxid, set_levels_prok, taxonomic_cutoff):
     organism belongs to the Zymo mock comm, at a given taxonomic cutoff 
     """
     lineage = taxfoo.get_lineage_as_dict(taxo_taxid)
-    taxo_levels = lineage.keys()
 
-    if taxonomic_cutoff not in taxo_levels:
-        # return ('notDeterminable', 'FP')
-        return (taxfoo.get_taxid_name(int(taxo_taxid)), 'FP', 'notInKeys')
+    if not lineage: # "cannot find taxid {a_taxid}; quitting." --> empty dict
+        return ('notDeterminable', 'FP', 'taxid_unknown')
     else:
-        taxo_name = lineage[taxonomic_cutoff]
-        if taxo_name in set_levels_prok:
-            return (taxo_name, "TP", 'true_pos')
-        return (taxo_name, "FP", 'misassigned')
+        taxo_levels = lineage.keys()
+
+        if taxonomic_cutoff not in taxo_levels:
+            # return ('notDeterminable', 'FP')
+            return (taxfoo.get_taxid_name(int(taxo_taxid)), 'FP', 'notInKeys')
+        else:
+            taxo_name = lineage[taxonomic_cutoff]
+            if taxo_name in set_levels_prok:
+                return (taxo_name, "TP", 'true_pos')
+            return (taxo_name, "FP", 'misassigned')
