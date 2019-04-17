@@ -352,23 +352,66 @@ def write_metadat_file(to_seqid2taxid, base_used):
     os.remove('taxids_complete_lineage')
 
 
-def stats_base(to_seqid2taxid):
+def stats_base(db_to_stat):
     """
     """
+    to_seqid2taxid = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/" +
+                      "metage_ONT_2019/Centri_idxes/" + db_to_stat.lower() +
+                      '/seqid2taxid')
+
+    dict_name2taxid = {'Listeria monocytogenes':1639, 
+                       'Bacillus subtilis':1423, 
+                       'Staphylococcus aureus':1280, 
+                       'Escherichia coli':562, 
+                       'Lactobacillus fermentum':1613, 
+                       'Enterococcus faecalis':1351,
+                       'Pseudomonas aeruginosa':287, 
+                       'Salmonella enterica':28901,
+                       'Cryptococcus neoformans':5207, 
+    # dict_euk = {'Cryptococcus neoformans':5207, 
+                'Saccharomyces cerevisiae':4932}
+
+    taxids_zymo_sp = list(dict_name2taxid.values())
+    taxids_zymo_gen = [taxfoo.get_taxid_parent(taxid) for taxid in taxids_zymo_sp]
+    taxids_zymo_gen += [286, 5206, 1386] # Add 'Pseudomonas', 'Bacillus' and 'Cryptococcus'
+    
     with open(to_seqid2taxid, 'r') as seqid2taxid_file:
         set_taxids = {line.rstrip('\n').split('\t')[1] 
                       for line in seqid2taxid_file}
     
     dict_tmp = {}
+    dict_counts_sp = {a_key:0 for a_key in dict_name2taxid}
+    dict_counts_gen = {a_key.split()[0]:0 for a_key in dict_name2taxid}
+
     for taxid in set_taxids:
         dict_tmp[taxid] = taxfoo.get_taxid_rank(int(taxid))
         if taxfoo.is_strain(int(taxid)): # Strain => rk='no rank' && rk_parent='species'
             dict_tmp[taxid] = 'strain'
+        lineage = taxfoo.get_dict_lineage_as_taxids(taxid)
+        possible_tax_lvls = lineage.keys()
+
+        if 'species' in possible_tax_lvls:
+            sp_taxid = lineage['species']
+            if sp_taxid in taxids_zymo_sp:
+                dict_counts_sp[taxfoo.get_taxid_name(sp_taxid)] += 1
+
+        if 'genus' in possible_tax_lvls:
+            gen_taxid = lineage['genus']
+            if gen_taxid in taxids_zymo_gen:
+                dict_counts_gen[taxfoo.get_taxid_name(gen_taxid)] += 1
     del taxid
         
     #print(pd.DataFrame.from_dict(dict_tmp, orient='index')[0])
+    print("STATS OF {} DB:".format(db_to_stat.upper()))
     print(pd.Series(dict_tmp).value_counts())
-    del dict_tmp
+    print()
+    print(pd.Series(dict_counts_gen, 
+          name='GENUS lvl').sort_values(ascending=False))
+    print()
+    print(pd.Series(dict_counts_sp,
+          name='SPECIES lvl').sort_values(ascending=False))
+    print()
+
 
 
 # MAIN:
@@ -401,5 +444,4 @@ if __name__ == "__main__":
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
     #                         "taxids_complete_lineage")
 
-
-    stats_base(to_dbs + 'Centri_idxes/SILVA/seqid2taxid')
+    stats_base('SILVA')
