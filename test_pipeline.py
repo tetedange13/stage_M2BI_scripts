@@ -20,7 +20,7 @@ Arguments:
     trimming: 'porechop' or 'no' (default)
     chimera: 'yacrd' or 'no' (default)
     determination: 'minimap2', 'margin', 'centri', or 'no' (default)
-    database: 'GG', 'SILVA', rrn' or 'Zymo'
+    database: 'SILVA', 'rrn', 'p_compressed' or 'Zymo'
 """
 
 import os
