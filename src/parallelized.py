@@ -15,8 +15,10 @@ def is_trash(taxid_to_eval):
     """
     taxid_name = eval.taxfoo.get_taxid_name(int(taxid_to_eval))
     if not taxid_name:
-        print(taxid_to_eval)
-    assert(taxid_name)
+        print('WARNING: {} is an unknown taxid !'.format(taxid_to_eval))
+        return False   
+    # assert(taxid_name)
+    
     if ('metagenome' in taxid_name or 'uncultured' in taxid_name or 
         'unidentified' in taxid_name or 'phage' in taxid_name.lower() or
         taxid_name == 'synthetic construct' or 
@@ -32,12 +34,19 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
     readID, align_list = tupl_dict_item
     nb_alignments_for_readID = len(align_list)
     representative = align_list[0]
-    mapq, ratio_len = representative["mapq"], representative["ratio_len"]
-    len_align = representative["len_align"]
+    # mapq, ratio_len = representative["mapq"], representative["ratio_len"]
+    # len_align = representative["len_align"]
+    returned_dict = {'readID' : readID,
+                     'mapq' : representative["mapq"], 
+                     'ratio_len' : representative["ratio_len"],
+                     'len_align' : representative["len_align"]}
+    
 
     if nb_alignments_for_readID > 1: # Secondary alignment
         assert(not representative["is_suppl"])
         assert(not representative["is_second"])
+
+        # Get rid of supplementaries:
         no_suppl_list = [align_obj for align_obj in align_list 
                          if not align_obj["has_SA"]]
         # Check if they are all secondaries (1st one can be the representative):
@@ -45,18 +54,20 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
         # assert(all(map(lambda dico: dico["is_second"], no_suppl_list[1: ])))
 
         if not no_suppl_list: # Only supplementaries entries for this read
-            return (readID, 'only_suppl', 'no')
+            return {'readID':readID, 'type_align':'only_suppl', 
+                    'lineage':'no'}
+            # return [readID, 'only_suppl', 'no']
 
         max_AS = max(map(lambda dico: dico["AS"], no_suppl_list))
         only_equiv_list = [dico for dico in no_suppl_list 
                            if dico["AS"] == max_AS]
 
-        list_taxid_target, de_list = [], []
+        list_taxid_target = []
         if representative["has_SA"]:
             # print(readID, "suppl_as_repr")
             max_mapq = max([align_obj["mapq"] for align_obj in align_list 
                             if align_obj["has_SA"]])
-            mapq = max_mapq
+            returned_dict['mapq'] = max_mapq
             # for align_not_suppl in no_suppl_list:
             for align_not_suppl in only_equiv_list:
                 assert(align_not_suppl["mapq"] == 0)
@@ -65,7 +76,6 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
                 taxid_target = conv_seqid2taxid[align_not_suppl["ref_name"]]
                 assert(taxid_target) # If taxid not 'None'
                 list_taxid_target.append(taxid_target)
-                de_list.append(align_not_suppl["de"])
             del align_not_suppl
         else:
             # for align_not_suppl in no_suppl_list:
@@ -73,22 +83,25 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
                 taxid_target = conv_seqid2taxid[align_not_suppl["ref_name"]]
                 assert(taxid_target) # If taxid not 'None'
                 list_taxid_target.append(taxid_target)
-                de_list.append(align_not_suppl["de"])
             del align_not_suppl
-        de = max(de_list)
-        # de = sum(de_list) / len(de_list)
+        
+        # if 'de' in align_obj[0].keys():
+        #     de_list = [a_dict['de'] for a_dict in align_not_suppl]
+        #     returned_dict['de'] = max(de_list)
+            # de = sum(de_list) / len(de_list)
         if len(set(list_taxid_target)) == 1: # Mergeable directly
             type_alignment = 'second_uniq' 
         else:
             type_alignment = 'second_plural'
         nb_trashes = sum(map(is_trash, list_taxid_target))
+
         # print([dico["de"] for dico in no_suppl_list], 
         #       [dico["AS"] for dico in no_suppl_list], 
         #       [dico["mapq"] for dico in no_suppl_list])
         
     else: # Normal case
         type_alignment = 'normal' # i.e. not secondary
-        de = representative["de"]
+        # de = representative["de"]
         current_taxid = conv_seqid2taxid[representative["ref_name"]]
         list_taxid_target = [current_taxid]
         nb_trashes = int(is_trash(current_taxid))
@@ -96,8 +109,12 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
      # Taxid has to be considered as an str:
     taxo_to_write = (';' + 
                      's'.join(str(taxid) for taxid in list_taxid_target) + ';')
-    return [readID, type_alignment, taxo_to_write, nb_trashes, mapq, len_align,
-            ratio_len, de]
+    # return [readID, type_alignment, taxo_to_write, nb_trashes, mapq, len_align,
+    #         ratio_len, de]
+    returned_dict['lineage'] = taxo_to_write
+    returned_dict['nb_trashes'] = nb_trashes
+    returned_dict['type_align'] = type_alignment
+    return returned_dict
 
 
 def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok, 
