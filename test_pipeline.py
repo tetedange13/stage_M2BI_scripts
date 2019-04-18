@@ -171,7 +171,7 @@ if __name__ == "__main__":
                            base_margin + "_jobTree " + "--trials=5")
         margin_log_path = dirOut_margin + in_fq_base + "_margin.log"
         
-        #print('\n', cmd_margin, '\n') ; sys.exit()
+        print(cmd_margin);sys.exit()
         #print("Mapping with MarginAlign+minimap2 in progress...")
         MARGIN_TIME = t.time()
         with open(margin_log_path, 'w') as margin_log:
