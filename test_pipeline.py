@@ -157,15 +157,16 @@ if __name__ == "__main__":
     
     if DETER == "margin":
         # Mapping using MarginAlign+minimap2:
+        ref_fa_path = path_proj + 'databases/Zymo_SEGO.fa'
         dirOut_margin = path_proj + "3-deter_margin/"
         args_margin = " --minimap2 --maxThreads=" + nb_threads + " "
         base_margin = dirOut_margin + in_fq_base
         
         cmd_margin = (to_marginAlign + "marginAlign" + args_margin +
-                           file_to_map + " " + ref_fa_path + " " + 
+                           in_fq_path + " " + ref_fa_path + " " + 
                            base_margin + "_toZymo.sam" +
                            " --em --iterations=30 " + 
-                           "--maxAlignmentLengthToSample=50000000 " +
+                           "--maxAlignmentLengthToSample=10000000 " +
                            "--outputModel " + 
                            base_margin + ".hmm" + " --jobTree=" +
                            base_margin + "_jobTree " + "--trials=5")
