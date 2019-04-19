@@ -86,6 +86,7 @@ if __name__ == '__main__':
     # print(counts_sp_obs)
 
     tot_nb_mapped = sum(counts_sp_obs)
+    print()
     print("TOT NB OF MAPPED READS:", tot_nb_mapped)
 
     # Draw pie chart of abundances (simple counts):
@@ -125,7 +126,7 @@ if __name__ == '__main__':
     print(df_counts)
     print("L1-distance =", sum(df_counts.L1dist))
 
-    # sys.exit()
+    sys.exit()
 
     print()
     plot_pie_chart(df_counts.obs_counts.sort_values(ascending=False), True, 
