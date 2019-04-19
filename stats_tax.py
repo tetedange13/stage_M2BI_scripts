@@ -45,11 +45,12 @@ def alignment_to_dict(align_obj):
                  "ratio_len":ratio_len,
                  "is_suppl":align_obj.is_supplementary,
                  "has_SA": align_obj.has_tag("SA"),
-                 "AS":align_obj.get_tag("AS"),
                  "is_second":align_obj.is_secondary}
                  
     if align_obj.has_tag('de'):
         to_return['de'] = round(align_obj.get_tag("de"), 4)
+    if align_obj.has_tag('AS'):
+        to_return['AS'] = align_obj.get_tag("AS"),
 
     return to_return
 
@@ -364,18 +365,16 @@ if __name__ == "__main__":
             print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
             print()
             assert(len(list_unmapped) == len(set(list_unmapped)))
-            list_suppl_as_repr = []
 
-            # print("SUPPL AS REPR:", len(list_suppl_as_repr))
-            # plot_thin_hist(list_nb_second, 
-            #                "Distrib of nb of secondaries with N=100")
-            # sys.exit()
-            # dict_count["SA"] = len(list_suppl)
-            # dict_count["SA_uniq"] = len(set(list_suppl))
-            # del list_suppl
+            test = [tupl for tupl in dict_gethered.items() if len(tupl[1])>1]
+            for readID, felix_list in test:
+                lena = set(map(lambda a_dict: a_dict['ref_name'], felix_list))
+                if len(lena) > 1:
+                    print(readID, lena)
+            sys.exit()
 
 
-            # Extract releval SAM info towards a CSV file:
+            # Extract relevant SAM info towards a CSV file:
             TOTO = t.time()
             print("Converting SAM into CSV...")
             partial_func = partial(pll.SAM_to_CSV, 
@@ -404,8 +403,7 @@ if __name__ == "__main__":
                 # print(header_for_file);sys.exit()
 
                 # Write unmapped reads:
-                # if list_unmapped:
-                if False:
+                if list_unmapped:
                     for unmapped_read in list_unmapped:
                         out_file.write(unmapped_read + ',unmapped,no\n')
                     del unmapped_read
@@ -577,8 +575,8 @@ if __name__ == "__main__":
 
         print("FP STATS:")
         # print(my_csv[is_FP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
-        # print(my_csv[is_FP].remark_eval.value_counts().sort_index())
-        print(my_csv[is_FP].nb_trashes.value_counts().sort_index())
+        print(my_csv[is_FP].remark_eval.value_counts().sort_index())
+        # print(my_csv[is_FP].nb_trashes.value_counts().sort_index())
         # print(my_csv[is_FP & (my_csv['remark_eval'] == 'no_majo_found')]['species'].value_counts())
         print()
         print("TP STATS:")

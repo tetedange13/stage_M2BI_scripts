@@ -57,34 +57,35 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
             return {'readID':readID, 'type_align':'only_suppl', 
                     'lineage':'no'}
             # return [readID, 'only_suppl', 'no']
+            
 
-        max_AS = max(map(lambda dico: dico["AS"], no_suppl_list))
-        only_equiv_list = [dico for dico in no_suppl_list 
-                           if dico["AS"] == max_AS]
+        if 'AS' in representative.keys():
+            max_AS = max(map(lambda dico: dico["AS"], no_suppl_list))
+            only_equiv_list = [dico for dico in no_suppl_list 
+                               if dico["AS"] == max_AS]
 
-        list_taxid_target = []
-        if representative["has_SA"]:
-            # print(readID, "suppl_as_repr")
-            max_mapq = max([align_obj["mapq"] for align_obj in align_list 
-                            if align_obj["has_SA"]])
-            returned_dict['mapq'] = max_mapq
-            # for align_not_suppl in no_suppl_list:
-            for align_not_suppl in only_equiv_list:
-                assert(align_not_suppl["mapq"] == 0)
-                # Need to propagate max value of MAPQ to all secondaries:
-                align_not_suppl["mapq"] = max_mapq
-                taxid_target = conv_seqid2taxid[align_not_suppl["ref_name"]]
-                assert(taxid_target) # If taxid not 'None'
-                list_taxid_target.append(taxid_target)
-            del align_not_suppl
+            if representative["has_SA"]:
+                # print(readID, "suppl_as_repr")
+                max_mapq = max([align_obj["mapq"] for align_obj in align_list 
+                                if align_obj["has_SA"]])
+                returned_dict['mapq'] = max_mapq
+                # for align_not_suppl in no_suppl_list:
+                for align_not_suppl in only_equiv_list:
+                    assert(align_not_suppl["mapq"] == 0)
+                    # Need to propagate max value of MAPQ to all secondaries:
+                    align_not_suppl["mapq"] = max_mapq
+                del align_not_suppl
+            else:
+                # for align_not_suppl in no_suppl_list:
+                pass
+
         else:
-            # for align_not_suppl in no_suppl_list:
-            for align_not_suppl in only_equiv_list:
-                taxid_target = conv_seqid2taxid[align_not_suppl["ref_name"]]
-                assert(taxid_target) # If taxid not 'None'
-                list_taxid_target.append(taxid_target)
-            del align_not_suppl
+            only_equiv_list = no_suppl_list
         
+        list_taxid_target = [conv_seqid2taxid[align_dict["ref_name"]]
+                             for align_dict in only_equiv_list]
+        assert(all(list_taxid_target)) # Check if there are NO 'None'
+
         # if 'de' in align_obj[0].keys():
         #     de_list = [a_dict['de'] for a_dict in align_not_suppl]
         #     returned_dict['de'] = max(de_list)
@@ -107,8 +108,8 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
         nb_trashes = int(is_trash(current_taxid))
     
      # Taxid has to be considered as an str:
-    taxo_to_write = (';' + 
-                     's'.join(str(taxid) for taxid in list_taxid_target) + ';')
+    taxo_to_write = (';' + 's'.join(str(taxid) for taxid 
+                                               in list_taxid_target) + ';')
     # return [readID, type_alignment, taxo_to_write, nb_trashes, mapq, len_align,
     #         ratio_len, de]
     returned_dict['lineage'] = taxo_to_write
