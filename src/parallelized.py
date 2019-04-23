@@ -143,11 +143,14 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok,
             elif mode == 'LCA':
                 res_second_handling = eval.make_lca(list_taxid_target)
             remark_eval = res_second_handling[0]
-            if len(res_second_handling) == 1: # Problem ('no_majo_found')
-                # list_sp_name = '&'.join([eval.taxfoo.get_taxid_name(taxid) 
-                #                          for taxid in list_taxid_target])
-                # return (one_csv_index_val, list_sp_name, 'FP', remark_eval)
-                return (one_csv_index_val, 'no_majo_found', remark_eval, 'FP', 
+
+            if False:
+            # if remark_eval == 'no_majo_found': # Problem ('no_majo_found')
+                remark_eval += ';lca'
+                taxid_to_eval = eval.taxfoo.find_lca(set(list_taxid_target))
+            elif len(remark_eval) == 1: # Other problem
+                # return (one_csv_index_val, 'no_majo_found', remark_eval, 'FP',
+                return (one_csv_index_val, 'problem', remark_eval, 'FP',
                         remark_eval)
             else:
                 taxid_to_eval = res_second_handling[1]
