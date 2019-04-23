@@ -113,6 +113,16 @@ class NCBI_TaxonomyFoo(object):
             return path[-1]
         return 1
 
+    #FELIX BIDOUILLE:
+    # def is_strain(self, taxid):
+    #     if self.get_taxid_rank(taxid) == 'no rank':
+    #         parent = self.get_taxid_parent(taxid)
+    #         rk_parent = self.get_taxid_rank(parent)
+    #         if rk_parent == 'species' or rk_parent == 'species group':
+    #             if rk_parent == 'species group': print("SALUT")
+    #             return True
+    #     return False
+
     def is_strain(self, taxid):
         if self.get_taxid_rank(taxid) == 'no rank':
             parent = self.get_taxid_parent(taxid)
