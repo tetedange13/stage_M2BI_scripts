@@ -177,6 +177,7 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'txt', 'sam'])
 
     # Common variables:
+    NB_THREADS = 10
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
@@ -185,6 +186,7 @@ if __name__ == "__main__":
     import src.parallelized as pll
     evaluate = pll.eval
     pd = evaluate.pd
+    # print(evaluate.taxfoo.get_taxid_rank(136841));sys.exit()
     print("Taxonomic Python module loaded !\n")
 
     taxo_cutoff = check.acceptable_str(ARGS["--taxoCut"], evaluate.want_taxo)
@@ -366,12 +368,12 @@ if __name__ == "__main__":
             print()
             assert(len(list_unmapped) == len(set(list_unmapped)))
 
-            test = [tupl for tupl in dict_gethered.items() if len(tupl[1])>1]
-            for readID, felix_list in test:
-                lena = set(map(lambda a_dict: a_dict['ref_name'], felix_list))
-                if len(lena) > 1:
-                    print(readID, lena)
-            sys.exit()
+            # test = [tupl for tupl in dict_gethered.items() if len(tupl[1])>1]
+            # for readID, felix_list in test:
+            #     lena = set(map(lambda a_dict: a_dict['ref_name'], felix_list))
+            #     if len(lena) > 1:
+            #         print(readID, lena)
+            # sys.exit()
 
 
             # Extract relevant SAM info towards a CSV file:
@@ -380,7 +382,7 @@ if __name__ == "__main__":
             partial_func = partial(pll.SAM_to_CSV, 
                                    conv_seqid2taxid=dict_seqid2taxid)
                                                # Parallel version:
-            my_pool = mp.Pool(15)
+            my_pool = mp.Pool(NB_THREADS)
             results = my_pool.map(partial_func, dict_gethered.items())
             my_pool.close()
             # Serial version (need list casting to have output):
@@ -474,7 +476,7 @@ if __name__ == "__main__":
                                               mode=MODE)
         print("PROCESSING CSV TO EVALUATE TAXO...")
         # Parallel version:
-        eval_pool = mp.Pool(15)
+        eval_pool = mp.Pool(NB_THREADS)
         results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
         eval_pool.close()
         # results_eval = list(map(partial_eval, my_csv_to_pll.index)) 
@@ -540,7 +542,7 @@ if __name__ == "__main__":
         grped_by_fin_taxid = my_csv.groupby(by=['final_taxid'])
         tool_used = 'centri'
         if IS_SAM_FILE:
-            tool_used = 'last'
+            tool_used = 'minimap'
         sampl_prefix = (tool_used + guessed_db.capitalize() + 
                         MODE.lower().capitalize())
 
@@ -577,7 +579,7 @@ if __name__ == "__main__":
         # print(my_csv[is_FP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
         print(my_csv[is_FP].remark_eval.value_counts().sort_index())
         # print(my_csv[is_FP].nb_trashes.value_counts().sort_index())
-        # print(my_csv[is_FP & (my_csv['remark_eval'] == 'no_majo_found')]['species'].value_counts())
+        # print(my_csv[is_FP & (my_csv.remark_eval == 'no_majo_found')]['lineage'].value_counts())
         print()
         print("TP STATS:")
         print(my_csv[is_TP].species.value_counts())
@@ -640,7 +642,13 @@ if __name__ == "__main__":
         print("NB_FP", len(list_FP), " | NB_TP", len(list_TP))
         dict_stats_sp_level = {'TP':len(list_TP),
                                'FP':len(list_FP)}
-        precision_at_taxa_level = compute_metrics(dict_stats_sp_level, True)
+        # precision_at_taxa_level = compute_metrics(dict_stats_sp_level, True)
+        def truncate(n, decimals=0):
+            multiplier = 10 ** decimals
+            return int(n * multiplier) / multiplier
+        precision_at_taxa_level = truncate(len(list_TP) / (len(list_TP)+len(list_FP)), 4)
+        print("PRECISION:  {} | FDR: {}".format(precision_at_taxa_level, 
+                                                1-precision_at_taxa_level))
         print("SENSITIVITY:", recall_at_taxa_level, " | ", "FNR:",
               1 - recall_at_taxa_level)
         calc_f1 = lambda tupl: round((2*tupl[0]*tupl[1])/(tupl[0]+tupl[1]), 4)
@@ -737,5 +745,5 @@ if __name__ == "__main__":
 
 
     # COMPUTE METRICS:
-    compute_metrics(dict_to_convert, False)
+    # compute_metrics(dict_to_convert, False)
     print()
