@@ -126,12 +126,12 @@ def get_majo(list_of_things, cutoff_majo):
 
     to_return = [val for val in val_counts]
     if nb_majo == 1: # 1 unique majoritary
-        return (str(freq_counts.idxmax()), to_return)
+        return ('majo_found', str(freq_counts.idxmax()))
     # print(val_counts)
-    return ('noMajo', to_return) # NO majoritary
+    return ('noMajo', None) # NO majoritary
 
 
-def get_majo_lca(list_of_things, cutoff_discard):
+def remove_minor_lca(list_of_things, cutoff_discard):
     """
     Given a list of taxids, count occurences of each taxid, discard the taxids
     that have frequecy below a given cutoff and proceed to a LCA seach on the
@@ -139,20 +139,23 @@ def get_majo_lca(list_of_things, cutoff_discard):
     """
     val_counts = pd.Series(list_of_things).value_counts()
     freq_counts = val_counts/len(list_of_things)
-    are_up_to_cutoff  = freq_counts > (1 - cutoff_discard)
-    nb_majo = sum(are_up_to_cutoff)
+    are_down_to_cutoff  = freq_counts < cutoff_discard
+    nb_majo = len(are_down_to_cutoff) - sum(are_down_to_cutoff)
     to_return = [val for val in val_counts]
-    if nb_majo > 1:
-        print('NB_MAJO:', nb_majo)
+
     if nb_majo == 0:
-        return ('noMajo', to_return) # NO majoritary
+        print('noMajo:', [taxfoo.get_taxid_name(a_taxid) for a_taxid in freq_counts.index])
+        # print('noMajo!\n', freq_counts)
+        return ('noMajo', None) # NO majoritary
     elif nb_majo == 1: # 1 unique majoritary
-        return (freq_counts.idxmax(), to_return)
+        return ('uniq_majo', freq_counts.idxmax())
     else:
-        return taxfoo.find_lca(freq_counts[are_up_to_cutoff].index, to_return)
+        # '-' before a pdSeries of bool invert the Series:
+        return ('minors_rm_lca', 
+                taxfoo.find_lca(list(freq_counts[-are_down_to_cutoff].index)))
 
 
-def majo_voting(list_taxid_target, taxonomic_cutoff):
+def majo_voting(list_taxid_target):
     """
     Proceed to the majo determination for a list of given taxids, at the a
     given taxonomic cutoff
@@ -163,20 +166,20 @@ def majo_voting(list_taxid_target, taxonomic_cutoff):
         if 'species' in lineage.keys():
             dict_taxid2ancester[taxid] = lineage['species']
         else:
-            dict_+taxid2ancester[taxid] = taxid
+            dict_taxid2ancester[taxid] = taxid
             if taxfoo.get_taxid_rank(taxid) == 'no rank':
                 print(taxfoo.get_taxid_name(taxid))
     del taxid
 
     list_taxids_ancesters = [dict_taxid2ancester[taxid] 
                              for taxid in list_taxid_target]
-    # majo_ancester, _ = get_majo(list_taxids_ancesters, 0.5)
-    majo_ancester, _ = get_majo_lca(list_taxids_ancesters, 0.1)
+    # remark_majo, majo_ancester = get_majo(list_taxids_ancesters, 0.5)
+    remark_majo, majo_ancester = remove_minor_lca(list_taxids_ancesters, 0.25)
 
-    if majo_ancester == 'noMajo': # Still NO majoritary
+    if remark_majo == 'noMajo': # Still NO majoritary
         return ('no_majo_found', )
     else:
-        return ('majo_found', majo_ancester) # Majo found only after the 2nd round
+        return (remark_majo, majo_ancester) # Majo found only after the 2nd round
 
 
 def make_lca(list_taxid_target):
@@ -201,15 +204,15 @@ def in_zymo(taxo_taxid, set_levels_prok, taxonomic_cutoff):
     lineage = taxfoo.get_lineage_as_dict(taxo_taxid)
 
     if not lineage: # "cannot find taxid {a_taxid}; quitting." --> empty dict
-        return ('notDeterminable', 'FP', 'taxid_unknown')
+        return ('FP', 'taxid_unknown')
     else:
         taxo_levels = lineage.keys()
 
         if taxonomic_cutoff not in taxo_levels:
             # return ('notDeterminable', 'FP')
-            return (taxfoo.get_taxid_name(int(taxo_taxid)), 'FP', 'notInKeys')
+            return ('FP', 'notInKeys')
         else:
             taxo_name = lineage[taxonomic_cutoff]
             if taxo_name in set_levels_prok:
-                return (taxo_name, "TP", 'true_pos')
-            return (taxo_name, "FP", 'misassigned')
+                return ('TP', 'true_pos')
+            return ('FP', 'misassigned')
