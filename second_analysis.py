@@ -123,8 +123,21 @@ if __name__ == '__main__':
     df_counts = df_counts.assign(log_modulus=lambda x: log_modulus(x.difference),
                                  L1dist=lambda x: pd.np.abs(x.difference))
     
-    print(df_counts)
+    print(df_counts) 
     print("L1-distance =", sum(df_counts.L1dist))
+
+    plot_stacked_bar = False
+    if plot_stacked_bar:
+        tmp_series = df_counts.obs_counts.drop('misassigned').sort_index(ascending=False)/sum(df_counts.obs_counts)
+        # print(tmp_series);sys.exit()
+        tmp_df = pd.DataFrame([tmp_series.to_dict(), 
+                               {felix:0 for i, felix in enumerate(tmp_series.index)}], 
+                              index=[0,1])#.sort_values(by=1, axis='columns')
+        tmp_df = tmp_df.reindex(sorted(tmp_df.columns, reverse=True), axis=1)
+        print(tmp_df)
+        tmp_df.plot(kind='bar', stacked=True, width=0.1, legend=True, 
+                    title='Cusco2018 16S_run2', yticks=[0, 0.25, 0.5, 0.75, 1])
+        plt.show()
 
     sys.exit()
 
