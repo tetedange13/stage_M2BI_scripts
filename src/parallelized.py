@@ -109,7 +109,8 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
     
      # Taxid has to be considered as an str:
     taxo_to_write = (';' + 's'.join(str(taxid) for taxid 
-                                               in list_taxid_target) + ';')
+                                               in sorted(list_taxid_target)) + 
+                     ';')
     # return [readID, type_alignment, taxo_to_write, nb_trashes, mapq, len_align,
     #         ratio_len, de]
     returned_dict['lineage'] = taxo_to_write
@@ -138,8 +139,7 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok,
             taxid_to_eval = list_taxid_target[0]
         else: # More than 1 unique taxid
             if mode == 'MAJO':
-                res_second_handling = eval.majo_voting(list_taxid_target, 
-                                                       'species')
+                res_second_handling = eval.majo_voting(list_taxid_target)
             elif mode == 'LCA':
                 res_second_handling = eval.make_lca(list_taxid_target)
             remark_eval = res_second_handling[0]
@@ -148,23 +148,17 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok,
             # if remark_eval == 'no_majo_found': # Problem ('no_majo_found')
                 remark_eval += ';lca'
                 taxid_to_eval = eval.taxfoo.find_lca(set(list_taxid_target))
-            elif len(remark_eval) == 1: # Other problem
-                # return (one_csv_index_val, 'no_majo_found', remark_eval, 'FP',
+            elif len(res_second_handling) == 1: # Other problem
                 return (one_csv_index_val, 'problem', remark_eval, 'FP',
                         remark_eval)
             else:
                 taxid_to_eval = res_second_handling[1]
-                if remark_eval == 'majo_notInKey':
-                    return (one_csv_index_val, int(taxid_to_eval),
-                            eval.taxfoo.get_taxid_name(int(taxid_to_eval)), 
-                            'FP', remark_eval)
 
-    taxo_name, classif, remark = eval.in_zymo(taxid_to_eval, set_levels_prok, 
-                                              taxonomic_cutoff)
+    classif, remark = eval.in_zymo(taxid_to_eval, set_levels_prok, 
+                                   taxonomic_cutoff)
     remark_eval += ';' + remark
 
-    return (one_csv_index_val, int(taxid_to_eval), taxo_name, classif, 
-            remark_eval)
+    return (one_csv_index_val, int(taxid_to_eval), classif, remark_eval)
 
 
 
