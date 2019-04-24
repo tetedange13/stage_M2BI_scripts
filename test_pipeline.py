@@ -19,7 +19,7 @@ Options:
 Arguments:
     trimming: 'porechop' or 'no' (default)
     chimera: 'yacrd' or 'no' (default)
-    determination: 'minimap2', 'margin', 'centri', or 'no' (default)
+    determination: 'minimap2', 'centri', or 'no' (default)
     database: 'SILVA', 'rrn', 'p_compressed' or 'Zymo'
 """
 
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     TRIM = check.acceptable_str(ARGS["--trim"], ["porechop", "no"])
     CHIM = check.acceptable_str(ARGS["--chim"], ["yacrd", "no"])
     DETER = check.acceptable_str(ARGS["--deter"], 
-                                 ["minimap2", "margin", "centri", "no"])
+                                 ["minimap2", "centri", "no"])
     nb_threads = check.input_nb(ARGS["--threads"], "'-t number of threads'")   
 
                 
@@ -154,44 +154,9 @@ if __name__ == "__main__":
     # TAXONOMIC DETERMINATION STEP:
     print("TAXONOMIC DETERMINATION WITH:", DETER + "...")
     file_to_map = dirOut_yacrd + in_fq_base + flag_ext
+
     
-    if DETER == "margin":
-        # Mapping using MarginAlign+minimap2:
-        ref_fa_path = path_proj + 'databases/Zymo_SEGO.fa'
-        dirOut_margin = path_proj + "3-deter_margin/"
-        args_margin = " --minimap2 --maxThreads=" + nb_threads + " "
-        base_margin = dirOut_margin + in_fq_base
-        
-        cmd_margin = (to_marginAlign + "marginAlign" + args_margin +
-                           in_fq_path + " " + ref_fa_path + " " + 
-                           base_margin + "_toZymo.sam" +
-                           " --em --iterations=30 " + 
-                           "--maxAlignmentLengthToSample=10000000 " +
-                           "--outputModel " + 
-                           base_margin + ".hmm" + " --jobTree=" +
-                           base_margin + "_jobTree " + "--trials=5")
-        margin_log_path = dirOut_margin + in_fq_base + "_margin.log"
-        
-        print(cmd_margin);sys.exit()
-        #print("Mapping with MarginAlign+minimap2 in progress...")
-        MARGIN_TIME = t.time()
-        with open(margin_log_path, 'w') as margin_log:
-            sub.Popen(cmd_margin.split(), stderr=margin_log).communicate()                
-        #out_margin, err_margin = Popen_margin.communicate()
-        
-        #margin_log = open(margin_log_path, 'w')
-        #if out_margin:
-        #    margin_log.write(out_margin)
-        #if err_margin:
-        #    margin_log.write(err_margin)
-        
-            margin_log.write("\n\nTIME MARGIN = " + str(t.time()-MARGIN_TIME) + 
-                             "\n\n")       
-        #margin_log.close()        
-    
-    #print("Mapping with MarginAlign+minimap2 finished !")
-    
-    elif DETER == "minimap2":
+    if DETER == "minimap2":
         # dirOut_minimap = path_proj + "3-deter_minimap2/"
         dirOut_minimap = path_proj + "3-deter_minimap2_second/"
 
