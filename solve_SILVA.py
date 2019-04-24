@@ -339,10 +339,12 @@ def write_metadat_file(to_seqid2taxid, base_used):
 
     with open('taxids_complete_lineage', 'r') as complete_lineage, \
          open(base_used + '_tax_metadat.tsv', 'w') as metadat_file:
-        metadat_file.write('no_majo_found' + '\t' + ';'.join(['Other'] * 7) + 
+        # metadat_file.write('#OTU ID\ttaxonomy\n')
+        # metadat_file.write('no_majo_found' + '\t' + ';'.join(['Other'] * 7) + 
+        #                    '\n')
+        metadat_file.write('unmapped' + '\t' + ';'.join(['no'] * 7) + 
                            '\n')
-        # my_metadat.write('#OTU ID\ttaxonomy\n')
-
+        
         for line in complete_lineage:
             taxid_grp = line.rstrip('\n')
             metadat_file.write(taxid_grp + '\t' + 
@@ -438,10 +440,10 @@ if __name__ == "__main__":
     # correct_seqid2taxid("old_seqid2taxid", "wrong2good_taxids")
 
     # write_complete_lineage("seqid2taxid")
-    # write_metadat_file(to_dbs + 'Centri_idxes/rrn/seqid2taxid', 'toRrn')
+    write_metadat_file(to_dbs + 'Centri_idxes/zymo/seqid2taxid', 'toZymo')
     # parse_and_rewrite_names(to_dbs_nt + "names.dmp", 
     #                         "taxids_complete_lineage")
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
     #                         "taxids_complete_lineage")
 
-    stats_base('SILVA')
+    # stats_base('SILVA')
