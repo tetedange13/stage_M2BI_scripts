@@ -72,6 +72,26 @@ def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
     plt.show()
 
 
+def get_ancester_name(arg_taxid, taxonomic_cutoff):
+    """
+    Get the ancestor name, given the taxid and a taxo cutoff
+    If the cutoff cannot bee found, the name associated with the given taxid is
+    returned
+    If the taxid is unknown (i.e. lineage={}=empty_dict), 'notDeterminable' is
+    returned
+    """
+    if pd.np.isnan(arg_taxid):
+        return pd.np.nan
+
+    lineage = evaluate.taxfoo.get_lineage_as_dict(arg_taxid)
+    if not lineage:
+        return 'notDeterminable'
+    elif taxonomic_cutoff not in lineage.keys():
+        return evaluate.taxfoo.get_taxid_name(int(arg_taxid))
+    else:
+        return lineage[taxonomic_cutoff]
+
+
 def str_from_res_conv(dict_res_conv):
     """
     Generate a string (ready to write) from an evaluation result
@@ -462,6 +482,8 @@ if __name__ == "__main__":
                   "NB REMOVED:", len(with_lineage)-sum(with_lineage))
 
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
+        # print(my_csv_to_pll['type_align'].value_counts());sys.exit()
+
         # MODE = 'LCA'
         MODE = 'MAJO'
         # if IS_SAM_FILE:
@@ -507,29 +529,34 @@ if __name__ == "__main__":
         dict_species2res = {} # To access evaluation results of a given species
         list_index_new_col, list_val_new_col = [], []
         for tupl_res in results_eval:
-            readID, final_taxid, species, res_eval, remark_evaluation = tupl_res
-            if remark_evaluation != 'no_majo_found':
-                dict_species2res[species] = res_eval
+            readID, final_taxid, res_eval, remark_evaluation = tupl_res
                     
             list_index_new_col.append(readID)
-            list_val_new_col.append((final_taxid, species, res_eval, 
+            list_val_new_col.append((final_taxid, res_eval, 
                                      remark_evaluation))
         del tupl_res
 
         tmp_df = pd.DataFrame({'final_taxid':[tupl[0] 
                                           for tupl in list_val_new_col],
-                               'species':[tupl[1] 
-                                          for tupl in list_val_new_col],
-                               'res_eval':[tupl[2] 
+                               'res_eval':[tupl[1] 
                                            for tupl in list_val_new_col],
-                               'remark_eval':[tupl[3] 
+                               'remark_eval':[tupl[2] 
                                               for tupl in list_val_new_col]},
                               index=list_index_new_col)
         my_csv = my_csv.assign(final_taxid=tmp_df.final_taxid,
-                               species=tmp_df.species, 
                                res_eval=tmp_df.res_eval,
                                remark_eval=tmp_df.remark_eval)
         del tmp_df, list_val_new_col
+
+        print('Determining associated species name...')
+        tmp_func = lambda fin_taxid: get_ancester_name(fin_taxid, taxo_cutoff)
+        my_csv = my_csv.assign(species=my_csv.final_taxid.apply(tmp_func))
+
+        tmp_df = my_csv[['species', 'res_eval', 'remark_eval']][my_csv.species.notnull()]
+        dict_species2res = {tupl[0]:tupl[1] 
+                            for _, tupl in tmp_df.iterrows() 
+                            if tupl[2] != 'no_majo_found'}
+        del tmp_df
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
 
@@ -537,32 +564,45 @@ if __name__ == "__main__":
         # sys.exit()
 
         
-        # OTU mapping file writting:
-        # (NaN values are automatically EXCLUDED during the 'groupby')
-        grped_by_fin_taxid = my_csv.groupby(by=['final_taxid'])
-        tool_used = 'centri'
-        if IS_SAM_FILE:
-            tool_used = 'minimap'
-        sampl_prefix = (tool_used + guessed_db.capitalize() + 
-                        MODE.lower().capitalize())
+        write_map = False
+        if write_map:
+            # OTU mapping file writting:
+            # (NaN values are automatically EXCLUDED during the 'groupby')
+            grped_by_fin_taxid = my_csv.groupby(by=['final_taxid'])
+            tool_used = 'centri'
+            if IS_SAM_FILE:
+                tool_used = 'Cusco2018.2.minimap'
+            sampl_prefix = (tool_used + guessed_db.capitalize() + 
+                            MODE.lower().capitalize())
 
-        with open(infile_base + '_' + MODE + '.map', 'w') as my_map:
-            #my_map.write('#OTU ID\t' + 'SampleID' + '\n')
-            for taxid_grp, grp in grped_by_fin_taxid:
-                readIDs_to_write = map(lambda readID: sampl_prefix + '_' + 
-                                                      str(readID), 
-                                       grp.index)
-                my_map.write(str(taxid_grp) + '\t' + 
-                             '\t'.join(readIDs_to_write) + '\n')
-                
-                # taxo_to_write = ';'.join(['Other'] * 7)
-                if taxid_grp != 'no_majo_found':
-                    pass
-                    # taxo_to_write = evaluate.taxo_from_taxid(taxid_grp)
-                else:
-                    print("NB OF 'NO_MAJO':", len(grp))
-        print("--> Wrote OTUs mapping file for '{}' !".format(sampl_prefix))
-        print()
+            with open(infile_base + '_' + MODE + '.map', 'w') as my_map:
+            # with open(sampl_prefix + '.map', 'w') as my_map:
+                #my_map.write('#OTU ID\t' + 'SampleID' + '\n')
+                for taxid_grp, grp in grped_by_fin_taxid:
+                    readIDs_to_write = map(lambda readID: sampl_prefix + '_' + 
+                                                          str(readID), 
+                                           grp.index)
+                    # 'int' casting needed for the taxid
+                    my_map.write(str(int(taxid_grp)) + '\t' + 
+                                 '\t'.join(readIDs_to_write) + '\n')
+                    
+                    # taxo_to_write = ';'.join(['Other'] * 7)
+                    if taxid_grp != 'no_majo_found':
+                        pass
+                        # taxo_to_write = evaluate.taxo_from_taxid(taxid_grp)
+                    else:
+                        print("NB OF 'NO_MAJO':", len(grp))
+
+                unmapped_to_write = map(lambda readID: sampl_prefix + '_' + 
+                                                          str(readID), 
+                                        my_csv[my_csv.type_align == 'unmapped'].index)     
+                my_map.write('unmapped\t' +  '\t'.join(unmapped_to_write) + 
+                             '\n')
+            print("--> Wrote OTUs mapping file for '{}' !".format(sampl_prefix))
+            print()
+
+        # print(set([evaluate.taxfoo.get_taxid_rank(a_taxid) for a_taxid in set(my_csv.final_taxid)]))
+        # print(my_csv.species.value_counts())
         # sys.exit()
 
 
@@ -580,6 +620,7 @@ if __name__ == "__main__":
         print(my_csv[is_FP].remark_eval.value_counts().sort_index())
         # print(my_csv[is_FP].nb_trashes.value_counts().sort_index())
         # print(my_csv[is_FP & (my_csv.remark_eval == 'no_majo_found')]['lineage'].value_counts())
+        # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]['lineage'].apply(lambda lin: 's'.join(set(lin.strip(';').split('s')))).value_counts())
         print()
         print("TP STATS:")
         print(my_csv[is_TP].species.value_counts())
@@ -589,8 +630,47 @@ if __name__ == "__main__":
         print()
 
 
-        # test = my_csv[is_FP & (my_csv.final_taxid.notnull())]['final_taxid']
-        # print(test.value_counts());sys.exit()
+        if taxo_cutoff == 'species':
+        # Make difference between TFP and FFP:
+            FP_notInKey = my_csv[is_FP & 
+                                 (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]
+            counts_FP_NotInKey = FP_notInKey.final_taxid.value_counts()
+            print()
+
+            # We remove 'superkingdom' and 'species' lvls
+            taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
+            list_FFP, tot_FFP = [], 0
+            for taxid in counts_FP_NotInKey.index:
+                lineage = evaluate.taxfoo.get_dict_lineage_as_taxids(taxid, 
+                                                    want_taxonomy=taxo_not_bact)
+                #print("\n", taxid)
+                for taxo_lvl in taxo_not_bact:
+                    if taxo_lvl in lineage.keys():
+                        # print(lineage);sys.exit()
+                        current_ancester = lineage[taxo_lvl]
+                        current_set_proks = set(map(lambda a_str: a_str[3:], 
+                                                    df_proks[taxo_lvl]))
+                        res_eval = evaluate.in_zymo(current_ancester, 
+                                                    current_set_proks, taxo_lvl)[1]
+                        #print(evaluate.taxfoo.get_taxid_name(current_ancester), res_eval)
+                        if res_eval == 'true_pos':
+                            tot_FFP += counts_FP_NotInKey[taxid]
+                            list_FFP.append((int(taxid), current_ancester))
+                            break
+                del taxo_lvl
+            del taxid
+
+            # print(counts_FP_NotInKey)
+            print(FP_notInKey.species.value_counts())
+            print('TOT NB OF FFP: {} | OVER {} FP_notInKey'.format(tot_FFP,
+                                                                   len(FP_notInKey)))
+            sys.exit()
+
+            #lineage = evaluate.taxfoo.get_lineage_as()
+        # print([evaluate.taxfoo.get_taxid_name(int(taxid)) for taxid in test.index])
+        
+
+        # print(test.value_counts())
         # for readID, lin_val in test.items():
         #     # print([evaluate.taxfoo.get_taxid_name(int(taxid)) for taxid in lin_val.split('s')])
         #     my_lca = evaluate.taxfoo.find_lca(map(int, lin_val.split('s')))
@@ -745,5 +825,5 @@ if __name__ == "__main__":
 
 
     # COMPUTE METRICS:
-    # compute_metrics(dict_to_convert, False)
+    compute_metrics(dict_to_convert, False)
     print()
