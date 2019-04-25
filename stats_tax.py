@@ -22,6 +22,7 @@ import subprocess as sub
 import pysam as pys
 import multiprocessing as mp
 import matplotlib.pyplot as plt
+from itertools import islice
 from functools import partial
 from docopt import docopt
 import src.check_args as check
@@ -72,26 +73,6 @@ def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
     plt.show()
 
 
-def get_ancester_name(arg_taxid, taxonomic_cutoff):
-    """
-    Get the ancestor name, given the taxid and a taxo cutoff
-    If the cutoff cannot bee found, the name associated with the given taxid is
-    returned
-    If the taxid is unknown (i.e. lineage={}=empty_dict), 'notDeterminable' is
-    returned
-    """
-    if pd.np.isnan(arg_taxid):
-        return pd.np.nan
-
-    lineage = evaluate.taxfoo.get_lineage_as_dict(arg_taxid)
-    if not lineage:
-        return 'notDeterminable'
-    elif taxonomic_cutoff not in lineage.keys():
-        return evaluate.taxfoo.get_taxid_name(int(arg_taxid))
-    else:
-        return lineage[taxonomic_cutoff]
-
-
 def str_from_res_conv(dict_res_conv):
     """
     Generate a string (ready to write) from an evaluation result
@@ -113,6 +94,31 @@ def str_from_res_conv(dict_res_conv):
     return (",".join(to_return + [lineage_to_write] + 
                      [str(x[1]) for x in rest]), 
             to_extract[1:] + list(map(lambda x: x[0], rest)))
+
+
+def discriminate_FP(arg_taxid, wanted_taxo, df_proks_arg):
+    """
+    Given the taxid of a FP, discriminate between FFP (= in Zymo but taxo too 
+    high) and TFP (= 'final_taxid' misassigned or taxo lvl above 'Bacteria')
+    """
+    lineage = taxfoo.get_dict_lineage_as_taxids(arg_taxid, 
+                                                want_taxonomy=wanted_taxo)
+    # print("\n", taxid)
+    for taxo_lvl in wanted_taxo:
+        if taxo_lvl in lineage.keys():
+            current_ancester = lineage[taxo_lvl]
+            current_set_proks = set(map(lambda a_str: a_str[3:], 
+                                        df_proks_arg[taxo_lvl]))
+            res_eval = evaluate.in_zymo(current_ancester, 
+                                        current_set_proks, taxo_lvl)[-1]
+            # print(evaluate.taxfoo.get_taxid_name(current_ancester), res_eval)
+            if res_eval == 'true_pos':
+                return pd.Series(['FFP', current_ancester,
+                                  taxfoo.get_taxid_name(current_ancester)])
+
+    del taxo_lvl
+
+    return pd.Series(['TFP', arg_taxid, taxfoo.get_taxid_name(int(arg_taxid))])
 
 
 def dict_stats_to_vectors(dict_res):
@@ -197,7 +203,7 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'txt', 'sam'])
 
     # Common variables:
-    NB_THREADS = 10
+    NB_THREADS = 15
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
@@ -206,6 +212,7 @@ if __name__ == "__main__":
     import src.parallelized as pll
     evaluate = pll.eval
     pd = evaluate.pd
+    taxfoo = evaluate.taxfoo
     # print(evaluate.taxfoo.get_taxid_rank(136841));sys.exit()
     print("Taxonomic Python module loaded !\n")
 
@@ -333,7 +340,6 @@ if __name__ == "__main__":
 
         print(my_csv.type_align.value_counts())
         print()
-        # # taxfoo = evaluate.taxfoo
 
 
     if not CLUST_MODE and IS_SAM_FILE:
@@ -491,33 +497,51 @@ if __name__ == "__main__":
 
         print()
         print("MODE FOR HANDLING OF THE MULTI-HITS =", MODE)
+        print()
 
         partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
                                               set_levels_prok=set_proks,
                                               taxonomic_cutoff=taxo_cutoff,
                                               mode=MODE)
-        print("PROCESSING CSV TO EVALUATE TAXO...")
+        nb_reads_to_process = len(my_csv_to_pll.index)
+        print("PROCESSING {} reads from CSV to EVALUATE TAXO..".format(nb_reads_to_process))
+        print("(Nb CPUs: {})".format(NB_THREADS))
         # Parallel version:
+        size_chunks = 100
+        results_eval = []
+        start = 0
+        my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage].reset_index()
+
         eval_pool = mp.Pool(NB_THREADS)
-        results_eval = eval_pool.map(partial_eval, my_csv_to_pll.index)
+        while start < nb_reads_to_process:
+            #print("Processing slice {} ".format([start, (start+size_chunks)]))
+            my_slice=my_csv_to_pll[start:(start+size_chunks)].set_index('index')
+            partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_slice,
+                                              set_levels_prok=set_proks,
+                                              taxonomic_cutoff=taxo_cutoff,
+                                              mode=MODE)
+            # result = eval_pool.imap_unordered(partial_eval, my_slice.index)
+            result = eval_pool.map(partial_eval, my_slice.index)
+            results_eval.extend(result)
+            start += size_chunks
+
         eval_pool.close()
+        assert(len(results_eval) == nb_reads_to_process)
+        # sys.exit()
+
+        
+        # results_eval = eval_pool.map(partial_eval, my_csv_to_pll.iterrows())
+        # eval_pool.close()
         # results_eval = list(map(partial_eval, my_csv_to_pll.index)) 
         del my_csv_to_pll
         print("PLL PROCESS FINISHED !")
-        # sys.exit()
         
         # Compute counts:
-        dict_count = {}
+        dict_count = {'second_uniq':0, 'second_plural':0, 'unmapped':0}
         counts_type_align = my_csv.type_align.value_counts()
         for type_aln, count in counts_type_align.items():
             dict_count[type_aln] = count
         del type_aln
-        if 'second_uniq' not in counts_type_align.index:
-            dict_count['second_uniq'] = 0
-        if 'second_plural' not in counts_type_align.index:
-            dict_count['second_plural'] = 0
-        if 'unmapped' not in counts_type_align.index:
-            dict_count['unmapped'] = 0
         dict_count['tot_second'] = (dict_count['second_plural'] + 
                                     dict_count['second_uniq'])
         dict_count["tot_reads"] = (dict_count['unmapped'] + 
@@ -525,37 +549,23 @@ if __name__ == "__main__":
                                    dict_count["normal"])        
         dict_stats['FN'] += dict_count['unmapped']
 
+        print('Finalizing evaluation..')
+        # /!\ CAREFUL WITH THE ORDER OF THE COLUMNS GIVEN HERE:
+        tmp_df = pd.DataFrame.from_dict({idx:a_list for idx, a_list 
+                                                    in results_eval}, 
+                                        orient='index',
+                                        columns=['species', 'final_taxid', 
+                                                 'res_eval', 'remark_eval'])
         # Add the results of the evaluation to the csv:
-        dict_species2res = {} # To access evaluation results of a given species
-        list_index_new_col, list_val_new_col = [], []
-        for tupl_res in results_eval:
-            readID, final_taxid, res_eval, remark_evaluation = tupl_res
-                    
-            list_index_new_col.append(readID)
-            list_val_new_col.append((final_taxid, res_eval, 
-                                     remark_evaluation))
-        del tupl_res
-
-        tmp_df = pd.DataFrame({'final_taxid':[tupl[0] 
-                                          for tupl in list_val_new_col],
-                               'res_eval':[tupl[1] 
-                                           for tupl in list_val_new_col],
-                               'remark_eval':[tupl[2] 
-                                              for tupl in list_val_new_col]},
-                              index=list_index_new_col)
         my_csv = my_csv.assign(final_taxid=tmp_df.final_taxid,
                                res_eval=tmp_df.res_eval,
-                               remark_eval=tmp_df.remark_eval)
-        del tmp_df, list_val_new_col
+                               remark_eval=tmp_df.remark_eval,
+                               species=tmp_df.species)
+        del tmp_df, results_eval
 
-        print('Determining associated species name...')
-        tmp_func = lambda fin_taxid: get_ancester_name(fin_taxid, taxo_cutoff)
-        my_csv = my_csv.assign(species=my_csv.final_taxid.apply(tmp_func))
-
-        tmp_df = my_csv[['species', 'res_eval', 'remark_eval']][my_csv.species.notnull()]
-        dict_species2res = {tupl[0]:tupl[1] 
-                            for _, tupl in tmp_df.iterrows() 
-                            if tupl[2] != 'no_majo_found'}
+        # To access evaluation results of a given species:
+        tmp_df = my_csv[['species', 'res_eval']][my_csv.species.notnull()]
+        dict_species2res = {tupl[0]:tupl[1] for _, tupl in tmp_df.iterrows()}
         del tmp_df
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
@@ -631,53 +641,34 @@ if __name__ == "__main__":
 
 
         if taxo_cutoff == 'species':
-        # Make difference between TFP and FFP:
+            # Make difference between TFP and FFP:
+            print("DISCRIMINATION between TFP and FFP..")
             FP_notInKey = my_csv[is_FP & 
                                  (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]
             counts_FP_NotInKey = FP_notInKey.final_taxid.value_counts()
-            print()
+            counts_FP_NotInKey.name = 'counts'
 
             # We remove 'superkingdom' and 'species' lvls
             taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
             list_FFP, tot_FFP = [], 0
-            for taxid in counts_FP_NotInKey.index:
-                lineage = evaluate.taxfoo.get_dict_lineage_as_taxids(taxid, 
-                                                    want_taxonomy=taxo_not_bact)
-                #print("\n", taxid)
-                for taxo_lvl in taxo_not_bact:
-                    if taxo_lvl in lineage.keys():
-                        # print(lineage);sys.exit()
-                        current_ancester = lineage[taxo_lvl]
-                        current_set_proks = set(map(lambda a_str: a_str[3:], 
-                                                    df_proks[taxo_lvl]))
-                        res_eval = evaluate.in_zymo(current_ancester, 
-                                                    current_set_proks, taxo_lvl)[1]
-                        #print(evaluate.taxfoo.get_taxid_name(current_ancester), res_eval)
-                        if res_eval == 'true_pos':
-                            tot_FFP += counts_FP_NotInKey[taxid]
-                            list_FFP.append((int(taxid), current_ancester))
-                            break
-                del taxo_lvl
-            del taxid
+            df_FP = pd.DataFrame(counts_FP_NotInKey).reset_index()
+            # print(df_FP);sys.exit()
+            tmp_df = df_FP['index'].apply(discriminate_FP, args=(taxo_not_bact, 
+                                                          df_proks))
+            df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
+                                 ancester_name=tmp_df[2])
+            del tmp_df
 
-            # print(counts_FP_NotInKey)
-            print(FP_notInKey.species.value_counts())
+            tot_FFP = sum(df_FP[df_FP.status == 'FFP'].counts)
+            print(df_FP.set_index('index'))
+            print()
+
             print('TOT NB OF FFP: {} | OVER {} FP_notInKey'.format(tot_FFP,
                                                                    len(FP_notInKey)))
-            sys.exit()
+            print("(and over a total of {} FP)".format(sum(is_FP)))
+            # sys.exit()
 
-            #lineage = evaluate.taxfoo.get_lineage_as()
-        # print([evaluate.taxfoo.get_taxid_name(int(taxid)) for taxid in test.index])
-        
 
-        # print(test.value_counts())
-        # for readID, lin_val in test.items():
-        #     # print([evaluate.taxfoo.get_taxid_name(int(taxid)) for taxid in lin_val.split('s')])
-        #     my_lca = evaluate.taxfoo.find_lca(map(int, lin_val.split('s')))
-        #     print(evaluate.taxfoo.get_taxid_rank(my_lca), evaluate.taxfoo.get_taxid_name(my_lca))
-        
-
-        # eval_taxfoo = evaluate.taxfoo
         # pd.DataFrame({'TP_nb_trashes':my_csv[is_TP]['nb_trashes'].value_counts(), 
         #               'FP_nb_trashes':my_csv[is_FP]['nb_trashes'].value_counts()
         #               }).plot.bar(title="Distrib nb_trashes between FP and TP",

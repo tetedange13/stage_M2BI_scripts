@@ -126,19 +126,23 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok,
     The 'mode' parameter allows to change between LCA and majo voting, for the
     handling of multi-hits/mult-mapping
     """
+    #one_csv_index_val, tupl_typeAln_lin = one_line_from_csv
+    #lineage_val, type_align = tupl_typeAln_lin
     lineage_val = two_col_from_csv.loc[one_csv_index_val, "lineage"]
     type_align = two_col_from_csv.loc[one_csv_index_val, "type_align"]
+
     remark_eval = type_align
 
     if type_align == 'normal':
-        taxid_to_eval = lineage_val.strip(';')
+        taxid_to_eval = int(lineage_val.strip(';'))
         
-    else: # Secondary (with 1 unique taxid or more)
+    elif 'second' in type_align: # Secondary (with 1 unique taxid or more)
         list_taxid_target = list(map(int, lineage_val.strip(';').split('s')))
         if type_align == 'second_uniq':
             taxid_to_eval = list_taxid_target[0]
         else: # More than 1 unique taxid
             if mode == 'MAJO':
+                # res_second_handling = eval.majo_voting_old(list_taxid_target, taxonomic_cutoff)
                 res_second_handling = eval.majo_voting(list_taxid_target)
             elif mode == 'LCA':
                 res_second_handling = eval.make_lca(list_taxid_target)
@@ -149,16 +153,21 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok,
                 remark_eval += ';lca'
                 taxid_to_eval = eval.taxfoo.find_lca(set(list_taxid_target))
             elif len(res_second_handling) == 1: # Other problem
-                return (one_csv_index_val, 'problem', remark_eval, 'FP',
-                        remark_eval)
+                return (one_csv_index_val, 
+                        ['problem', remark_eval, 'FP', remark_eval])
             else:
                 taxid_to_eval = res_second_handling[1]
 
-    classif, remark = eval.in_zymo(taxid_to_eval, set_levels_prok, 
-                                   taxonomic_cutoff)
+    # else: # 'only_suppl' or 'unmapped'
+    #     taxid_to_eval = lineage_val # Should be a nan
+    #     assert(pd.np.isnan(taxid_to_eval))
+
+    sp_name, classif, remark = eval.in_zymo(taxid_to_eval, set_levels_prok, 
+                                      taxonomic_cutoff)
     remark_eval += ';' + remark
 
-    return (one_csv_index_val, int(taxid_to_eval), classif, remark_eval)
+    return (one_csv_index_val, 
+            [sp_name, int(taxid_to_eval), classif, remark_eval])
 
 
 
