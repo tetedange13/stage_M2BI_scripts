@@ -110,7 +110,7 @@ def calc_taxo_shift(arg_taxid, taxonomic_cutoff):
     # print(len(taxfoo.))
 
 
-def get_majo(list_of_things, cutoff_majo):
+def get_majo_old(list_of_things, cutoff_majo):
     """
     Given a list of things (could be numbers of list of strings), determine
     wether there is one whose frequency is up to a given cutoff (so that can be
@@ -126,8 +126,56 @@ def get_majo(list_of_things, cutoff_majo):
 
     to_return = [val for val in val_counts]
     if nb_majo == 1: # 1 unique majoritary
+        return (str(freq_counts.idxmax()), to_return)
+
+    return ('noMajo', to_return) # NO majoritary
+
+
+def majo_voting_old(list_taxid_target, taxonomic_cutoff):
+    """
+    Proceed to the majo determination for a list of given taxids, at the a
+    given taxonomic cutoff
+    """   
+    dict_taxid2ancester = {}
+    for taxid in set(list_taxid_target):
+        lineage = taxfoo.get_dict_lineage_as_taxids(taxid)
+        if taxonomic_cutoff in lineage.keys():
+            dict_taxid2ancester[taxid] = lineage[taxonomic_cutoff]
+        else:
+            # dict_taxid2ancester[taxid] = 'notInKey'
+            dict_taxid2ancester[taxid] = 'notInKey_' + str(taxid)
+    del taxid
+
+    list_taxids_ancesters = [dict_taxid2ancester[taxid] 
+                             for taxid in list_taxid_target]
+    majo_ancester, _ = get_majo_old(list_taxids_ancesters, 0.5)
+
+    if majo_ancester == 'noMajo': # Still NO majoritary
+        return ('no_majo_found', )
+    else:
+        if 'notInKey' in majo_ancester:
+            return ('majo_notInKey', majo_ancester.split('_')[1])
+        # assert (majo_ancester != 'notInKey')
+        return ('majo_found', majo_ancester) # Majo found only after the 2nd round
+
+
+def get_majo(list_of_things, cutoff_majo):
+    """
+    Given a list of things (could be numbers of list of strings), determine
+    wether there is one whose frequency is up to a given cutoff (so that can be
+    considered as majority)
+    """
+    val_counts = pd.Series(list_of_things).value_counts()
+    freq_counts = val_counts/len(list_of_things)
+    are_up_to_cutoff  = freq_counts > cutoff_majo
+    nb_majo = sum(are_up_to_cutoff)
+    assert(nb_majo < 2)
+
+    to_return = [val for val in val_counts]
+    if nb_majo == 1: # 1 unique majoritary
         return ('majo_found', str(freq_counts.idxmax()))
     # print(val_counts)
+    print(freq_counts)
     return ('noMajo', None) # NO majoritary
 
 
@@ -139,6 +187,12 @@ def remove_minor_lca(list_of_things, cutoff_discard):
     """
     val_counts = pd.Series(list_of_things).value_counts()
     freq_counts = val_counts/len(list_of_things)
+    if len(freq_counts) > 2 and len(set(freq_counts)) > 1:
+        freq_counts.name='freq'
+        test = pd.DataFrame(freq_counts.apply(round, args=(2, ))).reset_index()
+        test = test.assign(sp_name=test['index'].apply(taxfoo.get_taxid_name),
+                           diff_freq=lambda x: round(x.freq - 1/len(freq_counts), 2))
+        # print('\n', test.set_index('index'))
     are_down_to_cutoff  = freq_counts < cutoff_discard
     nb_majo = len(are_down_to_cutoff) - sum(are_down_to_cutoff)
     to_return = [val for val in val_counts]
@@ -157,8 +211,8 @@ def remove_minor_lca(list_of_things, cutoff_discard):
 
 def majo_voting(list_taxid_target):
     """
-    Proceed to the majo determination for a list of given taxids, at the a
-    given taxonomic cutoff
+    Proceed to the majo determination for a list of given taxids
+    This version is independant from any taxo cutoff
     """
     dict_taxid2ancester = {}
     for taxid in set(list_taxid_target):
@@ -173,13 +227,16 @@ def majo_voting(list_taxid_target):
 
     list_taxids_ancesters = [dict_taxid2ancester[taxid] 
                              for taxid in list_taxid_target]
-    # remark_majo, majo_ancester = get_majo(list_taxids_ancesters, 0.5)
-    remark_majo, majo_ancester = remove_minor_lca(list_taxids_ancesters, 0.25)
-
-    if remark_majo == 'noMajo': # Still NO majoritary
-        return ('no_majo_found', )
+    if len(set(list_taxids_ancesters)) > 1:
+        remark_majo, majo_ancester = get_majo(list_taxids_ancesters, 0.5)
+        # remark_majo, majo_ancester = remove_minor_lca(list_taxids_ancesters, 0.2)
+        if remark_majo == 'noMajo': # Still NO majoritary
+            return ('no_majo_found', )
+        else:
+            return (remark_majo, majo_ancester) # Majo found only after the 2nd round
+    
     else:
-        return (remark_majo, majo_ancester) # Majo found only after the 2nd round
+        return ('single_taxid', list_taxid_target[0])
 
 
 def make_lca(list_taxid_target):
@@ -204,15 +261,15 @@ def in_zymo(taxo_taxid, set_levels_prok, taxonomic_cutoff):
     lineage = taxfoo.get_lineage_as_dict(taxo_taxid)
 
     if not lineage: # "cannot find taxid {a_taxid}; quitting." --> empty dict
-        return ('FP', 'taxid_unknown')
+        return ('notDeterminable', 'FP', 'taxid_unknown')
     else:
         taxo_levels = lineage.keys()
 
         if taxonomic_cutoff not in taxo_levels:
             # return ('notDeterminable', 'FP')
-            return ('FP', 'notInKeys')
+            return (taxfoo.get_taxid_name(int(taxo_taxid)), 'FP', 'notInKeys')
         else:
             taxo_name = lineage[taxonomic_cutoff]
             if taxo_name in set_levels_prok:
-                return ('TP', 'true_pos')
-            return ('FP', 'misassigned')
+                return (taxo_name, 'TP', 'true_pos')
+            return (taxo_name, 'FP', 'misassigned')
