@@ -203,7 +203,7 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'txt', 'sam'])
 
     # Common variables:
-    NB_THREADS = 15
+    NB_THREADS = 20
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
@@ -229,7 +229,9 @@ if __name__ == "__main__":
     else:
         print("Unkown database !\n")
         sys.exit(2)
+    
     print("DB GUESSED:", guessed_db)
+    print("PROCESSING", infile_base)
 
 
     df_proks = evaluate.generate_df_zymo()
@@ -491,7 +493,8 @@ if __name__ == "__main__":
         # print(my_csv_to_pll['type_align'].value_counts());sys.exit()
 
         # MODE = 'LCA'
-        MODE = 'MAJO'
+        MODE = 'MINOR_RM_LCA'
+        # MODE = 'MAJO_OLD'
         # if IS_SAM_FILE:
         #     MODE = 'MAJO'
 
@@ -520,6 +523,8 @@ if __name__ == "__main__":
                                               set_levels_prok=set_proks,
                                               taxonomic_cutoff=taxo_cutoff,
                                               mode=MODE)
+            if len(results_eval) == (nb_reads_to_process-nb_reads_to_process%size_chunks)/2:
+                print("HALF WAY !")
             # result = eval_pool.imap_unordered(partial_eval, my_slice.index)
             result = eval_pool.map(partial_eval, my_slice.index)
             results_eval.extend(result)
@@ -655,6 +660,7 @@ if __name__ == "__main__":
             # print(df_FP);sys.exit()
             tmp_df = df_FP['index'].apply(discriminate_FP, args=(taxo_not_bact, 
                                                           df_proks))
+            # print(tmp_df)
             df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
                                  ancester_name=tmp_df[2])
             del tmp_df
@@ -717,14 +723,16 @@ if __name__ == "__main__":
         def truncate(n, decimals=0):
             multiplier = 10 ** decimals
             return int(n * multiplier) / multiplier
-        precision_at_taxa_level = truncate(len(list_TP) / (len(list_TP)+len(list_FP)), 4)
-        print("PRECISION:  {} | FDR: {}".format(precision_at_taxa_level, 
-                                                1-precision_at_taxa_level))
+        prec_at_taxa_level = round(len(list_TP) / (len(list_TP)+len(list_FP)), 
+                                   4)
+        FDR_at_taxa_level = round(1-precision_at_taxa_level, 4)
+        print("PRECISION:  {} | FDR: {}".format(prec_at_taxa_level, 
+                                                FDR_at_taxa_level))
         print("SENSITIVITY:", recall_at_taxa_level, " | ", "FNR:",
               1 - recall_at_taxa_level)
         calc_f1 = lambda tupl: round((2*tupl[0]*tupl[1])/(tupl[0]+tupl[1]), 4)
         print("F1-SCORE:", 
-              calc_f1((precision_at_taxa_level, recall_at_taxa_level)))
+              calc_f1((prec_at_taxa_level, recall_at_taxa_level)))
         print()
 
 

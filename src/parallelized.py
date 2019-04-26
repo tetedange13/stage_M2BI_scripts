@@ -141,8 +141,9 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok,
         if type_align == 'second_uniq':
             taxid_to_eval = list_taxid_target[0]
         else: # More than 1 unique taxid
-            if mode == 'MAJO':
-                # res_second_handling = eval.majo_voting_old(list_taxid_target, taxonomic_cutoff)
+            if mode == 'MAJO_OLD':
+                res_second_handling = eval.majo_voting_old(list_taxid_target, 'species')
+            elif mode == 'MINOR_RM_LCA':
                 res_second_handling = eval.majo_voting(list_taxid_target)
             elif mode == 'LCA':
                 res_second_handling = eval.make_lca(list_taxid_target)
