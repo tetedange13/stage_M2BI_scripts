@@ -160,7 +160,7 @@ if __name__ == "__main__":
         # dirOut_minimap = path_proj + "3-deter_minimap2/"
         dirOut_minimap = path_proj + "3-deter_minimap2_second/"
 
-        args_minimap2_map = "-N25 -t" + nb_threads + " -x map-ont "
+        args_minimap2_map = "-K300M -N25 -t" + nb_threads + " -ax map-ont "
         # if DB_NAME == "gg":
         #     args_minimap2_map = ("-K100M --secondary=no -t" + nb_threads + 
         #                          " -x map-ont ")
@@ -168,10 +168,10 @@ if __name__ == "__main__":
         to_minimap_idxes = to_dbs + "minimap2_idxes/"
         root_minimap_outfiles = (dirOut_minimap + in_fq_base + "_to" + 
                                  DB_NAME.capitalize())
-        cmd_minimap = (to_minimap2 + "minimap2 " + args_minimap2_map + "-a " +
+        cmd_minimap = (to_minimap2 + "minimap2 " + args_minimap2_map + " " +
                        to_minimap_idxes + DB_NAME + ".mmi " + 
                        in_fq_path)
-        # print(cmd_minimap) ; sys.exit()
+        # print(cmd_minimap, " | ", root_minimap_outfiles) ; sys.exit()
         START_MINIMAP = t.time()
         log_minimap = open(root_minimap_outfiles + ".log", 'w')
         with open(root_minimap_outfiles + ".sam", 'w') as minimap_SAM:
