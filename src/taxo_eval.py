@@ -175,7 +175,7 @@ def get_majo(list_of_things, cutoff_majo):
     if nb_majo == 1: # 1 unique majoritary
         return ('majo_found', str(freq_counts.idxmax()))
     # print(val_counts)
-    print(freq_counts)
+
     return ('noMajo', None) # NO majoritary
 
 
@@ -228,8 +228,8 @@ def majo_voting(list_taxid_target):
     list_taxids_ancesters = [dict_taxid2ancester[taxid] 
                              for taxid in list_taxid_target]
     if len(set(list_taxids_ancesters)) > 1:
-        remark_majo, majo_ancester = get_majo(list_taxids_ancesters, 0.5)
-        # remark_majo, majo_ancester = remove_minor_lca(list_taxids_ancesters, 0.2)
+        # remark_majo, majo_ancester = get_majo(list_taxids_ancesters, 0.5)
+        remark_majo, majo_ancester = remove_minor_lca(list_taxids_ancesters, 0.2)
         if remark_majo == 'noMajo': # Still NO majoritary
             return ('no_majo_found', )
         else:
