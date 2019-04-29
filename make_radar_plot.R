@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-library(fmsb)
-
 args = commandArgs(trailingOnly=TRUE)
 if (length(args) == 0) {
   stop("Input dat file NOT specified !", call.=FALSE)
@@ -9,6 +7,8 @@ if (length(args) == 0) {
   # default output file
   data_to_load <- args[1]
 }
+
+library(fmsb)
 
 # data=as.data.frame(matrix( sample( 0:20 , 15 , replace=F) , ncol=5))
 data <- read.csv(data_to_load, header=T, sep=";", row.names="Zymo_sp")
