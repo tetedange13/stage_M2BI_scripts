@@ -1,5 +1,13 @@
 #!/usr/bin/env Rscript
 
+args = commandArgs(trailingOnly=TRUE)
+if (length(args) == 0) {
+  stop("Input dat file NOT specified !", call.=FALSE)
+} else if (length(args) == 1) {
+  # default output file
+  data_to_load <- args[1]
+}
+
 library(dplyr)
 library(ggplot2)
 library(reshape2)
@@ -16,18 +24,22 @@ library(reshape2)
 # melted[melted$variable == 'value1',]$cat <- "first"
 # melted[melted$variable != 'value1',]$cat <- "second"
 
-df2 <- read.csv("my_CSVs/test_gglot2.csv", header=T, sep=';')
+df2 <- read.csv(data_to_load, header=T, sep=';')
 melted <- melt(df2, "run")
 
-cond_raw = (melted$variable == 'unmap' | melted$variable == 'prec')
-cond_lenFilt = (melted$variable == 'unmap_lenFilt' | 
-                 melted$variable == 'prec_lenFilt')
+cond_raw <- (melted$variable == 'FDR' | melted$variable == 'sens')
+cond_lenFilt <- (melted$variable == 'FDR_lenFilt' | 
+                 melted$variable == 'sens_lenFilt')
 melted$cat <- ''
-melted[cond_raw,]$cat <- "1_Raw"
-melted[cond_lenFilt,]$cat <- "2_LenFilt"
+melted[cond_raw, ]$cat <- "1_Raw"
+melted[cond_lenFilt, ]$cat <- "2_LenFilt"
+melted[cond_lenFilt, ]$variable <- melted[cond_raw, ]$variable
+
 # melted <- ddply(melted, c("run", "cat"),
 #                    transform, label_ypos=value-cumsum(value))
                 #transform, label_ypos=cumsum(value))
+print(melted)
+
 grouped <- melted %>%
             group_by(run, cat) %>%
             summarise(total = sum(value))
@@ -41,7 +53,11 @@ ggplot(melted, aes(x = cat, y = value, fill = variable)) +
   geom_text(aes(y=label_ypos, label=value), vjust=-0.5, 
             color="white", size=3.5) +
   facet_grid(~ run) +
-  ggtitle("Mapping (p08N25) of complete to Zymo") + 
-  theme(plot.title = element_text(hjust = 0.5))
+  ggtitle("Mapping (p08N25) of complete to Zymo - lvl SPECIES") + 
+  theme(plot.title = element_text(hjust = 0.5), 
+        panel.background = element_rect(fill = "grey"),
+        panel.grid.major = element_blank()) +
+  scale_y_continuous(name="recall + FDR", 
+                     breaks=c(0, 0.25, 0.5, 0.75, 1))
 
 while(identical(readLines(), character(0))){Sys.sleep(1)}
