@@ -28,34 +28,6 @@ from docopt import docopt
 import src.check_args as check
 
 
-def alignment_to_dict(align_obj):
-    """
-    Takes an alignment instance and return a dict containing the needed
-    attributes (only)
-
-    With infer_read_length() method, hard-clipped bases are included in the 
-    counting
-    infer_query_length() method does NOT include them
-    """
-    ratio_len = align_obj.infer_query_length()/align_obj.infer_read_length()
-    assert(ratio_len <= 1)
-
-    to_return = {"mapq":align_obj.mapping_quality,
-                 "ref_name": align_obj.reference_name,
-                 "len_align":align_obj.infer_query_length(),
-                 "ratio_len":ratio_len,
-                 "is_suppl":align_obj.is_supplementary,
-                 "has_SA": align_obj.has_tag("SA"),
-                 "is_second":align_obj.is_secondary}
-                 
-    if align_obj.has_tag('de'):
-        to_return['de'] = round(align_obj.get_tag("de"), 4)
-    if align_obj.has_tag('AS'):
-        to_return['AS'] = align_obj.get_tag("AS"),
-
-    return to_return
-
-
 def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
     """
     Draw a thin histogram from a list of values
@@ -71,6 +43,51 @@ def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
     plt.hist(list_values, bins=int(256/1), log=y_log)
     plt.xlim(xlims)
     plt.show()
+
+
+def ali_to_dict(align_obj):
+    """
+    Takes an alignment instance and return a dict containing the needed
+    attributes (only)
+
+    With infer_read_length() method, hard-clipped bases are included in the 
+    counting
+    infer_query_length() method does NOT include them
+    """
+    if align_obj.is_unmapped:
+        return 'unmapped'
+
+    ratio_len = align_obj.infer_query_length()/align_obj.infer_read_length()
+    assert(ratio_len <= 1)
+
+    to_return = {"mapq":align_obj.mapping_quality,
+                 "ref_name": align_obj.reference_name,
+                 "len_align":align_obj.infer_query_length(),
+                 "ratio_len":ratio_len,
+                 "is_suppl":align_obj.is_supplementary,
+                 "has_SA": align_obj.has_tag("SA"),
+                 "is_second":align_obj.is_secondary}
+                 
+    if align_obj.has_tag('de'):
+        to_return['de'] = round(align_obj.get_tag("de"), 4)
+    if align_obj.has_tag('AS'):
+        to_return['AS'] = align_obj.get_tag("AS")
+
+    return to_return
+
+
+def cut_dict(a_dict, size):
+    """Yield successive n-sized chunks from l."""
+    list_keys = list(a_dict.keys())
+    list_slices_keys, list_gen = [], []
+
+    for i in range(0, len(list_keys), size):
+        list_slices_keys.append(list_keys[i:(i + size)])
+    for slice in list_slices_keys:
+        list_gen.append([(key, a_dict[key]) for key in slice])
+        for key in slice:
+            del a_dict[key] 
+
 
 
 def str_from_res_conv(dict_res_conv):
@@ -203,11 +220,12 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'txt', 'sam'])
 
     # Common variables:
-    NB_THREADS = 20
+    NB_THREADS = 10
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
 
+    print()
     print("Loading taxonomic Python module...")
     import src.parallelized as pll
     evaluate = pll.eval
@@ -366,6 +384,36 @@ if __name__ == "__main__":
             START_SAM_PARSING = t.time()
             input_samfile = pys.AlignmentFile(to_infile, "r")
 
+            # tmp_df = pd.DataFrame.from_dict({idx: [ali.query_name,ali_to_dict(ali)] 
+            #                 for idx, ali 
+            #                 in enumerate(input_samfile.fetch(until_eof=True))},
+            #                                 orient='index', 
+            #                                 columns=['read_ID', 'a_dict'])
+            # input_samfile.close()
+            # print('Done1')
+            # are_unmapped = tmp_df.a_dict == 'unmapped'
+            # list_unmapped = list(tmp_df[are_unmapped]['read_ID'])
+            # test = tmp_df[-are_unmapped].groupby('read_ID')['a_dict'].apply(list)
+            # print('Done2')
+            # print('MEM_OF_DICT:', sys.getsizeof(test)/8/1000)
+
+            # print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
+            # TOTO = t.time()
+            # start, nb_to_process, results = 0, len(test.index), []
+            # size = 1000000
+            # my_pool = mp.Pool(NB_THREADS)
+            # partial_func = partial(pll.SAM_to_CSV, 
+            #                        conv_seqid2taxid=dict_seqid2taxid)
+            # while start < nb_to_process:
+            #     slice_dict_items = test[start:(start+size)].items()
+            #     print('MEM_OF_SLICE:', sys.getsizeof(slice_dict_items)/8/1000)
+            #     result = my_pool.map(partial_func, slice_dict_items)
+            #     results.extend(result)
+            #     start += size
+            # my_pool.close()
+            # print("CSV CONVERSION TIME:", t.time() - TOTO);sys.exit()
+
+
             dict_gethered = {}
             list_suppl = []
             list_unmapped = []
@@ -378,10 +426,9 @@ if __name__ == "__main__":
 
                 if alignment.is_unmapped:
                     list_unmapped.append(query_name)
-                    dict_stats['FN'] += 1 # Count unmapped = 'FN'
 
                 else:
-                    dict_align = alignment_to_dict(alignment)
+                    dict_align = ali_to_dict(alignment)
                     if query_name in dict_gethered.keys():
                     # if alignment.is_secondary or alignment.is_supplementary:
                         dict_gethered[query_name].append(dict_align)
@@ -396,11 +443,7 @@ if __name__ == "__main__":
             print()
             assert(len(list_unmapped) == len(set(list_unmapped)))
 
-            # test = [tupl for tupl in dict_gethered.items() if len(tupl[1])>1]
-            # for readID, felix_list in test:
-            #     lena = set(map(lambda a_dict: a_dict['ref_name'], felix_list))
-            #     if len(lena) > 1:
-            #         print(readID, lena)
+            print('MEM_OF_DICT:', sys.getsizeof(dict_gethered)/8/1000)
             # sys.exit()
 
 
@@ -409,14 +452,31 @@ if __name__ == "__main__":
             print("Converting SAM into CSV...")
             partial_func = partial(pll.SAM_to_CSV, 
                                    conv_seqid2taxid=dict_seqid2taxid)
-                                               # Parallel version:
-            my_pool = mp.Pool(NB_THREADS)
-            results = my_pool.map(partial_func, dict_gethered.items())
-            my_pool.close()
-            # Serial version (need list casting to have output):
-            # results = list(map(partial_func, dict_gethered.items())) 
+            # Parallel version:
+            size = 1000000
+            results = []
+            # Need generator casting to have islice() work:
+            dict_light = (tupl for tupl in dict_gethered.items())
+            # print("SIZE_DICT:", sys.getsizeof(dict_gethered)/8/1000)
 
-            # sys.exit()
+            my_pool = mp.Pool(NB_THREADS)
+            while True:
+                slice_dict_items = list(islice(dict_light, size))
+                if slice_dict_items:
+                    print('MEM_OF_SLICE:', sys.getsizeof(slice_dict_items)/8/1000)
+                    result = my_pool.map(partial_func, slice_dict_items)
+                    results.extend(result)
+                else:
+                    print("TOUT CONSOMME !")
+                    break
+            my_pool.close()
+
+            # Serial version (need list casting to have output):
+            # results = list(map(partial_func, dict_gethered.items()))
+            # print("Deleting BIG dict..")
+            # dict_gethered.clear()
+
+            print("CSV CONVERSION TIME:", t.time() - TOTO);sys.exit()
 
             # Write outfile:
             with open(to_out_file, 'w') as out_file:
@@ -520,15 +580,15 @@ if __name__ == "__main__":
             #print("Processing slice {} ".format([start, (start+size_chunks)]))
             my_slice=my_csv_to_pll[start:(start+size_chunks)].set_index('index')
             partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_slice,
-                                              set_levels_prok=set_proks,
-                                              taxonomic_cutoff=taxo_cutoff,
-                                              mode=MODE)
+                                                  set_levels_prok=set_proks,
+                                                  taxonomic_cutoff=taxo_cutoff,
+                                                  mode=MODE)
             if len(results_eval) == (nb_reads_to_process-nb_reads_to_process%size_chunks)/2:
                 print("HALF WAY !")
             # result = eval_pool.imap_unordered(partial_eval, my_slice.index)
             result = eval_pool.map(partial_eval, my_slice.index)
             results_eval.extend(result)
-            start += size_chunks
+            start += size_chunks 
 
         eval_pool.close()
         assert(len(results_eval) == nb_reads_to_process)
@@ -546,7 +606,7 @@ if __name__ == "__main__":
         counts_type_align = my_csv.type_align.value_counts()
         for type_aln, count in counts_type_align.items():
             dict_count[type_aln] = count
-        del type_aln
+        del type_aln, count
         dict_count['tot_second'] = (dict_count['second_plural'] + 
                                     dict_count['second_uniq'])
         dict_count["tot_reads"] = (dict_count['unmapped'] + 
@@ -720,12 +780,9 @@ if __name__ == "__main__":
         dict_stats_sp_level = {'TP':len(list_TP),
                                'FP':len(list_FP)}
         # precision_at_taxa_level = compute_metrics(dict_stats_sp_level, True)
-        def truncate(n, decimals=0):
-            multiplier = 10 ** decimals
-            return int(n * multiplier) / multiplier
         prec_at_taxa_level = round(len(list_TP) / (len(list_TP)+len(list_FP)), 
                                    4)
-        FDR_at_taxa_level = round(1-precision_at_taxa_level, 4)
+        FDR_at_taxa_level = round(1-prec_at_taxa_level, 4)
         print("PRECISION:  {} | FDR: {}".format(prec_at_taxa_level, 
                                                 FDR_at_taxa_level))
         print("SENSITIVITY:", recall_at_taxa_level, " | ", "FNR:",
