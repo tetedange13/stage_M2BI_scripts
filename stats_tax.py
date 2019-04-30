@@ -448,69 +448,41 @@ if __name__ == "__main__":
             print()
             assert(len(list_unmapped) == len(set(list_unmapped)))
 
-            print('MEM_OF_DICT:', sys.getsizeof(dict_gethered)/8/1000)
-            # sys.exit()
-
 
             # Extract relevant SAM info towards a CSV file:
             TOTO = t.time()
             print("Converting SAM into CSV...")
             partial_func = partial(pll.SAM_to_CSV, 
                                    conv_seqid2taxid=dict_seqid2taxid)
-            # Parallel version:
-            size = 500000
-            nb_chunks = 5
-            # list_keys = list(dict_gethered.keys())
-            
-            print("Converting BIG dict..")
-            # Need generator casting to have islice() work:
-            dict_light = (tupl for tupl in dict_gethered.items())
-            felix = []
-            while True:
-                tmp_slice = list(islice(dict_light, size))
-                if tmp_slice:
-                    felix.append(tmp_slice)
-                else:
-                    break
-            dict_gethered.clear()
-            # print(felix[-1]);sys.exit()
-            # test = lambda a_dict: ((key, a_dict[key][:]) for key in )
-            def test2(a_dict):
-                for tupl in a_dict.items():
-                    yield tupl
-            
-            
-            # dict_light = test(dict_gethered)
-            # print("salut")
-            # dict_gethered.clear()
-            # assert(list(dict_light))
-            # print(next(dict_light));sys.exit()
-            # print("SIZE_DICT:", sys.getsizeof(dict_gethered)/8/1000)
-
-            results = []
-            # 
-            # while True:
-            for slice_dict_items in felix:
-                # my_pool = mp.Pool(NB_THREADS)
-                with mp.get_context("spawn").Pool() as my_pool:
-                # slice_dict_items = list(islice(dict_light, size))
-                # if slice_dict_items:
-                    print('MEM_OF_SLICE:', sys.getsizeof(slice_dict_items)/8/1000)
-                    result = my_pool.map(partial_func, slice_dict_items)
-                    results.extend(result)
-                    # del result, slice_dict_items
-                    # print('MEM_OF_RES:', sys.getsizeof(results)/8/1000)
-                # else:
-                #     print("TOUT CONSOMME !")
-                #     break
-                # my_pool.close()
-
-
+                                               # Parallel version:
+            my_pool = mp.Pool(NB_THREADS)
+            results = my_pool.map(partial_func, dict_gethered.items())
+            my_pool.close()
             # Serial version (need list casting to have output):
-            # results = list(map(partial_func, dict_gethered.items()))
-            print("Deleting BIG dict..")
-            # dict_gethered.clear()
-            print("CSV CONVERSION TIME:", t.time() - TOTO);sys.exit()
+            # results = list(map(partial_func, dict_gethered.items())) 
+
+            # sys.exit()
+
+            # Write outfile:
+            with open(to_out_file, 'w') as out_file:
+                
+                # Write mapped reads:
+                for res_conversion in results:
+                    to_write, list_header = str_from_res_conv(res_conversion)
+                    if len(res_conversion) > 3:
+                        # list_header = [a_key for a_key in res_conversion.keys() 
+                        #                      if a_key != 'readID']
+                        header_for_file = ','.join([''] + list_header)
+                    out_file.write(to_write + '\n')
+                del res_conversion
+                # print(header_for_file);sys.exit()
+
+                # Write unmapped reads:
+                if list_unmapped:
+                    for unmapped_read in list_unmapped:
+                        out_file.write(unmapped_read + ',unmapped,no\n')
+                    del unmapped_read
+
 
             # Write outfile:
             with open(to_out_file, 'w') as out_file:
