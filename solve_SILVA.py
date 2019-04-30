@@ -190,7 +190,7 @@ def local_taxid_search(gz_db_name, to_problems_file, dirOut="./",
             groups = [list(ittls.islice(acc2taxid_gz, size_chunks)) for i in range(nb_threads)]
 
             # As soon as 1st element not an empty list
-            # (if the 1st one IS empty, the following will beb too)
+            # (if the 1st one IS empty, the following will be too)
             if groups[0]: 
                 result = my_pool.imap_unordered(worker, groups)
                 results.extend(result)
