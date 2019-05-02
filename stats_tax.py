@@ -76,20 +76,6 @@ def ali_to_dict(align_obj):
     return to_return
 
 
-def cut_dict(a_dict, size):
-    """Yield successive n-sized chunks from l."""
-    list_keys = list(a_dict.keys())
-    list_slices_keys, list_gen = [], []
-
-    for i in range(0, len(list_keys), size):
-        list_slices_keys.append(list_keys[i:(i + size)])
-    for slice in list_slices_keys:
-        list_gen.append([(key, a_dict[key]) for key in slice])
-        for key in slice:
-            del a_dict[key] 
-
-
-
 def str_from_res_conv(dict_res_conv):
     """
     Generate a string (ready to write) from an evaluation result
@@ -111,6 +97,21 @@ def str_from_res_conv(dict_res_conv):
     return (",".join(to_return + [lineage_to_write] + 
                      [str(x[1]) for x in rest]), 
             to_extract[1:] + list(map(lambda x: x[0], rest)))
+
+
+def get_ancester_name(arg_taxid_ancest):
+    """
+    Return the sp_name of the ancester given its taxid (different of what I 
+    called 'final_taxid')
+    If a taxid could not be found for the ancester, 'notDeterminable' is 
+    returned
+    """
+    if arg_taxid_ancest == 'no_majo_found':
+        return 'notDeterminable'
+        
+    if not pd.np.isnan(arg_taxid_ancest):
+        return taxfoo.get_taxid_name(arg_taxid_ancest)
+    return 'notDeterminable'
 
 
 def discriminate_FP(arg_taxid, wanted_taxo, df_proks_arg):
@@ -384,47 +385,12 @@ if __name__ == "__main__":
             START_SAM_PARSING = t.time()
             input_samfile = pys.AlignmentFile(to_infile, "r")
 
-            # tmp_df = pd.DataFrame.from_dict({idx: [ali.query_name,ali_to_dict(ali)] 
-            #                 for idx, ali 
-            #                 in enumerate(input_samfile.fetch(until_eof=True))},
-            #                                 orient='index', 
-            #                                 columns=['read_ID', 'a_dict'])
-            # input_samfile.close()
-            # print('Done1')
-            # are_unmapped = tmp_df.a_dict == 'unmapped'
-            # list_unmapped = list(tmp_df[are_unmapped]['read_ID'])
-            # test = tmp_df[-are_unmapped].groupby('read_ID')
-            
-            # # sys.exit()
-            # # # test = tmp_df[-are_unmapped].groupby('read_ID')['a_dict'].apply(list)
-            # print('Done2')
-            # print('MEM_OF_DICT:', sys.getsizeof(test)/8/1000)
-
-            # print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
-            # TOTO = t.time()
-            # start, nb_to_process, results = 0, len(test), []
-            # size = 1000000
-            # my_pool = mp.Pool(NB_THREADS)
-            # partial_func = partial(pll.SAM_to_CSV, 
-            #                        conv_seqid2taxid=dict_seqid2taxid)
-            # while start < nb_to_process:
-            #     slice_dict_items = [(a_thing[0], a_thing[1].tolist()) 
-            #                         for a_thing in islice(test['a_dict'], size)] 
-            #     # slice_dict_items = test[start:(start+size)].items()
-            #     print('MEM_OF_SLICE:', sys.getsizeof(slice_dict_items)/8/1000)
-            #     result = my_pool.map(partial_func, slice_dict_items)
-            #     results.extend(result)
-            #     start += size
-            # my_pool.close()
-            # print("CSV CONVERSION TIME:", t.time() - TOTO);sys.exit()
-
-
             dict_gethered = {}
             list_suppl = []
             list_unmapped = []
 
             for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
-                if (idx+1) % 1000000 == 0:
+                if (idx+1) % 500000 == 0:
                     print("500 000 SAM entries elapsed !")
                 query_name = alignment.query_name
                 assert(query_name) # Different from ""
@@ -606,16 +572,15 @@ if __name__ == "__main__":
         print("PLL PROCESS FINISHED !")
         
         # Compute counts:
-        dict_count = {'second_uniq':0, 'second_plural':0, 'unmapped':0}
+        dict_count = {'second_uniq':0, 'second_plural':0, 'unmapped':0,
+                      'only_suppl':0}
         counts_type_align = my_csv.type_align.value_counts()
         for type_aln, count in counts_type_align.items():
             dict_count[type_aln] = count
         del type_aln, count
         dict_count['tot_second'] = (dict_count['second_plural'] + 
                                     dict_count['second_uniq'])
-        dict_count["tot_reads"] = (dict_count['unmapped'] + 
-                                   dict_count["tot_second"] +
-                                   dict_count["normal"])        
+        dict_count["tot_reads"] = sum(counts_type_align)     
         dict_stats['FN'] += dict_count['unmapped']
 
         print('Finalizing evaluation..')
@@ -623,13 +588,14 @@ if __name__ == "__main__":
         tmp_df = pd.DataFrame.from_dict({idx:a_list for idx, a_list 
                                                     in results_eval}, 
                                         orient='index',
-                                        columns=['species', 'final_taxid', 
+                                        columns=['taxid_ances', 'final_taxid', 
                                                  'res_eval', 'remark_eval'])
         # Add the results of the evaluation to the csv:
         my_csv = my_csv.assign(final_taxid=tmp_df.final_taxid,
                                res_eval=tmp_df.res_eval,
                                remark_eval=tmp_df.remark_eval,
-                               species=tmp_df.species)
+                               taxid_ancester=tmp_df.taxid_ances)
+        my_csv = my_csv.assign(species=tmp_df.taxid_ances.apply(get_ancester_name))
         del tmp_df, results_eval
 
         # To access evaluation results of a given species:
@@ -708,35 +674,10 @@ if __name__ == "__main__":
 
         print()
 
-
-        if taxo_cutoff == 'species':
-            # Make difference between TFP and FFP:
-            print("DISCRIMINATION between TFP and FFP..")
-            FP_notInKey = my_csv[is_FP & 
-                                 (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]
-            counts_FP_NotInKey = FP_notInKey.final_taxid.value_counts()
-            counts_FP_NotInKey.name = 'counts'
-
-            # We remove 'superkingdom' and 'species' lvls
-            taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
-            list_FFP, tot_FFP = [], 0
-            df_FP = pd.DataFrame(counts_FP_NotInKey).reset_index()
-            # print(df_FP);sys.exit()
-            tmp_df = df_FP['index'].apply(discriminate_FP, args=(taxo_not_bact, 
-                                                          df_proks))
-            # print(tmp_df)
-            df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
-                                 ancester_name=tmp_df[2])
-            del tmp_df
-
-            tot_FFP = sum(df_FP[df_FP.status == 'FFP'].counts)
-            print(df_FP.set_index('index'))
-            print()
-
-            print('TOT NB OF FFP: {} | OVER {} FP_notInKey'.format(tot_FFP,
-                                                                   len(FP_notInKey)))
-            print("(and over a total of {} FP)".format(sum(is_FP)))
-            # sys.exit()
+        # Add numbers of TP and FP to the dict of stats:
+        dict_stats['FP'] += sum(is_FP)
+        dict_stats['FP'] += sum(my_csv['type_align'] == 'only_suppl')
+        dict_stats['TP'] += sum(is_TP)
 
 
         # pd.DataFrame({'TP_nb_trashes':my_csv[is_TP]['nb_trashes'].value_counts(), 
@@ -754,9 +695,6 @@ if __name__ == "__main__":
             # plt.show()
 
 
-        dict_stats['FP'] += sum(is_FP)
-        dict_stats['FP'] += sum(my_csv['type_align'] == 'only_suppl')
-        dict_stats['TP'] += sum(is_TP)
         # print(dict_stats)
         # print("TOT READS EVALUATED:", sum(dict_stats.values()))
         print()
@@ -795,6 +733,37 @@ if __name__ == "__main__":
         print("F1-SCORE:", 
               calc_f1((prec_at_taxa_level, recall_at_taxa_level)))
         print()
+
+
+        # Make difference between TFP and FFP:
+        print("DISCRIMINATION between TFP and FFP (at read lvl):")
+        FP_notInKey = my_csv[is_FP & 
+                             (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]
+        counts_FP_NotInKey = FP_notInKey.final_taxid.value_counts()
+        counts_FP_NotInKey.name = 'counts'
+
+        # We remove 'superkingdom' and 'species' lvls
+        taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
+        df_FP = pd.DataFrame(counts_FP_NotInKey).reset_index()
+        # print(df_FP);sys.exit()
+        tmp_df = df_FP['index'].apply(discriminate_FP, 
+                                      args=(taxo_not_bact, df_proks))
+        # print(tmp_df)
+        df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
+                             ancester_name=tmp_df[2])
+        del tmp_df
+
+        tot_FFP = sum(df_FP[df_FP.status == 'FFP'].counts)
+        print(df_FP.set_index('index'))
+        print()
+
+        print('TOT NB OF FFP: {} | OVER {} FP_notInKey'.format(tot_FFP,
+                                                               len(FP_notInKey)))
+        tot_FP = dict_stats['FP']
+        print("Total of {} FP --> {} + {} otherFP".format(tot_FP, tot_FFP, 
+                                                          tot_FP-tot_FFP))
+        print()
+        # sys.exit()
 
 
         sum_stats, sum_counts = sum(dict_stats.values()),sum(dict_count.values())
