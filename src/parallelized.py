@@ -6,6 +6,7 @@ Contains all functions used to parallelise processes
 """
 
 
+from sys import exit
 import src.taxo_eval as eval
 
 
@@ -139,6 +140,7 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok,
     elif 'second' in type_align: # Secondary (with 1 unique taxid or more)
         list_taxid_target = list(map(int, lineage_val.strip(';').split('s')))
         if type_align == 'second_uniq':
+        # if True: # Like that, we always take the 1st one
             taxid_to_eval = list_taxid_target[0]
         else: # More than 1 unique taxid
             if mode == 'MAJO_OLD':
@@ -155,20 +157,23 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok,
                 taxid_to_eval = eval.taxfoo.find_lca(set(list_taxid_target))
             elif len(res_second_handling) == 1: # Other problem
                 return (one_csv_index_val, 
-                        ['problem', remark_eval, 'FP', remark_eval])
+                        ['no_majo_found', remark_eval, 'FP', remark_eval])
             else:
                 taxid_to_eval = res_second_handling[1]
 
-    # else: # 'only_suppl' or 'unmapped'
+    else:
+        print("ERROR ! 'type_align' NOT KNOWN !")
+        exit()
     #     taxid_to_eval = lineage_val # Should be a nan
     #     assert(pd.np.isnan(taxid_to_eval))
 
-    sp_name, classif, remark = eval.in_zymo(taxid_to_eval, set_levels_prok, 
-                                      taxonomic_cutoff)
+    taxid_ancester, classif, remark = eval.in_zymo(taxid_to_eval, 
+                                                   set_levels_prok, 
+                                                   taxonomic_cutoff)
     remark_eval += ';' + remark
 
     return (one_csv_index_val, 
-            [sp_name, int(taxid_to_eval), classif, remark_eval])
+            [taxid_ancester, int(taxid_to_eval), classif, remark_eval])
 
 
 

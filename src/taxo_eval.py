@@ -198,7 +198,9 @@ def remove_minor_lca(list_of_things, cutoff_discard):
     to_return = [val for val in val_counts]
 
     if nb_majo == 0:
-        print('noMajo:', [taxfoo.get_taxid_name(a_taxid) for a_taxid in freq_counts.index])
+        print('noMajo:', 
+              [(taxfoo.get_taxid_name(a_taxid), a_freq) 
+               for a_taxid, a_freq in freq_counts.items()])
         # print('noMajo!\n', freq_counts)
         return ('noMajo', None) # NO majoritary
     elif nb_majo == 1: # 1 unique majoritary
@@ -258,18 +260,20 @@ def in_zymo(taxo_taxid, set_levels_prok, taxonomic_cutoff):
     Given the taxid of a read (lowest one in the taxo), determine if the 
     organism belongs to the Zymo mock comm, at a given taxonomic cutoff 
     """
-    lineage = taxfoo.get_lineage_as_dict(taxo_taxid)
+    lineage = taxfoo.get_dict_lineage_as_taxids(taxo_taxid)
 
     if not lineage: # "cannot find taxid {a_taxid}; quitting." --> empty dict
-        return ('notDeterminable', 'FP', 'taxid_unknown')
+        return (pd.np.nan, 'FP', 'taxid_unknown')
     else:
         taxo_levels = lineage.keys()
 
         if taxonomic_cutoff not in taxo_levels:
             # return ('notDeterminable', 'FP')
-            return (taxfoo.get_taxid_name(int(taxo_taxid)), 'FP', 'notInKeys')
+            return (pd.np.nan, 'FP', 'notInKeys')
         else:
-            taxo_name = lineage[taxonomic_cutoff]
+            taxid_ancester = lineage[taxonomic_cutoff]
+            assert(taxid_ancester)
+            taxo_name = taxfoo.get_taxid_name(taxid_ancester)
             if taxo_name in set_levels_prok:
-                return (taxo_name, 'TP', 'true_pos')
-            return (taxo_name, 'FP', 'misassigned')
+                return (taxid_ancester, 'TP', 'true_pos')
+            return (taxid_ancester, 'FP', 'misassigned')
