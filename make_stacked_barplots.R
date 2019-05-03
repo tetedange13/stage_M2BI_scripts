@@ -36,7 +36,7 @@ cond_topOne <- (melted$variable == 'FDR_topOne' |
 melted$cat <- ''
 melted[cond_raw, ]$cat <- "1_Raw"
 melted[cond_lenFilt, ]$cat <- "2_LenFilt"
-melted[cond_topOne, ]$cat <- "3_TopOne"
+# melted[cond_topOne, ]$cat <- "3_TopOne"
 melted[cond_lenFilt, ]$variable <- melted[cond_raw, ]$variable
 
 # melted <- ddply(melted, c("run", "cat"),
