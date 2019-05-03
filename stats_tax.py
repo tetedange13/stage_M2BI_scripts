@@ -221,7 +221,7 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'txt', 'sam'])
 
     # Common variables:
-    NB_THREADS = 10
+    NB_THREADS = 15
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
@@ -420,24 +420,54 @@ if __name__ == "__main__":
             print("Converting SAM into CSV...")
             partial_func = partial(pll.SAM_to_CSV, 
                                    conv_seqid2taxid=dict_seqid2taxid)
-                                               # Parallel version:
-            my_pool = mp.Pool(NB_THREADS)
-            results = my_pool.map(partial_func, dict_gethered.items())
-            my_pool.close()
+            # Parallel version:
+            # from contextlib import closing
+            # with closing(mp.Pool(NB_THREADS)) as my_pool: 
+            #     results = my_pool.map_async(partial_func, dict_gethered.items()).get()
+
+            # assert(results)
             # Serial version (need list casting to have output):
             # results = list(map(partial_func, dict_gethered.items())) 
 
             # sys.exit()
 
+            dict_light = (tupl for tupl in dict_gethered.items())
+            nb_reads_to_process = len(dict_gethered.keys())
+            proc_chunks, chunksize = [], nb_reads_to_process//NB_THREADS
+            # for i_proc in range(NB_THREADS):
+            while True:
+                my_slice = list(islice(dict_light, chunksize))
+                if my_slice:
+                    proc_chunks.append(my_slice)
+                else:
+                    break
+            assert(sum(map(len, proc_chunks)) == nb_reads_to_process)
+
+            def process_chunk(chunk, partial_fct):
+                assert(list(map(partial_fct, chunk)))
+                return list(map(partial_fct, chunk))
+
+            results = []
+            with mp.Pool(NB_THREADS) as my_pool:
+                proc_results = [my_pool.apply_async(process_chunk, 
+                                                    args=(chunk, partial_func))
+                                                    #callback=lambda res: results.extend(res.get()))
+                                for chunk in proc_chunks]
+                results = [r for r_ext in proc_results for r in r_ext.get()]
+            # for res in proc_results:
+            #     print(res.get());break
+            # print(results)
+            print(results[0])
+            # print(results)
+            print("PLL PROCESS FINISHED !")
+
+
             # Write outfile:
             with open(to_out_file, 'w') as out_file:
-                
                 # Write mapped reads:
                 for res_conversion in results:
                     to_write, list_header = str_from_res_conv(res_conversion)
                     if len(res_conversion) > 3:
-                        # list_header = [a_key for a_key in res_conversion.keys() 
-                        #                      if a_key != 'readID']
                         header_for_file = ','.join([''] + list_header)
                     out_file.write(to_write + '\n')
                 del res_conversion
@@ -449,26 +479,7 @@ if __name__ == "__main__":
                         out_file.write(unmapped_read + ',unmapped,no\n')
                     del unmapped_read
 
-
-            # Write outfile:
-            with open(to_out_file, 'w') as out_file:
-                
-                # Write mapped reads:
-                for res_conversion in results:
-                    to_write, list_header = str_from_res_conv(res_conversion)
-                    if len(res_conversion) > 3:
-                        header_for_file = ','.join([''] + list_header)
-                    out_file.write(to_write + '\n')
-                del res_conversion
-                # print(header_for_file);sys.exit()
-
-                # Write unmapped reads:
-                if list_unmapped:
-                    for unmapped_read in list_unmapped:
-                        out_file.write(unmapped_read + ',unmapped,no\n')
-                    del unmapped_read
-
-            # Write header:
+            # Add header to the outfile:
             with open(to_out_file, 'r+') as out_file:
                 content = out_file.read()
                 out_file.seek(0)
@@ -519,8 +530,6 @@ if __name__ == "__main__":
             print("NUMBER OF READS REMAINING:", sum(with_lineage), " | ",
                   "NB REMOVED:", len(with_lineage)-sum(with_lineage))
 
-        my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage]
-        # print(my_csv_to_pll['type_align'].value_counts());sys.exit()
 
         # MODE = 'LCA'
         MODE = 'MINOR_RM_LCA'
@@ -532,45 +541,49 @@ if __name__ == "__main__":
         print("MODE FOR HANDLING OF THE MULTI-HITS =", MODE)
         print()
 
-        partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_csv_to_pll,
-                                              set_levels_prok=set_proks,
-                                              taxonomic_cutoff=taxo_cutoff,
-                                              mode=MODE)
+        my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage].reset_index()
         nb_reads_to_process = len(my_csv_to_pll.index)
         print("PROCESSING {} reads from CSV to EVALUATE TAXO..".format(nb_reads_to_process))
         print("(Nb CPUs: {})".format(NB_THREADS))
+
+        partial_eval = partial(pll.eval_taxo, set_levels_prok=set_proks,
+                                              taxonomic_cutoff=taxo_cutoff,
+                                              mode=MODE)
+
         # Parallel version:
-        size_chunks = 100
-        results_eval = []
-        start = 0
-        my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage].reset_index()
+        def process_chunk(chunk_df, partial_func):
+            return chunk_df.apply(partial_func, axis='columns')
 
-        eval_pool = mp.Pool(NB_THREADS)
-        while start < nb_reads_to_process:
-            #print("Processing slice {} ".format([start, (start+size_chunks)]))
-            my_slice=my_csv_to_pll[start:(start+size_chunks)].set_index('index')
-            partial_eval = partial(pll.eval_taxo, two_col_from_csv=my_slice,
-                                                  set_levels_prok=set_proks,
-                                                  taxonomic_cutoff=taxo_cutoff,
-                                                  mode=MODE)
-            if len(results_eval) == (nb_reads_to_process-nb_reads_to_process%size_chunks)/2:
-                print("HALF WAY !")
-            # result = eval_pool.imap_unordered(partial_eval, my_slice.index)
-            result = eval_pool.map(partial_eval, my_slice.index)
-            results_eval.extend(result)
-            start += size_chunks 
 
-        eval_pool.close()
-        assert(len(results_eval) == nb_reads_to_process)
-        # sys.exit()
+        proc_chunks, chunksize = [], nb_reads_to_process//NB_THREADS
+        for i_proc in range(NB_THREADS):
+            chunkstart = i_proc * chunksize
+            # make sure to include the division remainder for the last process
+            chunkend = (i_proc + 1) * chunksize if i_proc < NB_THREADS - 1 else None
+            proc_chunks.append(my_csv_to_pll.iloc[chunkstart : chunkend])
+        assert(sum(map(len, proc_chunks)) == nb_reads_to_process)
 
-        
+        with mp.Pool(NB_THREADS) as eval_pool:
+            proc_results = [eval_pool.apply_async(process_chunk, 
+                                                  args=(chunk, partial_eval))
+                            for chunk in proc_chunks]
+            result_chunks = [r.get() for r in proc_results]
+        print("PLL PROCESS FINISHED !")
+
+        # SERIAL VERSION:
         # results_eval = eval_pool.map(partial_eval, my_csv_to_pll.iterrows())
         # eval_pool.close()
         # results_eval = list(map(partial_eval, my_csv_to_pll.index)) 
         del my_csv_to_pll
-        print("PLL PROCESS FINISHED !")
-        
+
+        print('Finalizing evaluation..')
+        my_res = pd.concat(result_chunks)
+        my_csv = pd.concat([my_csv, my_res.set_index('index')], axis='columns', 
+                           sort=False, copy=False)
+        my_csv['species'] = my_csv.taxid_ancester.apply(get_ancester_name)
+        # sys.exit()
+
+
         # Compute counts:
         dict_count = {'second_uniq':0, 'second_plural':0, 'unmapped':0,
                       'only_suppl':0}
@@ -583,25 +596,12 @@ if __name__ == "__main__":
         dict_count["tot_reads"] = sum(counts_type_align)     
         dict_stats['FN'] += dict_count['unmapped']
 
-        print('Finalizing evaluation..')
-        # /!\ CAREFUL WITH THE ORDER OF THE COLUMNS GIVEN HERE:
-        tmp_df = pd.DataFrame.from_dict({idx:a_list for idx, a_list 
-                                                    in results_eval}, 
-                                        orient='index',
-                                        columns=['taxid_ances', 'final_taxid', 
-                                                 'res_eval', 'remark_eval'])
-        # Add the results of the evaluation to the csv:
-        my_csv = my_csv.assign(final_taxid=tmp_df.final_taxid,
-                               res_eval=tmp_df.res_eval,
-                               remark_eval=tmp_df.remark_eval,
-                               taxid_ancester=tmp_df.taxid_ances)
-        my_csv = my_csv.assign(species=tmp_df.taxid_ances.apply(get_ancester_name))
-        del tmp_df, results_eval
 
         # To access evaluation results of a given species:
-        tmp_df = my_csv[['species', 'res_eval']][my_csv.species.notnull()]
-        dict_species2res = {tupl[0]:tupl[1] for _, tupl in tmp_df.iterrows()}
+        tmp_df = my_csv[['species', 'res_eval']].drop_duplicates()
+        dict_species2res = tmp_df.set_index('species')['res_eval'].to_dict()
         del tmp_df
+
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print()
 

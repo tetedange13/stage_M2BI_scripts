@@ -8,6 +8,7 @@ Contains all functions used to parallelise processes
 
 from sys import exit
 import src.taxo_eval as eval
+Series = eval.pd.Series
 
 
 # FROM STAT_TAX.PY:
@@ -72,7 +73,9 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
                 returned_dict['mapq'] = max_mapq
                 # for align_not_suppl in no_suppl_list:
                 for align_not_suppl in only_equiv_list:
-                    assert(align_not_suppl["mapq"] == 0)
+                    # if align_not_suppl["mapq"] != 0:
+                    #     print(align_not_suppl)
+                    # assert(align_not_suppl["mapq"] == 0)
                     # Need to propagate max value of MAPQ to all secondaries:
                     align_not_suppl["mapq"] = max_mapq
                 del align_not_suppl
@@ -120,17 +123,21 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
     return returned_dict
 
 
-def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok, 
-              taxonomic_cutoff, mode):
+# def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok, 
+#               taxonomic_cutoff, mode):
+def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
     """
     Do the parallel taxonomic evaluation on a given Pandas DataFrame
     The 'mode' parameter allows to change between LCA and majo voting, for the
     handling of multi-hits/mult-mapping
     """
-    #one_csv_index_val, tupl_typeAln_lin = one_line_from_csv
+    # /!\ CAREFUL WITH THE ORDER HERE:
+    one_csv_index_val, lineage_val, type_align = one_line_from_csv.values
+    # print(one_csv_index_val, lineage_val)
+    # one_csv_index_val, tupl_typeAln_lin = one_line_from_csv.items()
     #lineage_val, type_align = tupl_typeAln_lin
-    lineage_val = two_col_from_csv.loc[one_csv_index_val, "lineage"]
-    type_align = two_col_from_csv.loc[one_csv_index_val, "type_align"]
+    # lineage_val = two_col_from_csv.loc[one_csv_index_val, "lineage"]
+    # type_align = two_col_from_csv.loc[one_csv_index_val, "type_align"]
 
     remark_eval = type_align
 
@@ -156,8 +163,11 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok,
                 remark_eval += ';lca'
                 taxid_to_eval = eval.taxfoo.find_lca(set(list_taxid_target))
             elif len(res_second_handling) == 1: # Other problem
-                return (one_csv_index_val, 
-                        ['no_majo_found', remark_eval, 'FP', remark_eval])
+                return Series([one_csv_index_val, 'no_majo_found', 
+                                       remark_eval, 'FP', remark_eval],
+                                      index=['index', 'taxid_ancester', 
+                                             'final_taxid', 'res_eval', 
+                                             'remark_eval'])
             else:
                 taxid_to_eval = res_second_handling[1]
 
@@ -172,8 +182,10 @@ def eval_taxo(one_csv_index_val, two_col_from_csv, set_levels_prok,
                                                    taxonomic_cutoff)
     remark_eval += ';' + remark
 
-    return (one_csv_index_val, 
-            [taxid_ancester, int(taxid_to_eval), classif, remark_eval])
+    return Series([one_csv_index_val, taxid_ancester, int(taxid_to_eval), 
+                   classif, remark_eval], 
+                  index=['index', 'taxid_ancester', 'final_taxid', 'res_eval', 
+                  'remark_eval'])
 
 
 
