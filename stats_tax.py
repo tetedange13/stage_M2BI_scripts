@@ -196,12 +196,14 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
     y_true, y_pred = dict_stats_to_vectors(dict_stats_to_convert)
 
     precision = round(skm.precision_score(y_true, y_pred), 4) # PPV = TP/(TP+FP) (positive predictive value or precision)
-    print("PRECISION:", precision, " | ", "FDR:", 1 - precision) 
+    print("PRECISION:", precision, " | ", "FDR:", round(1 - precision, 4), 
+          " | TEST:", round(pd.np.exp(2-precision), 4))
 
     if not at_taxa_level:
         sensitivity = round(skm.recall_score(y_true, y_pred), 4)
     
-        print("SENSITIVITY:", sensitivity, " | ", "FNR:", 1 - sensitivity) # TPR = TP/(TP+FN) (or sensitivity, hit rate, recall) 
+        print("SENSITIVITY:", sensitivity, " | ", "FNR:", 
+              round(1 - sensitivity, 4)) # TPR = TP/(TP+FN) (or sensitivity, hit rate, recall) 
         print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
         print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
         print("ACCURACY:", round(skm.accuracy_score(y_true, y_pred), 4)) # ACC = (TP+TN)/(TP+FP+FN+TN) (overall accuracy)
@@ -221,7 +223,7 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'txt', 'sam'])
 
     # Common variables:
-    NB_THREADS = 15
+    NB_THREADS = 10
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
@@ -271,8 +273,9 @@ if __name__ == "__main__":
 
     if not CLUST_MODE and not IS_SAM_FILE:
         print("CENTRIFUGE MODE !\n")
-        dict_gethered = {}
 
+        print("Gethering multi-hits from Centrifuge's CSV..")
+        dict_gethered = {}
         with open(to_infile, 'r') as in_tab_file:
             in_tab_file.readline() # Skip header
             set_ignored_hits = set()
@@ -295,21 +298,22 @@ if __name__ == "__main__":
 
         # Be sure to don't exclude any read:
         assert(len(set_all_readIDs) == len(dict_gethered.keys()))
-        print("NB OF IGNORED HITS:", len(set_ignored_hits))
+        print("NB OF IGNORED HITS ('no rank' + taxid=0):", 
+              len(set_ignored_hits))
+        print()
 
-        readIDs, list_val, list_indexes = dict_gethered.keys(), [], []
+        print("Formatting for further taxo eval..")
+        readIDs = dict_gethered.keys()
         dict_problems = {'2071623':'37482', '585494':'573', '595593':'656366'}
+        tmp_dict = {}
 
         for readID in readIDs:
-            list_indexes.append(readID)
             if len(dict_gethered[readID]) > 1:
                 list_taxids = list(map(lambda a_str: a_str.split('\t')[1], 
                                    dict_gethered[readID]))
                 if '0' in list_taxids:
                     print(readID);sys.exit()
                 nb_trashes = sum(map(pll.is_trash, list_taxids))
-                # nb_trashes = 0
-                lineage = 's'.join(list_taxids)
                 # In the case of multiple hits, all hits have the same score, 
                 # 2ndBestScore etc, except for the hitLength, that can differ
                 (_, _, score, _, _, queryLength, 
@@ -320,7 +324,7 @@ if __name__ == "__main__":
                     type_align = 'second_uniq'
                 else:
                     type_align = 'second_plural'
-                hitLength = 'm'.join(list_hitLength)
+
                 secondBestScore = pd.np.nan
 
             else:
@@ -337,27 +341,32 @@ if __name__ == "__main__":
                      numMatches, nb_trashes) = [pd.np.nan] * 7
                 else:
                     type_align = 'normal'    
-                    lineage = ';' + taxID + ';'
-                    hitLength = ';' + pre_hitLength + ';'
+                    list_hitLength = [pre_hitLength]
                     nb_trashes = int(pll.is_trash(taxID))
-                    # nb_trashes = 0
+                list_taxids = [taxID]
 
-            list_val.append([type_align, lineage, nb_trashes, score, 
-                             secondBestScore, hitLength, queryLength, 
-                             numMatches])
+
+            # /!\ CAREFUL WITH THE ORDER HERE:
+            if type_align != 'unmapped':
+                score = int(score)
+                hitLength = (';' + 'm'.join(list_hitLength) + ';')
+                lineage = (';' + 's'.join(str(taxid) 
+                                          for taxid in sorted(list_taxids)) + 
+                           ';')
+            tmp_dict[readID] = [type_align, lineage, nb_trashes, score, 
+                                secondBestScore, hitLength, queryLength, 
+                                numMatches]
         del readID
 
-        tupl_columns = ('type_align', 'lineage', 'nb_trashes', 'score', 
-                        'secondBestScore', 'hitLength', 'queryLength', 
-                        'numMatches')
-        my_csv = pd.DataFrame(data=None, columns=tupl_columns,
-                              index=list_indexes)
-        for i in range(len(tupl_columns)):
-            # Cuz df.assign() takes 1 single karg:
-            tmp_dict = {tupl_columns[i]:list(map(lambda sublist: sublist[i], 
-                                                 list_val))}
-            my_csv = my_csv.assign(**tmp_dict)
-        del i, tmp_dict, list_val, list_indexes
+        dict_gethered.clear()
+
+        # /!\ CAREFUL WITH THE ORDER HERE:
+        my_csv = pd.DataFrame.from_dict(tmp_dict, orient='index',
+                                        columns=['type_align', 'lineage', 
+                                                 'nb_trashes', 'score', 
+                                                 'secondBestScore', 'hitLength', 
+                                                 'queryLength', 'numMatches'])
+        tmp_dict.clear()
 
         print(my_csv.type_align.value_counts())
         print()
@@ -451,6 +460,7 @@ if __name__ == "__main__":
                 results = [r for r_ext in proc_results for r in r_ext.get()]
 
             print("PLL PROCESS FINISHED !")
+            dict_gethered.clear()
 
 
             # Serial version (need list casting to have output):
@@ -514,18 +524,35 @@ if __name__ == "__main__":
         TIME_CSV_TREATMENT = t.time()
         with_lineage = ((my_csv.type_align != 'unmapped') & 
                         (my_csv.type_align != 'only_suppl'))
-                        # (my_csv.type_align != 'only_suppl'),
-                        # (my_csv.type_align != 'second_plural')
+
+        # FILTER CENTRIFUGE results on score and/or hitLength
         if not IS_SAM_FILE:
         # if False:
             cutoff_on_centriScore, cutoff_on_centriHitLength = 300, 50
-            with_lineage = ((my_csv.type_align != 'unmapped') & 
-                            (my_csv.type_align != 'only_suppl') &
-                            (pd.to_numeric(my_csv['score']) > cutoff_on_centriScore))
-            print("CUTOFF CENTRI SCORE:", cutoff_on_centriScore)
-            print("NUMBER OF READS REMAINING:", sum(with_lineage), " | ",
-                  "NB REMOVED:", len(with_lineage)-sum(with_lineage))
+            # cutoff_on_centriScore, cutoff_on_centriHitLength = 0, 0
 
+            def get_min_hitLength(hitLength_val):
+                if type(hitLength_val) == str:
+                    list_val = hitLength_val.strip(';').split('m')
+                    if len(list_val) > 1:
+                        return min(map(float, list_val))
+                    return float(list_val[0])
+                return hitLength_val
+
+            my_csv['min_hitLength'] = my_csv.hitLength.apply(get_min_hitLength)
+            centri_filter = my_csv.score > cutoff_on_centriScore
+            centri_filter = (centri_filter & 
+                             (my_csv.min_hitLength > cutoff_on_centriHitLength))
+            nb_nan = sum(-with_lineage)
+            nb_pass_before_filter = sum(with_lineage)
+            with_lineage = with_lineage & centri_filter
+            nb_removed = nb_pass_before_filter-sum(with_lineage)
+            assert(len(with_lineage) == sum(with_lineage)+nb_removed +nb_nan)
+            print("CUTOFF CENTRI SCORE:", cutoff_on_centriScore, " | ",
+                  "CUTOFF CENTRI HitLength:", cutoff_on_centriHitLength)
+            print("NB OF NaNs:", nb_nan, " | ", "NB REMOVED (NaNs excepted):", 
+                  nb_removed)
+        # sys.exit()
 
         # MODE = 'LCA'
         MODE = 'MINOR_RM_LCA'
@@ -642,10 +669,6 @@ if __name__ == "__main__":
             print("--> Wrote OTUs mapping file for '{}' !".format(sampl_prefix))
             print()
 
-        # print(set([evaluate.taxfoo.get_taxid_rank(a_taxid) for a_taxid in set(my_csv.final_taxid)]))
-        # print(my_csv.species.value_counts())
-        # sys.exit()
-
 
         # Count TP and FP for statistics:
         cutoff_nb_trashes = my_csv.nb_trashes.max()
@@ -660,7 +683,7 @@ if __name__ == "__main__":
         # print(my_csv[is_FP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
         print(my_csv[is_FP].remark_eval.value_counts().sort_index())
         # print(my_csv[is_FP].nb_trashes.value_counts().sort_index())
-        # print(my_csv[is_FP & (my_csv.remark_eval == 'no_majo_found')]['lineage'].value_counts())
+        # print(my_csv[is_FP & (my_csv.remark_eval == 'second_uniq;misassigned')].species.value_counts())
         # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]['lineage'].apply(lambda lin: 's'.join(set(lin.strip(';').split('s')))).value_counts())
         print()
         print("TP STATS:")
@@ -747,7 +770,7 @@ if __name__ == "__main__":
             # print(df_FP);sys.exit()
             tmp_df = df_FP['index'].apply(discriminate_FP, 
                                           args=(taxo_not_bact, df_proks))
-            print(FP_notInKey)
+            # print(FP_notInKey)
             df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
                                  ancester_name=tmp_df[2])
             del tmp_df
