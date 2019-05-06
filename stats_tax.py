@@ -418,23 +418,19 @@ if __name__ == "__main__":
             # Extract relevant SAM info towards a CSV file:
             TOTO = t.time()
             print("Converting SAM into CSV...")
-            partial_func = partial(pll.SAM_to_CSV, 
+            conv_partial = partial(pll.SAM_to_CSV, 
                                    conv_seqid2taxid=dict_seqid2taxid)
             # Parallel version:
+            # VERSION 1 (use a lot of RAM, but quite fast):
             # from contextlib import closing
             # with closing(mp.Pool(NB_THREADS)) as my_pool: 
-            #     results = my_pool.map_async(partial_func, dict_gethered.items()).get()
+            #     results = my_pool.map_async(conv_partial, dict_gethered.items()).get()
 
-            # assert(results)
-            # Serial version (need list casting to have output):
-            # results = list(map(partial_func, dict_gethered.items())) 
-
-            # sys.exit()
-
+            # VERSION 2 (use much less RAM but a bit slower):
             dict_light = (tupl for tupl in dict_gethered.items())
             nb_reads_to_process = len(dict_gethered.keys())
             proc_chunks, chunksize = [], nb_reads_to_process//NB_THREADS
-            # for i_proc in range(NB_THREADS):
+
             while True:
                 my_slice = list(islice(dict_light, chunksize))
                 if my_slice:
@@ -444,33 +440,33 @@ if __name__ == "__main__":
             assert(sum(map(len, proc_chunks)) == nb_reads_to_process)
 
             def process_chunk(chunk, partial_fct):
-                assert(list(map(partial_fct, chunk)))
                 return list(map(partial_fct, chunk))
 
             results = []
             with mp.Pool(NB_THREADS) as my_pool:
                 proc_results = [my_pool.apply_async(process_chunk, 
-                                                    args=(chunk, partial_func))
-                                                    #callback=lambda res: results.extend(res.get()))
+                                                    args=(chunk, conv_partial))
                                 for chunk in proc_chunks]
+                # Magic line that if basically a one-liner of 'extend' method:
                 results = [r for r_ext in proc_results for r in r_ext.get()]
-            # for res in proc_results:
-            #     print(res.get());break
-            # print(results)
-            print(results[0])
-            # print(results)
+
             print("PLL PROCESS FINISHED !")
+
+
+            # Serial version (need list casting to have output):
+            # results = list(map(conv_partial, dict_gethered.items())) 
+            # sys.exit()
 
 
             # Write outfile:
             with open(to_out_file, 'w') as out_file:
                 # Write mapped reads:
-                for res_conversion in results:
-                    to_write, list_header = str_from_res_conv(res_conversion)
-                    if len(res_conversion) > 3:
+                for dict_res_conv in results:
+                    to_write, list_header = str_from_res_conv(dict_res_conv)
+                    if len(dict_res_conv) > 3:
                         header_for_file = ','.join([''] + list_header)
                     out_file.write(to_write + '\n')
-                del res_conversion
+                del dict_res_conv
                 # print(header_for_file);sys.exit()
 
                 # Write unmapped reads:
@@ -739,29 +735,32 @@ if __name__ == "__main__":
         print("DISCRIMINATION between TFP and FFP (at read lvl):")
         FP_notInKey = my_csv[is_FP & 
                              (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]
-        counts_FP_NotInKey = FP_notInKey.final_taxid.value_counts()
-        counts_FP_NotInKey.name = 'counts'
+        if FP_notInKey.empty:
+            print("NOT POSSIBLE ! (no FP and/or no 'minors_rm_lca;notInKeys')")
+        else:
+            counts_FP_NotInKey = FP_notInKey.final_taxid.value_counts()
+            counts_FP_NotInKey.name = 'counts'
 
-        # We remove 'superkingdom' and 'species' lvls
-        taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
-        df_FP = pd.DataFrame(counts_FP_NotInKey).reset_index()
-        # print(df_FP);sys.exit()
-        tmp_df = df_FP['index'].apply(discriminate_FP, 
-                                      args=(taxo_not_bact, df_proks))
-        # print(tmp_df)
-        df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
-                             ancester_name=tmp_df[2])
-        del tmp_df
+            # We remove 'superkingdom' and 'species' lvls
+            taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
+            df_FP = pd.DataFrame(counts_FP_NotInKey).reset_index()
+            # print(df_FP);sys.exit()
+            tmp_df = df_FP['index'].apply(discriminate_FP, 
+                                          args=(taxo_not_bact, df_proks))
+            print(FP_notInKey)
+            df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
+                                 ancester_name=tmp_df[2])
+            del tmp_df
 
-        tot_FFP = sum(df_FP[df_FP.status == 'FFP'].counts)
-        print(df_FP.set_index('index'))
-        print()
+            tot_FFP = sum(df_FP[df_FP.status == 'FFP'].counts)
+            print(df_FP.set_index('index'))
+            print()
 
-        print('TOT NB OF FFP: {} | OVER {} FP_notInKey'.format(tot_FFP,
-                                                               len(FP_notInKey)))
-        tot_FP = dict_stats['FP']
-        print("Total of {} FP --> {} + {} otherFP".format(tot_FP, tot_FFP, 
-                                                          tot_FP-tot_FFP))
+            print('TOT NB OF FFP: {} | OVER {} FP_notInKey'.format(tot_FFP,
+                                                                   len(FP_notInKey)))
+            tot_FP = dict_stats['FP']
+            print("Total of {} FP --> {} + {} otherFP".format(tot_FP, tot_FFP, 
+                                                              tot_FP-tot_FFP))
         print()
         # sys.exit()
 
