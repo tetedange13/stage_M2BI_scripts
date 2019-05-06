@@ -43,7 +43,6 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
                      'ratio_len' : representative["ratio_len"],
                      'len_align' : representative["len_align"]}
     
-
     if nb_alignments_for_readID > 1: # Secondary alignment
         assert(not representative["is_suppl"])
         assert(not representative["is_second"])
@@ -60,7 +59,6 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
                     'lineage':'no'}
             # return [readID, 'only_suppl', 'no']
             
-
         if 'AS' in representative.keys():
             max_AS = max(map(lambda dico: dico["AS"], no_suppl_list))
             only_equiv_list = [dico for dico in no_suppl_list 
@@ -73,15 +71,9 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
                 returned_dict['mapq'] = max_mapq
                 # for align_not_suppl in no_suppl_list:
                 for align_not_suppl in only_equiv_list:
-                    # if align_not_suppl["mapq"] != 0:
-                    #     print(align_not_suppl)
-                    # assert(align_not_suppl["mapq"] == 0)
                     # Need to propagate max value of MAPQ to all secondaries:
                     align_not_suppl["mapq"] = max_mapq
                 del align_not_suppl
-            else:
-                # for align_not_suppl in no_suppl_list:
-                pass
 
         else:
             only_equiv_list = no_suppl_list
@@ -163,6 +155,7 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
                 remark_eval += ';lca'
                 taxid_to_eval = eval.taxfoo.find_lca(set(list_taxid_target))
             elif len(res_second_handling) == 1: # Other problem
+                # /!\ CAREFUL WITH THE ORDER HERE:
                 return Series([one_csv_index_val, 'no_majo_found', 
                                        remark_eval, 'FP', remark_eval],
                                       index=['index', 'taxid_ancester', 
@@ -182,6 +175,7 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
                                                    taxonomic_cutoff)
     remark_eval += ';' + remark
 
+    # /!\ CAREFUL WITH THE ORDER HERE:
     return Series([one_csv_index_val, taxid_ancester, int(taxid_to_eval), 
                    classif, remark_eval], 
                   index=['index', 'taxid_ancester', 'final_taxid', 'res_eval', 
