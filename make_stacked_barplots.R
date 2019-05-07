@@ -39,9 +39,9 @@ for (i in 1:length(melted$variable)) {
                  substr(cond_name, start=test[i]+1, 
                         stop=nchar(cond_name)))
 }
-# warnings()
-melted$variable <- factor(vect_debut)
+
 melted$cat <- factor(vect_end)
+melted$variable <- factor(vect_debut)
 # print(melted)
 # exit()
 
@@ -60,15 +60,23 @@ melted$cat <- factor(vect_end)
 # melted <- ddply(melted, c("run", "cat"),
 #                    transform, label_ypos=value-cumsum(value))
                 #transform, label_ypos=cumsum(value))
-print(melted)
 
+# Need to be descendant with 'variable' col, to have 'sens' BEFORE 'FDR':
+melted <- melted %>% arrange(run, cat, desc(variable))
+# print(melted)
+
+# select_groups <- function(dd, gr, ...) dd[sort(unlist(attr(dd, "groups")$.rows[ gr ])), ]
 grouped <- melted %>%
             group_by(run, cat) %>%
-            summarise(total = sum(value))
-melted <- melted %>% arrange(run, cat)
+            # do(total=cumsum(.$value)-0.5*.$value)
+            do(total=cumsum(.$value)-0.5*.$value)
+            # 
+# print.data.frame(grouped)
 
-melted['label_ypos'] <- rep(grouped$total, each=2) - melted$value
+# melted['label_ypos'] <- (rep(grouped$total, each=2) - melted$value)/2
+melted['label_ypos'] <- rep(unlist(grouped$total))
 
+print(melted)
 filename = basename(data_to_load)
 title_plot = substr(filename, 1, regexpr("\\.", filename)[1]-1)
 
@@ -76,7 +84,7 @@ X11()
 ggplot(melted, aes(x = cat, y = value, fill = variable)) +
   geom_bar(stat = 'identity', position = 'stack') +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  geom_text(aes(y=label_ypos, label=value), vjust=-0.5, 
+  geom_text(aes(y=label_ypos, label=value), vjust=0.5, 
             color="white", size=3.5) +
   facet_grid(~ run) +
   ggtitle(paste(title_plot, "- lvl SPECIES")) + 
