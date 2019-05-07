@@ -223,7 +223,7 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'txt', 'sam'])
 
     # Common variables:
-    NB_THREADS = 10
+    NB_THREADS = 20
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
@@ -550,7 +550,7 @@ if __name__ == "__main__":
             assert(len(with_lineage) == sum(with_lineage)+nb_removed +nb_nan)
             print("CUTOFF CENTRI SCORE:", cutoff_on_centriScore, " | ",
                   "CUTOFF CENTRI HitLength:", cutoff_on_centriHitLength)
-            print("NB OF NaNs:", nb_nan, " | ", "NB REMOVED (NaNs excepted):", 
+            print("NB OF UNCLASSIF:", nb_nan, " | ", "NB REMOVED (NaNs excepted):", 
                   nb_removed)
         # sys.exit()
 
@@ -616,7 +616,8 @@ if __name__ == "__main__":
         del type_aln, count
         dict_count['tot_second'] = (dict_count['second_plural'] + 
                                     dict_count['second_uniq'])
-        dict_count["tot_reads"] = sum(counts_type_align)     
+        dict_count["tot_reads"] = sum(counts_type_align)
+        dict_count["tot_mapped"] = nb_reads_to_process   
         dict_stats['FN'] += dict_count['unmapped']
 
 
@@ -716,7 +717,7 @@ if __name__ == "__main__":
 
         # print(dict_stats)
         # print("TOT READS EVALUATED:", sum(dict_stats.values()))
-        print()
+        # print()
 
 
         # Print general counting results:

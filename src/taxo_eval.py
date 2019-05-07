@@ -223,8 +223,8 @@ def majo_voting(list_taxid_target):
             dict_taxid2ancester[taxid] = lineage['species']
         else:
             dict_taxid2ancester[taxid] = taxid
-            if taxfoo.get_taxid_rank(taxid) == 'no rank':
-                print(taxfoo.get_taxid_name(taxid))
+            # if taxfoo.get_taxid_rank(taxid) == 'no rank':
+            #     print(taxfoo.get_taxid_name(taxid))
     del taxid
 
     list_taxids_ancesters = [dict_taxid2ancester[taxid] 
