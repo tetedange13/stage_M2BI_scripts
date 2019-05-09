@@ -125,12 +125,6 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
     """
     # /!\ CAREFUL WITH THE ORDER HERE:
     one_csv_index_val, lineage_val, type_align = one_line_from_csv.values
-    # print(one_csv_index_val, lineage_val)
-    # one_csv_index_val, tupl_typeAln_lin = one_line_from_csv.items()
-    #lineage_val, type_align = tupl_typeAln_lin
-    # lineage_val = two_col_from_csv.loc[one_csv_index_val, "lineage"]
-    # type_align = two_col_from_csv.loc[one_csv_index_val, "type_align"]
-
     remark_eval = type_align
 
     if type_align == 'normal':
@@ -139,8 +133,8 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
     elif 'second' in type_align: # Secondary (with 1 unique taxid or more)
         list_taxid_target = list(map(int, lineage_val.strip(';').split('s')))
         if type_align == 'second_uniq':
-        # if True: # Like that, we always take the 1st one
             taxid_to_eval = list_taxid_target[0]
+
         else: # More than 1 unique taxid
             if mode == 'MAJO_OLD':
                 res_second_handling = eval.majo_voting_old(list_taxid_target, 'species')
@@ -148,6 +142,11 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
                 res_second_handling = eval.majo_voting(list_taxid_target)
             elif mode == 'LCA':
                 res_second_handling = eval.make_lca(list_taxid_target)
+            elif mode == 'TOP_ONE':
+                taxid_to_eval = list_taxid_target[0] # Like that, we always take the 1st one
+            else:
+                print("ERROR: WRONG MODE !")
+                sys.exit()
             remark_eval = res_second_handling[0]
 
             if False:
