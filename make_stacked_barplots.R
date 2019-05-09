@@ -43,38 +43,18 @@ for (i in 1:length(melted$variable)) {
 melted$cat <- factor(vect_end)
 melted$variable <- factor(vect_debut)
 # print(melted)
-# exit()
 
-# cond_raw <- (melted$variable == 'FDR' | melted$variable == 'sens')
-# cond_lenFilt <- (melted$variable == 'FDR_lenFilt' | 
-#                  melted$variable == 'sens_lenFilt')
-# cond_topOne <- (melted$variable == 'FDR_topOne' | 
-#                  melted$variable == 'sens_topOne')
-
-# melted$cat <- ''
-# melted[cond_raw, ]$cat <- "1_Centri_Raw"
-# melted[cond_lenFilt, ]$cat <- "2_Centri_Filt"
-# # melted[cond_topOne, ]$cat <- "3_TopOne"
-# melted[cond_lenFilt, ]$variable <- melted[cond_raw, ]$variable
-
-# melted <- ddply(melted, c("run", "cat"),
-#                    transform, label_ypos=value-cumsum(value))
-                #transform, label_ypos=cumsum(value))
 
 # Need to be descendant with 'variable' col, to have 'sens' BEFORE 'FDR':
 melted <- melted %>% arrange(run, cat, desc(variable))
 # print(melted)
 
-# select_groups <- function(dd, gr, ...) dd[sort(unlist(attr(dd, "groups")$.rows[ gr ])), ]
 grouped <- melted %>%
             group_by(run, cat) %>%
-            # do(total=cumsum(.$value)-0.5*.$value)
             do(total=cumsum(.$value)-0.5*.$value)
-            # 
 # print.data.frame(grouped)
 
-# melted['label_ypos'] <- (rep(grouped$total, each=2) - melted$value)/2
-melted['label_ypos'] <- rep(unlist(grouped$total))
+melted['label_ypos'] <- unlist(grouped$total)
 
 print(melted)
 filename = basename(data_to_load)
