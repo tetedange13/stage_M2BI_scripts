@@ -153,6 +153,7 @@ if __name__ == "__main__":
    
     # TAXONOMIC DETERMINATION STEP:
     print("TAXONOMIC DETERMINATION WITH:", DETER + "...")
+    print("AGAINST the DB:", DB_NAME.upper())
     file_to_map = dirOut_yacrd + in_fq_base + flag_ext
 
     
