@@ -196,8 +196,8 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
     y_true, y_pred = dict_stats_to_vectors(dict_stats_to_convert)
 
     precision = round(skm.precision_score(y_true, y_pred), 4) # PPV = TP/(TP+FP) (positive predictive value or precision)
-    print("PRECISION:", precision, " | ", "FDR:", round(1 - precision, 4), 
-          " | TEST:", round(pd.np.exp(2-precision), 4))
+    print("PRECISION:", precision, " | ", "FDR:", round(1 - precision, 4))#, 
+          #" | TEST:", round(pd.np.exp(2-precision), 4))
 
     if not at_taxa_level:
         sensitivity = round(skm.recall_score(y_true, y_pred), 4)
@@ -223,7 +223,7 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'txt', 'sam'])
 
     # Common variables:
-    NB_THREADS = 20
+    NB_THREADS = 15
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
@@ -528,8 +528,8 @@ if __name__ == "__main__":
         # FILTER CENTRIFUGE results on score and/or hitLength
         if not IS_SAM_FILE:
         # if False:
-            cutoff_on_centriScore, cutoff_on_centriHitLength = 300, 50
-            # cutoff_on_centriScore, cutoff_on_centriHitLength = 0, 0
+            # cutoff_on_centriScore, cutoff_on_centriHitLength = 300, 50
+            cutoff_on_centriScore, cutoff_on_centriHitLength = 0, 0
 
             def get_min_hitLength(hitLength_val):
                 if type(hitLength_val) == str:
@@ -548,20 +548,28 @@ if __name__ == "__main__":
             with_lineage = with_lineage & centri_filter
             nb_removed = nb_pass_before_filter-sum(with_lineage)
             assert(len(with_lineage) == sum(with_lineage)+nb_removed +nb_nan)
-            print("CUTOFF CENTRI SCORE:", cutoff_on_centriScore, " | ",
-                  "CUTOFF CENTRI HitLength:", cutoff_on_centriHitLength)
-            print("NB OF UNCLASSIF:", nb_nan, " | ", "NB REMOVED (NaNs excepted):", 
-                  nb_removed)
+
+            nb_not_nan = len(with_lineage)-nb_nan
+            if not cutoff_on_centriScore:
+                print("   >> CENTRI NOT FILTERED")
+            else:
+                print("CUTOFF CENTRI SCORE:", cutoff_on_centriScore, " | ",
+                      "CUTOFF CENTRI HitLength:", cutoff_on_centriHitLength)
+            print("NB OF UNCLASSIF:", nb_nan, 
+                  ' | NB_NOT_NaNs:', nb_not_nan)
+            print("NB REMOVED (NaNs excepted):", nb_removed, 
+                  "~ {}% removed".format(int(nb_removed/nb_not_nan*100)))
         # sys.exit()
 
         # MODE = 'LCA'
         MODE = 'MINOR_RM_LCA'
+        # MODE = 'TOP_ONE'
         # MODE = 'MAJO_OLD'
         # if IS_SAM_FILE:
         #     MODE = 'MAJO'
 
         print()
-        print("MODE FOR HANDLING OF THE MULTI-HITS =", MODE)
+        print("MODE FOR HANDLING MULTI-HITS:", MODE)
         print()
 
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage].reset_index()
@@ -730,7 +738,7 @@ if __name__ == "__main__":
 
         # AT THE TAXA LEVEL:
         print("RESULTS AT THE TAXA LEVEL:")
-        print(dict_species2res)
+        # print(dict_speciess2res)
         list_FP = [val for val in dict_species2res 
                    if dict_species2res[val] == 'FP']
         list_TP = [val for val in dict_species2res 
@@ -777,8 +785,7 @@ if __name__ == "__main__":
             del tmp_df
 
             tot_FFP = sum(df_FP[df_FP.status == 'FFP'].counts)
-            print(df_FP.set_index('index'))
-            print()
+            # print(df_FP.set_index('index')) ; print()
 
             print('TOT NB OF FFP: {} | OVER {} FP_notInKey'.format(tot_FFP,
                                                                    len(FP_notInKey)))
