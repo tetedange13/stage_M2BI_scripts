@@ -61,18 +61,17 @@ filename = basename(data_to_load)
 title_plot = substr(filename, 1, regexpr("\\.", filename)[1]-1)
 
 X11()
-ggplot(melted, aes(x = cat, y = value, fill = variable)) +
-  geom_bar(stat = 'identity', position = 'stack') +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  geom_text(aes(y=label_ypos, label=value), vjust=0.5, 
-            color="white", size=3.5) +
+ggplot(melted, aes(x=cat, y=value, fill=variable)) +
+  geom_bar(stat='identity', position='stack') +
+  theme(axis.text.x=element_text(angle=90, hjust=1, face="bold")) +
+  geom_text(aes(y=label_ypos, label=value), 
+            vjust=0.5, color="white", size=3.5) +
   facet_grid(~ run) +
-  ggtitle(paste(title_plot, "- lvl SPECIES")) + 
-  theme(plot.title = element_text(hjust = 0.5), 
-        panel.background = element_rect(fill = "grey"),
-        panel.grid.major = element_blank(),
-        axis.text.x = element_text(face="bold")) +
-  scale_y_continuous(name="recall + FDR", 
-                     breaks=c(0, 0.25, 0.5, 0.75, 1))
+  labs(title=paste(title_plot, "- lvl SPECIES"), x="\nDifferent conditions", 
+       y="Recall + FDR", fill=" Metrics") + # 'fill' = legend title
+  theme(plot.title=element_text(hjust = 0.5), 
+        panel.background=element_rect(fill="grey"),
+        panel.grid.major=element_blank()) +
+  scale_y_continuous(breaks=c(0, 0.25, 0.5, 0.75, 1))
 
 while(identical(readLines(), character(0))){Sys.sleep(1)}
