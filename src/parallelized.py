@@ -143,7 +143,8 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
             elif mode == 'LCA':
                 res_second_handling = eval.make_lca(list_taxid_target)
             elif mode == 'TOP_ONE':
-                taxid_to_eval = list_taxid_target[0] # Like that, we always take the 1st one
+                # Like that, we always take the 1st one
+                res_second_handling = ('topOne_only', list_taxid_target[0])
             else:
                 print("ERROR: WRONG MODE !")
                 sys.exit()
