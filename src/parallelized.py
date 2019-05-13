@@ -105,7 +105,8 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
     
      # Taxid has to be considered as an str:
     taxo_to_write = (';' + 's'.join(str(taxid) for taxid 
-                                               in sorted(list_taxid_target)) + 
+                                               # in sorted(list_taxid_target)) +
+                                               in list_taxid_target) +
                      ';')
     # return [readID, type_alignment, taxo_to_write, nb_trashes, mapq, len_align,
     #         ratio_len, de]
