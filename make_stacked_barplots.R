@@ -24,6 +24,8 @@ library(stringr)
 # melted[melted$variable != 'value1',]$cat <- "second"
 
 df2 <- read.csv(data_to_load, header=T, sep=';')
+stopifnot(ncol(df2)%%2 == 1)
+
 melted <- melt(df2, "run")
 # print(melted)
 
@@ -44,6 +46,10 @@ melted$cat <- factor(vect_end)
 melted$variable <- factor(vect_debut)
 # print(melted)
 
+# Safeguards:
+stopifnot(length(levels(melted$variable)) == 2)
+stopifnot(length(levels(melted$cat)) == (ncol(df2)-1)/2)
+
 
 # Need to be descendant with 'variable' col, to have 'sens' BEFORE 'FDR':
 melted <- melted %>% arrange(run, cat, desc(variable))
@@ -57,15 +63,17 @@ grouped <- melted %>%
 melted['label_ypos'] <- unlist(grouped$total)
 
 print(melted)
-filename = basename(data_to_load)
-title_plot = substr(filename, 1, regexpr("\\.", filename)[1]-1)
+filename <- basename(data_to_load)
+title_plot <- substr(filename, 1, regexpr("\\.", filename)[1]-1)
+# melted <- melted[complete.cases(melted), ]
+# print("SALUT") ; print(melted)
 
 X11()
 ggplot(melted, aes(x=cat, y=value, fill=variable)) +
   geom_bar(stat='identity', position='stack') +
-  theme(axis.text.x=element_text(angle=90, hjust=1, face="bold")) +
   geom_text(aes(y=label_ypos, label=value), 
             vjust=0.5, color="white", size=3.5) +
+  theme(axis.text.x=element_text(angle=90, hjust=1, face="bold", size=12)) +
   facet_grid(~ run) +
   labs(title=paste(title_plot, "- lvl SPECIES"), x="\nDifferent conditions", 
        y="Recall + FDR", fill=" Metrics") + # 'fill' = legend title
