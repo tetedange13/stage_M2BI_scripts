@@ -223,7 +223,7 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'txt', 'sam'])
 
     # Common variables:
-    NB_THREADS = 15
+    NB_THREADS = 10
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
@@ -247,12 +247,14 @@ if __name__ == "__main__":
         guessed_db = 'silva'
     elif "toP_compressed" in infile_base:
         guessed_db = 'p_compressed'
+    elif 'toNCBIbact' in infile_base:
+        guessed_db = 'NCBIbact'
     else:
         print("Unkown database !\n")
         sys.exit(2)
     
     print("DB GUESSED:", guessed_db)
-    print("PROCESSING", infile_base)
+    print("PROCESSING FILE:", infile_base)
 
 
     df_proks = evaluate.generate_df_zymo()
@@ -304,15 +306,24 @@ if __name__ == "__main__":
 
         print("Formatting for further taxo eval..")
         readIDs = dict_gethered.keys()
-        dict_problems = {'2071623':'37482', '585494':'573', '595593':'656366'}
+        dict_problems = {'2071623':'37482', '585494':'573', '595593':'656366',
+                         '697046':'645', '1870930':'1812935', 
+                         '2036817':'106590', '134962':'53431', 
+                         '1662457':'553814', '1662456':'553814',
+                         '1662458':'553814', '1834200':'1796646',
+                         '1902251':'745377', '913102':'59277'}
         tmp_dict = {}
 
         for readID in readIDs:
             if len(dict_gethered[readID]) > 1:
                 list_taxids = list(map(lambda a_str: a_str.split('\t')[1], 
                                    dict_gethered[readID]))
+
+                # Solve problematic taxids:
+                list_taxids = [dict_problems.get(taxid, taxid) for taxid in list_taxids]
                 if '0' in list_taxids:
                     print(readID);sys.exit()
+
                 nb_trashes = sum(map(pll.is_trash, list_taxids))
                 # In the case of multiple hits, all hits have the same score, 
                 # 2ndBestScore etc, except for the hitLength, that can differ
@@ -359,6 +370,7 @@ if __name__ == "__main__":
         del readID
 
         dict_gethered.clear()
+        # sys.exit()
 
         # /!\ CAREFUL WITH THE ORDER HERE:
         my_csv = pd.DataFrame.from_dict(tmp_dict, orient='index',
@@ -688,18 +700,19 @@ if __name__ == "__main__":
         is_TP = ((my_csv.res_eval == 'TP') &
                  (my_csv.nb_trashes <= cutoff_nb_trashes))
 
-        print("FP STATS:")
-        # print(my_csv[is_FP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
-        print(my_csv[is_FP].remark_eval.value_counts().sort_index())
-        # print(my_csv[is_FP].nb_trashes.value_counts().sort_index())
-        # print(my_csv[is_FP & (my_csv.remark_eval == 'second_uniq;misassigned')].species.value_counts())
-        # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]['lineage'].apply(lambda lin: 's'.join(set(lin.strip(';').split('s')))).value_counts())
-        print()
         print("TP STATS:")
         print(my_csv[is_TP].species.value_counts())
         # print(my_csv[is_TP].type_align.value_counts().sort_index())
         # print(my_csv[is_TP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
 
+        print()
+
+        print("FP STATS:")
+        # print(my_csv[is_FP][['remark_eval', 'final_taxid']].groupby(['remark_eval', 'final_taxid']).size())
+        print(my_csv[is_FP].remark_eval.value_counts().sort_index())
+        # print(my_csv[is_FP].species.value_counts())
+        # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')].final_taxid.value_counts())
+        # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]['lineage'].apply(lambda lin: 's'.join(set(lin.strip(';').split('s')))).value_counts())
         print()
 
         # Add numbers of TP and FP to the dict of stats:
@@ -714,16 +727,6 @@ if __name__ == "__main__":
         #                           color=('red', 'green'))
         # plt.show()
 
-        # if not IS_SAM_FILE:
-            # tupl_columns = ('type_align', 'lineage', 'nb_trashes', 'score', 
-            #             'secondBestScore', 'hitLength', 'queryLength', 
-            #             'numMatches')
-            # my_series = pd.to_numeric(my_csv[is_TP]['score'])
-            # my_series.plot.hist(bins=max(my_series), log=True)
-            # plt.show()
-
-
-        # print(dict_stats)
         # print("TOT READS EVALUATED:", sum(dict_stats.values()))
         # print()
 
@@ -765,8 +768,11 @@ if __name__ == "__main__":
 
         # Make difference between TFP and FFP:
         print("DISCRIMINATION between TFP and FFP (at read lvl):")
-        FP_notInKey = my_csv[is_FP & 
-                             (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]
+        possible_notInKeys = my_csv.remark_eval.apply(
+                                                lambda val: "notInKeys" in str(val))
+        # == 'minors_rm_lca;notInKeys') |(my_csv.remark_eval == 'minors_rm_lca;notInKeys')
+        FP_notInKey = my_csv[is_FP & possible_notInKeys]
+
         if FP_notInKey.empty:
             print("NOT POSSIBLE ! (no FP and/or no 'minors_rm_lca;notInKeys')")
         else:
@@ -778,7 +784,7 @@ if __name__ == "__main__":
             df_FP = pd.DataFrame(counts_FP_NotInKey).reset_index()
             # print(df_FP);sys.exit()
             tmp_df = df_FP['index'].apply(discriminate_FP, 
-                                          args=(taxo_not_bact, df_proks))
+                                          args=(taxo_not_bact, df_proks)) 
             # print(FP_notInKey)
             df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
                                  ancester_name=tmp_df[2])
