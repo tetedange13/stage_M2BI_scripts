@@ -200,7 +200,7 @@ def local_taxid_search(gz_db_name, to_problems_file, dirOut="./",
     my_pool.close()
 
     dict_acc2good = {} # To convert accession number to GOOD taxid
-    to_wrong2good_file = os.path.join(dirOut, "wrong2good_taxids")
+    to_wrong2good_file = osp.join(dirOut, "wrong2good_taxids")
     with open(to_wrong2good_file, 'a') as wrong2good_file:
         for res in results:
             if res: # If  NOT 'None'
@@ -214,7 +214,7 @@ def local_taxid_search(gz_db_name, to_problems_file, dirOut="./",
     nb_found = len(dict_acc2good.keys())
     nb_to_find = len(dict_acc2wrong.keys())
     if nb_found != 0:
-        to_need_remote = os.path.join(dirOut, gz_db_name +"_need_remote")
+        to_need_remote = osp.join(dirOut, gz_db_name +"_need_remote")
         with open(to_need_remote, 'w') as need_remote_file:
             found_acc_numbers = dict_acc2good.keys()
             for acc_to_find in dict_acc2wrong:
@@ -415,6 +415,44 @@ def stats_base(db_to_stat):
     print()
 
 
+def transform_epi2me_CSV(to_initial_csv):
+    """
+    Transform the CSV produced by Epi2me to make it usable by my scripts
+    """
+    initial_csv = pd.read_csv(to_initial_csv, header=0, sep=',', 
+                             usecols=['exit_status', 'taxid', 'accuracy', 
+                                      'lca'])
+    nb_rows = len(initial_csv.index)
+    initial_csv['readID'] = [foo[0]+str(foo[1]) 
+                             for foo in zip(['read_']*nb_rows, range(nb_rows))]
+    initial_csv['lineage'] = initial_csv.taxid.apply(
+                                            lambda val: ';' + str(val) + ';')
+
+    # print(initial_csv[initial_csv.exit_status=="Classification below QC threshold"][["exit_status", "taxid"]]);sys.exit()
+    
+    def exitStatus_to_typeAlign(val):
+        if val == 'Classification successful':
+            return 'normal'
+        return 'unmapped'
+
+    # Before applying this func, be sure not another category
+    possible_exit_status = ['Classification below QC threshold', 
+                            'Classification successful', 'No classification'] 
+    assert(sorted(initial_csv.exit_status.unique()) == possible_exit_status)
+
+    initial_csv['type_align'] = initial_csv.exit_status.apply(
+    
+                                                    exitStatus_to_typeAlign)
+    initial_csv['nb_trashes'] = initial_csv[initial_csv.type_align!='unmapped'].taxid.apply(
+                        lambda val: int(pll.is_trash(val)))
+
+    initial_csv.drop(columns=['taxid', 'exit_status'], inplace=True)
+    print(initial_csv.head())
+    inbase = osp.splitext(osp.basename(to_initial_csv))[0]
+    initial_csv.set_index(['readID']).to_csv(inbase+'.csv', index_label=False)
+
+
+
 
 # MAIN:
 if __name__ == "__main__":
@@ -440,10 +478,11 @@ if __name__ == "__main__":
     # correct_seqid2taxid("old_seqid2taxid", "wrong2good_taxids")
 
     # write_complete_lineage("seqid2taxid")
-    write_metadat_file(to_dbs + 'Centri_idxes/zymo/seqid2taxid', 'toZymo')
+    # write_metadat_file(to_dbs + 'Centri_idxes/zymo/seqid2taxid', 'toZymo')
     # parse_and_rewrite_names(to_dbs_nt + "names.dmp", 
     #                         "taxids_complete_lineage")
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
     #                         "taxids_complete_lineage")
 
-    # stats_base('SILVA')
+    stats_base('SILVA')
+    # transform_epi2me_CSV("../Epi2Me_16Skit_run1_500K_toNCBIbact.sam")
