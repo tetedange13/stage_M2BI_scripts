@@ -14,8 +14,11 @@ library(fmsb)
 data <- read.csv(data_to_load, header=T, sep=";", row.names="Zymo_sp")
 #colnames(data)=c("math" , "english" , "biology" , "music" , "R-coding" )
 #rownames(data) <- data["Zymo_sp"]
-min_val <- -10
-max_val <- 10
+print(paste("MIN_VAL_DF:", data[which(data == min(data), arr.ind = TRUE)]))
+print(paste("MAX_VAL_DF:", data[which(data == max(data), arr.ind = TRUE)]))
+
+min_val <- -5
+max_val <- 5
 nb_var <- ncol(data)
 data <- rbind(rep(max_val, nb_var) , rep(min_val, nb_var) , data)
 #print(data)
@@ -26,17 +29,20 @@ colors_border=c( rgb(0.6,0.6,0.6,0.4), rgb(0.2,0.5,0.5,0.9),
 colors_in=c( rgb(0.6,0.6,0.6,0.4), rgb(0.2,0.5,0.5,0.4), 
              rgb(0.8,0.2,0.5,0.4), rgb(0.7,0.5,0.1,0.4))
 
-test = X11()
+filename <- basename(data_to_load)
+title_plot <- substr(filename, 1, regexpr("\\.", filename)[1]-1)
+
+X11()
 par(mar=c(5.1, 4.1, 6.1, 2.1), xpd=TRUE)
-radarchart( data , axistype=1 , 
+radarchart( data, axistype=1, 
             #custom polygon
             pcol=colors_border , pfcol=colors_in , plwd=4 , plty=1,
             #custom the grid
-            cglcol="grey", cglty=1, axislabcol="dark grey", 
-            caxislabels=seq(min_val,max_val,5), cglwd=0.8,
+            cglcol="grey", cglty=1, axislabcol="dark grey", cglwd=0.8,
+            caxislabels=seq(min_val,max_val,length.out=5), 
             #custom labels
             vlcex=0.8,
-            title="Cusco2018 - Minimap2 - toZymo - COMPLETE RAW (Majo)"
+            title=paste(title_plot, "\n")
 )
 legend(x=-1, y=1.6, legend=rownames(data[-c(1,2), ]), bty="n", pch=20, 
        col=colors_in, text.col="dark grey", cex=0.9, pt.cex=3, ncol=2)
