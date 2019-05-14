@@ -119,12 +119,25 @@ if __name__ == '__main__':
     df_counts = df_counts.assign(difference=df_counts.obs_counts - 
                                             df_counts.expect_counts)
 
-    log_modulus = lambda diff: (pd.np.sign(diff) * pd.np.log10(1 + pd.np.abs(diff)))
+    log_modulus = lambda diff: (pd.np.sign(diff) * 
+                                pd.np.log10(1 + pd.np.abs(diff)))
     df_counts = df_counts.assign(log_modulus=lambda x: log_modulus(x.difference),
                                  L1dist=lambda x: pd.np.abs(x.difference))
     
-    print(df_counts) 
+    print(df_counts)
+    print()
     print("L1-distance =", sum(df_counts.L1dist))
+    print()
+
+    log_modulus_series = df_counts.log_modulus.sort_index()
+    print("Values of log-modulus:")
+    if taxo_cutoff == 'species':
+        print(';'.join(map(lambda a_str: a_str.split()[-1], 
+                           log_modulus_series.index)))
+    else:
+        print(';'.join(log_modulus_series.index))
+    print(';'.join(str(round(val, 2)) for val in log_modulus_series.values))
+
 
     plot_stacked_bar = False
     if plot_stacked_bar:
