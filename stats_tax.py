@@ -653,7 +653,7 @@ if __name__ == "__main__":
         # sys.exit()
 
         
-        write_map = False
+        write_map = True
         if write_map:
             # OTU mapping file writting:
             # (NaN values are automatically EXCLUDED during the 'groupby')
@@ -671,23 +671,25 @@ if __name__ == "__main__":
                     readIDs_to_write = map(lambda readID: sampl_prefix + '_' + 
                                                           str(readID), 
                                            grp.index)
-                    # 'int' casting needed for the taxid
-                    my_map.write(str(int(taxid_grp)) + '\t' + 
-                                 '\t'.join(readIDs_to_write) + '\n')
-                    
+                                        
                     # taxo_to_write = ';'.join(['Other'] * 7)
                     if taxid_grp != 'no_majo_found':
-                        pass
+                        # 'int' casting needed for the taxid
+                        taxid_to_write = int(taxid_grp)
                         # taxo_to_write = evaluate.taxo_from_taxid(taxid_grp)
                     else:
+                        taxid_to_write = taxid_grp
                         print("NB OF 'NO_MAJO':", len(grp))
+
+                    my_map.write(str(taxid_to_write) + '\t' + 
+                                 '\t'.join(readIDs_to_write) + '\n')
 
                 unmapped_to_write = map(lambda readID: sampl_prefix + '_' + 
                                                           str(readID), 
                                         my_csv[my_csv.type_align == 'unmapped'].index)     
                 my_map.write('unmapped\t' +  '\t'.join(unmapped_to_write) + 
                              '\n')
-            print("--> Wrote OTUs mapping file for '{}' !".format(sampl_prefix))
+            print("  >> Wrote OTUs mapping file for '{}' !".format(sampl_prefix))
             print()
 
 
