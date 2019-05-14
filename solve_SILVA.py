@@ -415,7 +415,7 @@ def stats_base(db_to_stat):
     print()
 
 
-def transform_epi2me_CSV(to_initial_csv):
+def transform_EPI2ME_CSV(to_initial_csv):
     """
     Transform the CSV produced by Epi2me to make it usable by my scripts
     """
@@ -484,5 +484,5 @@ if __name__ == "__main__":
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
     #                         "taxids_complete_lineage")
 
-    stats_base('SILVA')
-    # transform_epi2me_CSV("../Epi2Me_16Skit_run1_500K_toNCBIbact.sam")
+    # stats_base('RRN')
+    transform_EPI2ME_CSV("../EPI2ME_16Skit_run2_500K_toNCBIbact.sam")
