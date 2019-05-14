@@ -22,7 +22,7 @@ def infile(infile_path, list_acceptable_ext):
         
         if infile_ext[1:] not in list_acceptable_ext:
             err_ext = ("ERROR! The given file as the wrong extension. " +
-                       "Should be in:" + list_acceptable_ext)
+                       "Should be in:", list_acceptable_ext)
             print(err_ext)
             sys.exit(2)
         
