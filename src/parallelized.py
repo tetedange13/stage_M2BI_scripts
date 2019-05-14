@@ -158,7 +158,7 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
             elif len(res_second_handling) == 1: # Other problem
                 # /!\ CAREFUL WITH THE ORDER HERE:
                 return Series([one_csv_index_val, 'no_majo_found', 
-                                       remark_eval, 'FP', remark_eval],
+                                       'no_majo_found', 'FP', remark_eval],
                                       index=['index', 'taxid_ancester', 
                                              'final_taxid', 'res_eval', 
                                              'remark_eval'])
