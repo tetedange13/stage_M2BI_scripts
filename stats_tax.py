@@ -653,7 +653,7 @@ if __name__ == "__main__":
         # sys.exit()
 
         
-        write_map = True
+        write_map = False
         if write_map:
             # OTU mapping file writting:
             # (NaN values are automatically EXCLUDED during the 'groupby')
@@ -776,7 +776,7 @@ if __name__ == "__main__":
         FP_notInKey = my_csv[is_FP & possible_notInKeys]
 
         if FP_notInKey.empty:
-            print("NOT POSSIBLE ! (no FP and/or no 'minors_rm_lca;notInKeys')")
+            print("NOT POSSIBLE ! (no FP and/or no 'notInKeys')")
         else:
             counts_FP_NotInKey = FP_notInKey.final_taxid.value_counts()
             counts_FP_NotInKey.name = 'counts'
