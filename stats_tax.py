@@ -255,6 +255,7 @@ if __name__ == "__main__":
     
     print("DB GUESSED:", guessed_db)
     print("PROCESSING FILE:", infile_base)
+    print("Script PARALLELIZED on {} CPUs".format(NB_THREADS))
 
 
     df_proks = evaluate.generate_df_zymo()
@@ -405,12 +406,14 @@ if __name__ == "__main__":
             print("Extracting information from SAM file...")
             START_SAM_PARSING = t.time()
             input_samfile = pys.AlignmentFile(to_infile, "r")
+            # input_samfile = pys.AlignmentFile(to_infile, "r", check_sq=False)
 
             dict_gethered = {}
             list_suppl = []
             list_unmapped = []
 
             for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
+            # for idx, alignment in enumerate(input_samfile.fetch()):
                 if (idx+1) % 500000 == 0:
                     print("500 000 SAM entries elapsed !")
                 query_name = alignment.query_name
@@ -575,7 +578,7 @@ if __name__ == "__main__":
 
         # MODE = 'LCA'
         MODE = 'MINOR_RM_LCA'
-        # MODE = 'TOP_ONE'
+        MODE = 'TOP_ONE'
         # MODE = 'MAJO_OLD'
         # if IS_SAM_FILE:
         #     MODE = 'MAJO'
@@ -586,8 +589,11 @@ if __name__ == "__main__":
 
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage].reset_index()
         nb_reads_to_process = len(my_csv_to_pll.index)
-        print("PROCESSING {} reads from CSV to EVALUATE TAXO..".format(nb_reads_to_process))
-        print("(Nb CPUs: {})".format(NB_THREADS))
+        print("PROCESSING {} reads from CSV to EVALUATE TAXO..".format(
+                                                        nb_reads_to_process))
+        print("(Tot nb of entries: {})".format(
+                                sum(map(lambda lin: len(lin.split('s')), 
+                                        my_csv_to_pll.lineage.values))))
 
         partial_eval = partial(pll.eval_taxo, set_levels_prok=set_proks,
                                               taxonomic_cutoff=taxo_cutoff,
@@ -709,11 +715,47 @@ if __name__ == "__main__":
 
         print()
 
+
+        # EXTRACTION of aligned sequeces within reference DB:
+        print("EXTRACTIING..")
+        extract_ref = False
+        if extract_ref:
+            with pys.AlignmentFile(to_infile, "r") as input_samfile:
+                dict_felix = {}
+                for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
+                    if alignment.is_unmapped:
+                        continue
+                    elif alignment.has_tag("SA"):
+                        continue
+                    elif alignment.is_secondary:
+                        continue
+                    else:
+                        query_name = alignment.query_name
+                        # Take only TP reads (FP suposed noisy):
+                        if my_csv.loc[query_name, 'res_eval'] == 'TP':
+                            assert(alignment.query_name not in dict_felix.keys())
+                            tmp_list = [alignment.reference_name, 
+                                        alignment.reference_start, 
+                                        alignment.reference_end]
+                            dict_felix[alignment.query_name] = tmp_list
+                del idx, alignment
+
+            print("{} extractable sequences (FP only)".format(len(dict_felix)))
+            test_df = pd.DataFrame.from_dict(dict_felix, orient='index', 
+                                             columns=['ref_name', 'start_pos', 
+                                                      'end_pos'])
+            dict_felix.clear()
+            print(test_df.head())
+            test_df.to_csv('extractable_' + infile_base + '.csv', header=True)
+            print("Done !")
+            sys.exit()
+
+
         print("FP STATS:")
-        # print(my_csv[is_FP][['remark_eval', 'final_taxid']].groupby(['remark_eval', 'final_taxid']).size())
-        print(my_csv[is_FP].remark_eval.value_counts().sort_index())
+        # print(my_csv[is_FP][['species', 'remark_eval']].groupby(['species', 'remark_eval']).size())
+        # print(my_csv[is_FP].remark_eval.value_counts().sort_index())
         # print(my_csv[is_FP].species.value_counts())
-        # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')].final_taxid.value_counts())
+        print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')].final_taxid.value_counts())
         # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]['lineage'].apply(lambda lin: 's'.join(set(lin.strip(';').split('s')))).value_counts())
         print()
 
@@ -743,7 +785,7 @@ if __name__ == "__main__":
 
         # AT THE TAXA LEVEL:
         print("RESULTS AT THE TAXA LEVEL:")
-        # print(dict_speciess2res)
+        # print(dict_species2res)
         list_FP = [val for val in dict_species2res 
                    if dict_species2res[val] == 'FP']
         list_TP = [val for val in dict_species2res 
