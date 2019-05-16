@@ -75,7 +75,9 @@ ggplot(melted, aes(x=cat, y=value, fill=variable)) +
             vjust=0.5, color="white", size=3.5) +
   theme(axis.text.x=element_text(angle=90, hjust=1, face="bold", size=12)) +
   facet_grid(~ run) +
-  labs(title=paste(title_plot, "- lvl SPECIES"), x="\nDifferent conditions", 
+  # labs(title=paste(title_plot, "- lvl SPECIES"), 
+  labs(title=title_plot,
+       x="\nDifferent conditions", 
        y="Recall + FDR", fill=" Metrics") + # 'fill' = legend title
   theme(plot.title=element_text(hjust = 0.5), 
         panel.background=element_rect(fill="grey"),
