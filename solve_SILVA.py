@@ -8,6 +8,7 @@ import multiprocessing as mp
 import itertools as ittls
 from functools import partial
 import src.parallelized as pll
+from Bio import SeqIO
 
 
 taxfoo = pll.eval.taxfoo
@@ -452,6 +453,46 @@ def transform_EPI2ME_CSV(to_initial_csv):
     initial_csv.set_index(['readID']).to_csv(inbase+'.csv', index_label=False)
 
 
+def extract_reference_seq(to_extractable, to_zymo_SEGO):
+    """
+    Given a list of readID with their assignation and the positions of the 
+    alignment within the target sequence (genome), produce a (pseudo-)fasta 
+    file, containing the sequence of the aligned region within the reference
+    genome (so no errors)
+    These sequences will be then given to our custom version NanoSim as a 
+    reference fasta, in order to simulate reads  
+    """
+
+    with open(to_extractable, 'r') as extractable_file:
+        header = extractable_file.readline()
+
+        dict_felix = {}
+        for line in extractable_file:
+            readID, ref_name, start, end = line.rstrip('\n').split(',')
+
+            if ref_name not in dict_felix.keys():
+                dict_felix[ref_name] = [(readID, int(start), int(end))]
+            else:
+                dict_felix[ref_name].append((readID, int(start), int(end)))
+        del line
+
+    records = SeqIO.parse(to_zymo_SEGO, "fasta")
+    infile_base = osp.splitext(osp.basename(to_extractable))[0]
+    with open(infile_base + '.fa', 'w') as out_fasta:
+        for entry in records:
+            a_ref_name = entry.id
+
+            if a_ref_name in dict_felix.keys():
+                for read_info in dict_felix[a_ref_name]:
+                    readID, start, end = read_info
+                    str_to_write = '>' + readID + '_' + a_ref_name # header fa
+                    out_fasta.write(str_to_write + '\n' + 
+                                    str(entry.seq[start:end]) + '\n')
+                del read_info
+        del entry
+
+    print("Wrote:", infile_base + '.fa')
+
 
 
 # MAIN:
@@ -485,4 +526,5 @@ if __name__ == "__main__":
     #                         "taxids_complete_lineage")
 
     # stats_base('RRN')
-    transform_EPI2ME_CSV("../EPI2ME_16Skit_run2_500K_toNCBIbact.sam")
+    # transform_EPI2ME_CSV("../EPI2ME_16Skit_run2_500K_toNCBIbact.sam")
+    extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
