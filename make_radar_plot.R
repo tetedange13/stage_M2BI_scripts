@@ -11,7 +11,8 @@ if (length(args) == 0) {
 library(fmsb)
 
 # data=as.data.frame(matrix( sample( 0:20 , 15 , replace=F) , ncol=5))
-data <- read.csv(data_to_load, header=T, sep=";", row.names="Zymo_sp")
+data <- read.csv(data_to_load, header=T, sep=";", row.names="Zymo_sp", 
+                 comment.char="#")
 #colnames(data)=c("math" , "english" , "biology" , "music" , "R-coding" )
 #rownames(data) <- data["Zymo_sp"]
 print(paste("MIN_VAL_DF:", data[which(data == min(data), arr.ind = TRUE)]))
@@ -21,7 +22,7 @@ min_val <- -5
 max_val <- 5
 nb_var <- ncol(data)
 data <- rbind(rep(max_val, nb_var) , rep(min_val, nb_var) , data)
-#print(data)
+print(data)
 
 # Plot 2: Same plot with custom features
 colors_border=c( rgb(0.6,0.6,0.6,0.4), rgb(0.2,0.5,0.5,0.9), 
