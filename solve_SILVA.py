@@ -383,6 +383,7 @@ def stats_base(db_to_stat):
                       for line in seqid2taxid_file}
     
     dict_tmp = {}
+    dict_bacil = {'Bacillus intestinalis':0, 'Bacillus subtilis':0}
     dict_counts_sp = {a_key:0 for a_key in dict_name2taxid}
     dict_counts_gen = {a_key.split()[0]:0 for a_key in dict_name2taxid}
 
@@ -395,14 +396,19 @@ def stats_base(db_to_stat):
 
         if 'species' in possible_tax_lvls:
             sp_taxid = lineage['species']
+            sp_name = taxfoo.get_taxid_name(sp_taxid)
             if sp_taxid in taxids_zymo_sp:
-                dict_counts_sp[taxfoo.get_taxid_name(sp_taxid)] += 1
+                dict_counts_sp[sp_name] += 1
+            if sp_name in dict_bacil.keys():
+                dict_bacil[sp_name] += 1
 
         if 'genus' in possible_tax_lvls:
             gen_taxid = lineage['genus']
             if gen_taxid in taxids_zymo_gen:
                 dict_counts_gen[taxfoo.get_taxid_name(gen_taxid)] += 1
     del taxid
+
+    print(dict_bacil)
         
     #print(pd.DataFrame.from_dict(dict_tmp, orient='index')[0])
     print("STATS OF {} DB:".format(db_to_stat.upper()))
@@ -495,11 +501,40 @@ def extract_reference_seq(to_extractable, to_zymo_SEGO):
 
 
 
+def detect_RRN_litige(to_acc2taxid, to_species_annot):
+    """
+    Detect in the RRN db, cases where the annotated species name is not 
+    coherent with the given GI (and its associated taxid)
+    """
+    with open(to_acc2taxid, 'r') as acc2taxid_file:
+        dict_acc2taxid = {line.rstrip('\n').split('\t')[0]:line.rstrip('\n').split('\t')[1] 
+                          for line in acc2taxid_file}
+    # print(dict_acc2taxid);sys.exit()
+
+
+    with open(to_species_annot, 'r') as sp_annot:
+        for line in sp_annot:
+            annot_name, op_id, gi, _ = line.rstrip('\n').split('\t')
+            corresponding_taxid = dict_acc2taxid[gi]
+            lineage = taxfoo.get_lineage_as_dict(corresponding_taxid)
+
+            if 'species' in lineage.keys():
+                sp_name = lineage['species']
+                splitted_sp_name = sp_name.split()
+                if len(splitted_sp_name) == 2: 
+                    if '_'.join(splitted_sp_name) != annot_name:
+                        print(gi, ' | ', sp_name, 'VS', annot_name)
+            else:
+                print("NO SPECIES")
+
+
+
 # MAIN:
 if __name__ == "__main__":
     to_dbs = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/" +
               "metage_ONT_2019/")
     to_dbs_SILVA = to_dbs + "SILVA_refNR132_28feb19/"
+    to_dbs_RRN = to_dbs + "rrn_8feb19/"
     to_dbs_nt = to_dbs + "nt_db/taxo_18feb19/"
 
     # seqid2taxid_from_taxmap(to_dbs_SILVA + "taxmap_embl_ssu_ref_nr99_132.txt", 
@@ -526,5 +561,6 @@ if __name__ == "__main__":
     #                         "taxids_complete_lineage")
 
     # stats_base('RRN')
+    detect_RRN_litige(to_dbs_RRN+'acc2taxid', to_dbs_RRN+'species_annotation')
     # transform_EPI2ME_CSV("../EPI2ME_16Skit_run2_500K_toNCBIbact.sam")
-    extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
+    # extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
