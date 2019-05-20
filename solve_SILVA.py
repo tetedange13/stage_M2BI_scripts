@@ -121,6 +121,13 @@ def remote_taxid_search(to_problems_file, dirOut="./"):
     import src.remote as remote
     print("REMOTE TAXID SEARCH...")
 
+    # handle = remote.Entrez.efetch(db="Taxonomy", id="1963032", retmode="xml")
+    # handle = remote.Entrez.esearch(db="Taxonomy", term="Bacillus intestinalis", retmode="text")
+    # records = remote.Entrez.read(handle) ; handle.close()
+    # print(records) # With esearch
+    # print(records[0].keys()) # With efetch
+    # sys.exit()
+
     dict_wrong2good = {} # Conversion between wrong and good taxid
     to_wrong2good_file = osp.join(dirOut, "wrong2good_taxids")
 
@@ -513,6 +520,7 @@ def detect_RRN_litige(to_acc2taxid, to_species_annot):
 
 
     with open(to_species_annot, 'r') as sp_annot:
+        dict_litiges = {}
         for line in sp_annot:
             annot_name, op_id, gi, _ = line.rstrip('\n').split('\t')
             corresponding_taxid = dict_acc2taxid[gi]
@@ -523,9 +531,16 @@ def detect_RRN_litige(to_acc2taxid, to_species_annot):
                 splitted_sp_name = sp_name.split()
                 if len(splitted_sp_name) == 2: 
                     if '_'.join(splitted_sp_name) != annot_name:
-                        print(gi, ' | ', sp_name, 'VS', annot_name)
+                        #print(gi, ' | ', sp_name, 'VS', annot_name)
+                        dict_litiges[gi] = [sp_name, annot_name]
+                else:
+                    # if '_'.join(splitted_sp_name) != annot_name:
+                    print(gi, ' | ', sp_name, 'VS', annot_name)
+
             else:
                 print("NO SPECIES")
+
+    print("TOT NB LITIGES (len==2):", len(dict_litiges.keys()))
 
 
 
@@ -549,7 +564,7 @@ if __name__ == "__main__":
     # local_taxid_search("gb", "wgs_need_remote")
     # local_taxid_search("gss", "gb_need_remote")
 
-    # remote_taxid_search("problems.txt")
+    remote_taxid_search("problems.txt")
     
     # correct_seqid2taxid("old_seqid2taxid", "wrong2good_taxids")
 
@@ -561,6 +576,6 @@ if __name__ == "__main__":
     #                         "taxids_complete_lineage")
 
     # stats_base('RRN')
-    detect_RRN_litige(to_dbs_RRN+'acc2taxid', to_dbs_RRN+'species_annotation')
+    # detect_RRN_litige(to_dbs_RRN+'acc2taxid', to_dbs_RRN+'species_annotation')
     # transform_EPI2ME_CSV("../EPI2ME_16Skit_run2_500K_toNCBIbact.sam")
     # extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
