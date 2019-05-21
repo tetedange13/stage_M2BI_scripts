@@ -433,6 +433,8 @@ def transform_EPI2ME_CSV(to_initial_csv):
     """
     Transform the CSV produced by Epi2me to make it usable by my scripts
     """
+    print("Transforming EPI2ME CSV..")
+
     initial_csv = pd.read_csv(to_initial_csv, header=0, sep=',', 
                              usecols=['exit_status', 'taxid', 'accuracy', 
                                       'lca'])
@@ -461,6 +463,7 @@ def transform_EPI2ME_CSV(to_initial_csv):
                         lambda val: int(pll.is_trash(val)))
 
     initial_csv.drop(columns=['taxid', 'exit_status'], inplace=True)
+    print("Done ! Head of the written new CSV:")
     print(initial_csv.head())
     inbase = osp.splitext(osp.basename(to_initial_csv))[0]
     initial_csv.set_index(['readID']).to_csv(inbase+'.csv', index_label=False)
@@ -531,7 +534,7 @@ def detect_RRN_litige(to_acc2taxid, to_species_annot):
                 splitted_sp_name = sp_name.split()
                 if len(splitted_sp_name) == 2: 
                     if '_'.join(splitted_sp_name) != annot_name:
-                        #print(gi, ' | ', sp_name, 'VS', annot_name)
+                        print(gi, ' | ', sp_name, 'VS', annot_name)
                         dict_litiges[gi] = [sp_name, annot_name]
                 else:
                     # if '_'.join(splitted_sp_name) != annot_name:
@@ -564,7 +567,7 @@ if __name__ == "__main__":
     # local_taxid_search("gb", "wgs_need_remote")
     # local_taxid_search("gss", "gb_need_remote")
 
-    remote_taxid_search("problems.txt")
+    # remote_taxid_search("problems.txt")
     
     # correct_seqid2taxid("old_seqid2taxid", "wrong2good_taxids")
 
@@ -576,6 +579,6 @@ if __name__ == "__main__":
     #                         "taxids_complete_lineage")
 
     # stats_base('RRN')
-    # detect_RRN_litige(to_dbs_RRN+'acc2taxid', to_dbs_RRN+'species_annotation')
-    # transform_EPI2ME_CSV("../EPI2ME_16Skit_run2_500K_toNCBIbact.sam")
+    detect_RRN_litige(to_dbs_RRN+'acc2taxid', to_dbs_RRN+'species_annotation')
+    # transform_EPI2ME_CSV("../EPI2ME_16S_primers_500K_toNCBIbact.sam")
     # extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
