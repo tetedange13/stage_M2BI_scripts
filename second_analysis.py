@@ -96,20 +96,26 @@ if __name__ == '__main__':
     df_prok_ref = eval.generate_df_zymo()
     df_prok_ref = df_prok_ref.assign(abs_count=df_prok_ref.rel_count * 
                                                tot_nb_mapped / 100)
-    # print(df_prok_ref)
+    # print(df_prok_ref.rel_count);sys.exit()
     df_counts = pd.DataFrame(gether_counts(df_prok_ref, taxo_cutoff, 
                              'expect_counts')) 
-    
     set_expected = df_counts.index
-    df_counts.loc['misassigned', 'expect_counts'] = 0 # Add misassigned
+    df_counts.loc['0-misassigned', 'expect_counts'] = 0 # Add misassigned
     df_counts.expect_counts = pd.to_numeric(df_counts.expect_counts,
                                             downcast='integer')
+    
+    # Need to add some (virtual) reads to the "expected counts":
+    tot_expect = sum(df_counts.expect_counts)
+    if tot_expect != tot_nb_mapped:
+        gap = tot_nb_mapped - tot_expect 
+        assert(gap < 9 and pd.np.sign(gap) == 1.)
+        for i in range(gap): df_counts.expect_counts[i] += 1
 
     # Gether all 'misassigned' together:
-    dict_tmp = {'misassigned':0}
+    dict_tmp = {'0-misassigned':0}
     for taxa_name, count in counts_sp_obs.items():
         if taxa_name not in set_expected:
-            dict_tmp['misassigned'] += count
+            dict_tmp['0-misassigned'] += count
         else:
             dict_tmp[taxa_name] = count
     del taxa_name, count
@@ -123,13 +129,14 @@ if __name__ == '__main__':
                                 pd.np.log10(1 + pd.np.abs(diff)))
     df_counts = df_counts.assign(log_modulus=lambda x: log_modulus(x.difference),
                                  L1dist=lambda x: pd.np.abs(x.difference))
+    df_counts.sort_index(inplace=True)
     
     print(df_counts)
     print()
     print("L1-distance =", sum(df_counts.L1dist))
     print()
 
-    log_modulus_series = df_counts.log_modulus.sort_index()
+    log_modulus_series = df_counts.log_modulus
     print("Values of log-modulus:")
     if taxo_cutoff == 'species':
         print(';'.join(map(lambda a_str: a_str.split()[-1], 
@@ -137,15 +144,21 @@ if __name__ == '__main__':
     else:
         print(';'.join(log_modulus_series.index))
     print(';'.join(str(round(val, 2)) for val in log_modulus_series.values))
+    print()
+    
+    # Relative abundances:
+    print(';'.join(str(round(val, 2)) for val in df_counts.obs_counts/sum(df_counts.obs_counts)))
+    # print(';'.join(str(round(val, 2)) for val in df_counts.expect_counts/sum(df_counts.expect_counts)))
 
 
     plot_stacked_bar = False
     if plot_stacked_bar:
-        tmp_series = df_counts.obs_counts.drop('misassigned').sort_index(ascending=False)/sum(df_counts.obs_counts)
+        tmp_series = df_counts.obs_counts.drop('0-misassigned').sort_index(ascending=False)/sum(df_counts.obs_counts)
         # print(tmp_series);sys.exit()
         tmp_df = pd.DataFrame([tmp_series.to_dict(), 
                                {felix:0 for i, felix in enumerate(tmp_series.index)}], 
                               index=[0,1])#.sort_values(by=1, axis='columns')
+        # Invert to have the proper order on the stacked barplot:
         tmp_df = tmp_df.reindex(sorted(tmp_df.columns, reverse=True), axis=1)
         print(tmp_df)
         tmp_df.plot(kind='bar', stacked=True, width=0.1, legend=True, 
