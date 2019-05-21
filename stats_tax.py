@@ -578,7 +578,7 @@ if __name__ == "__main__":
 
         # MODE = 'LCA'
         MODE = 'MINOR_RM_LCA'
-        MODE = 'TOP_ONE'
+        # MODE = 'TOP_ONE'
         # MODE = 'MAJO_OLD'
         # if IS_SAM_FILE:
         #     MODE = 'MAJO'
@@ -632,6 +632,14 @@ if __name__ == "__main__":
         my_csv['species'] = my_csv.taxid_ancester.apply(get_ancester_name)
         # sys.exit()
 
+        # Different way:
+        # print(my_csv.final_taxid.value_counts());sys.exit()
+        df_eval = pd.DataFrame(my_csv.final_taxid.value_counts().drop('no_majo_found')).reset_index()
+        df_eval.columns = ['fin_taxid', 'count']
+        df_eval['res_eval'] = df_eval.fin_taxid.apply(evaluate.in_zymo, 
+                                                args=(set_proks, taxo_cutoff))
+        print(df_eval.head())
+        sys.exit()
 
         # Compute counts:
         dict_count = {'second_uniq':0, 'second_plural':0, 'unmapped':0,
@@ -717,9 +725,10 @@ if __name__ == "__main__":
 
 
         # EXTRACTION of aligned sequeces within reference DB:
-        print("EXTRACTIING..")
         extract_ref = False
         if extract_ref:
+            print("EXTRACTIING..")
+
             with pys.AlignmentFile(to_infile, "r") as input_samfile:
                 dict_felix = {}
                 for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
@@ -754,8 +763,8 @@ if __name__ == "__main__":
         print("FP STATS:")
         # print(my_csv[is_FP][['species', 'remark_eval']].groupby(['species', 'remark_eval']).size())
         # print(my_csv[is_FP].remark_eval.value_counts().sort_index())
-        # print(my_csv[is_FP].species.value_counts())
-        print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')].final_taxid.value_counts())
+        print(my_csv[is_FP].species.value_counts().nlargest(20))
+        # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')].final_taxid.value_counts())
         # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]['lineage'].apply(lambda lin: 's'.join(set(lin.strip(';').split('s')))).value_counts())
         print()
 
