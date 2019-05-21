@@ -47,8 +47,8 @@ melted$variable <- factor(vect_debut)
 # print(melted)
 
 # Safeguards:
-stopifnot(length(levels(melted$variable)) == 2)
-stopifnot(length(levels(melted$cat)) == (ncol(df2)-1)/2)
+# stopifnot(length(levels(melted$variable)) == )
+# stopifnot(length(levels(melted$cat)) == (ncol(df2)-1)/2)
 
 
 # Need to be descendant with 'variable' col, to have 'sens' BEFORE 'FDR':
@@ -62,26 +62,48 @@ grouped <- melted %>%
 
 melted['label_ypos'] <- unlist(grouped$total)
 
-print(melted)
+# print(melted)
 filename <- basename(data_to_load)
 title_plot <- substr(filename, 1, regexpr("\\.", filename)[1]-1)
-# melted <- melted[complete.cases(melted), ]
-# print("SALUT") ; print(melted)
+my_palette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", 
+                "#0072B2", "#D55E00", "#CC79A7")
+# my_palette <- rev(my_palette) # Reverse order, to have pink and orange 1st
+
+# To reproduce data plots from Cusco_2018:
+reprod_cusco = F
+if (reprod_cusco) {
+    palette_cusco = c("#A6CEE3", "#569DA3", "#51AE41", "#F68A89", "#F06C44", 
+                      "#F6860F", "#B295C8", "#C7B69A", "#B15928")
+    felix <- rev(c(0.0, 0.16, 0.1, 0.1, 0.19, 0.16, 0.05, 0.11, 0.13))
+    tmp_df <- cbind.data.frame(rep("Mock_db", 9), unique(melted$variable), felix, 
+                               rep("ref", 9), rep(NA, 9))
+    colnames(tmp_df) <- colnames(melted)
+    melted <- rbind(tmp_df, melted)
+    my_palette <- palette_cusco
+}
+
+
+print(melted)
+p <- ggplot(melted, aes(x=cat, y=value, fill=variable)) +
+        geom_bar(stat='identity', position='stack', na.rm=T) +
+        scale_fill_manual(values=my_palette[1:length(levels(melted$variable))]) + 
+        geom_text(aes(y=label_ypos, label=value), 
+                  vjust=0.5, color="white", size=3.5) +
+        theme(axis.text.x=element_text(angle=90, hjust=1, face="bold", 
+                                       size=12)) +
+        facet_grid(~ run, scales='free_x', space='free') + # No x-tick for missing + bars same width
+        # labs(title=paste(title_plot, "- lvl SPECIES"), 
+        labs(title=title_plot,
+             x="\nDifferent conditions", 
+             y="Recall + FDR", fill=" Metrics") + # 'fill' = legend title
+        theme(plot.title=element_text(hjust = 0.5), 
+              panel.background=element_rect(fill="light grey"),
+              panel.grid.major=element_blank()) +
+        scale_y_continuous(breaks=c(0, 0.25, 0.5, 0.75, 1))
+
+# ggplot_build(p)$data
 
 X11()
-ggplot(melted, aes(x=cat, y=value, fill=variable)) +
-  geom_bar(stat='identity', position='stack') +
-  geom_text(aes(y=label_ypos, label=value), 
-            vjust=0.5, color="white", size=3.5) +
-  theme(axis.text.x=element_text(angle=90, hjust=1, face="bold", size=12)) +
-  facet_grid(~ run) +
-  # labs(title=paste(title_plot, "- lvl SPECIES"), 
-  labs(title=title_plot,
-       x="\nDifferent conditions", 
-       y="Recall + FDR", fill=" Metrics") + # 'fill' = legend title
-  theme(plot.title=element_text(hjust = 0.5), 
-        panel.background=element_rect(fill="grey"),
-        panel.grid.major=element_blank()) +
-  scale_y_continuous(breaks=c(0, 0.25, 0.5, 0.75, 1))
+print(p)
 
 while(identical(readLines(), character(0))){Sys.sleep(1)}
