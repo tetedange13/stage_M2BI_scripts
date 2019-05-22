@@ -23,7 +23,7 @@ library(stringr)
 # melted[melted$variable == 'value1',]$cat <- "first"
 # melted[melted$variable != 'value1',]$cat <- "second"
 
-df2 <- read.csv(data_to_load, header=T, sep=';')
+df2 <- read.csv(data_to_load, header=T, sep=';', comment.char="#")
 stopifnot(ncol(df2)%%2 == 1)
 
 melted <- melt(df2, "run")
@@ -65,9 +65,10 @@ melted['label_ypos'] <- unlist(grouped$total)
 # print(melted)
 filename <- basename(data_to_load)
 title_plot <- substr(filename, 1, regexpr("\\.", filename)[1]-1)
-my_palette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", 
-                "#0072B2", "#D55E00", "#CC79A7")
+my_palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", 
+                "#0072B2", "#D55E00", "#CC79A7", "#999999", "#000000")
 # my_palette <- rev(my_palette) # Reverse order, to have pink and orange 1st
+
 
 # To reproduce data plots from Cusco_2018:
 reprod_cusco = F
@@ -98,7 +99,8 @@ p <- ggplot(melted, aes(x=cat, y=value, fill=variable)) +
              y="Recall + FDR", fill=" Metrics") + # 'fill' = legend title
         theme(plot.title=element_text(hjust = 0.5), 
               panel.background=element_rect(fill="light grey"),
-              panel.grid.major=element_blank()) +
+              panel.grid.major=element_blank(),
+              strip.background=element_rect(fill="grey")) +
         scale_y_continuous(breaks=c(0, 0.25, 0.5, 0.75, 1))
 
 # ggplot_build(p)$data
