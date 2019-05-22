@@ -277,3 +277,34 @@ def in_zymo(taxo_taxid, set_levels_prok, taxonomic_cutoff):
             if taxo_name in set_levels_prok:
                 return (taxid_ancester, 'TP', 'true_pos')
             return (taxid_ancester, 'FP', 'misassigned')
+
+
+def in_zymo_new(taxo_taxid, set_levels_prok, taxonomic_cutoff):
+    """
+    Given the taxid of a read (lowest one in the taxo), determine if the 
+    organism belongs to the Zymo mock comm, at a given taxonomic cutoff 
+    """
+    if taxo_taxid == 'no_majo_found':
+        returned_list = ['no_majo_found', 'FP', 'no_majo_found']
+
+    else:
+        lineage = taxfoo.get_dict_lineage_as_taxids(taxo_taxid)
+
+        if not lineage: # "cannot find taxid {a_taxid}; quitting." --> empty dict
+            returned_list = [pd.np.nan, 'FP', 'taxid_unknown']
+        else:
+            taxo_levels = lineage.keys()
+
+            if taxonomic_cutoff not in taxo_levels:
+                # return ('notDeterminable', 'FP')
+                returned_list = [pd.np.nan, 'FP', 'notInKeys']
+            else:
+                taxid_ancester = lineage[taxonomic_cutoff]
+                assert(taxid_ancester)
+                taxo_name = taxfoo.get_taxid_name(taxid_ancester)
+                if taxo_name in set_levels_prok:
+                    returned_list = [taxid_ancester, 'TP', 'true_pos']
+                else:
+                    returned_list = [taxid_ancester, 'FP', 'misassigned']
+
+    return pd.Series(returned_list)

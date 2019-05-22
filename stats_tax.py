@@ -525,7 +525,7 @@ if __name__ == "__main__":
     if not CLUST_MODE:
         print_distrib = False
         if print_distrib:
-            test = my_csv[my_csv['lineage'].notnull()]['lineage']
+            test = my_csv.lineage.dropna()
             felix = pd.Series(map(lambda lin: len(lin.split('s')), test))
             bins_val = felix.max()
             felix.plot.hist(bins=bins_val, log=True)
@@ -626,20 +626,30 @@ if __name__ == "__main__":
         del my_csv_to_pll
 
         print('Finalizing evaluation..')
+        # Add res to the main CSV:
         my_res = pd.concat(result_chunks)
         my_csv = pd.concat([my_csv, my_res.set_index('index')], axis='columns', 
                            sort=False, copy=False)
+
+        # NEW WAY (take ages...):
+        # df_eval = pd.DataFrame(my_res.final_taxid.value_counts()).reset_index()
+        # df_eval.columns = ['fin_taxid', 'counting']
+        # list_new_col = ['taxid_ancest', 'res_eval', 'next_remark'] 
+        # df_eval[list_new_col] = df_eval.fin_taxid.apply(evaluate.in_zymo, 
+        #                                         args=(set_proks, taxo_cutoff))
+        # # Count FP and TP:
+        # dict_stats['FP'] += sum(df_eval[df_eval.res_eval == 'FP'].counting)
+        # dict_stats['TP'] += sum(df_eval[df_eval.res_eval == 'TP'].counting)
+
+        # df_eval.drop('counting', axis='columns', inplace=True)
+        # df_eval.set_index('fin_taxid', inplace=True)
+
+        # my_csv[list_new_col] = my_csv.final_taxid.dropna().apply(
+        #                             lambda val: df_eval.loc[val, list_new_col])
+
         my_csv['species'] = my_csv.taxid_ancester.apply(get_ancester_name)
         # sys.exit()
 
-        # Different way:
-        # print(my_csv.final_taxid.value_counts());sys.exit()
-        df_eval = pd.DataFrame(my_csv.final_taxid.value_counts().drop('no_majo_found')).reset_index()
-        df_eval.columns = ['fin_taxid', 'count']
-        df_eval['res_eval'] = df_eval.fin_taxid.apply(evaluate.in_zymo, 
-                                                args=(set_proks, taxo_cutoff))
-        print(df_eval.head())
-        sys.exit()
 
         # Compute counts:
         dict_count = {'second_uniq':0, 'second_plural':0, 'unmapped':0,

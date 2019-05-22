@@ -159,18 +159,17 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
                 remark_eval = type_align + ';' + remark_eval
                 # /!\ CAREFUL WITH THE ORDER HERE:
                 return Series([one_csv_index_val, 'no_majo_found', 
-                                       'no_majo_found', 'FP', remark_eval],
-                                      index=['index', 'taxid_ancester', 
-                                             'final_taxid', 'res_eval', 
-                                             'remark_eval'])
+                               'no_majo_found', 'FP', remark_eval],
+                              index=['index', 'taxid_ancester', 'final_taxid', 
+                                     'res_eval', 'remark_eval'])
+                # return Series([one_csv_index_val, 'no_majo_found', remark_eval],
+                #               index=['index', 'final_taxid', 'remark_eval'])
             else:
                 taxid_to_eval = res_second_handling[1]
 
     else:
         print("ERROR ! 'type_align' NOT KNOWN !")
         exit()
-    #     taxid_to_eval = lineage_val # Should be a nan
-    #     assert(pd.np.isnan(taxid_to_eval))
 
     taxid_ancester, classif, remark = eval.in_zymo(taxid_to_eval, 
                                                    set_levels_prok, 
@@ -182,7 +181,8 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
                    classif, remark_eval], 
                   index=['index', 'taxid_ancester', 'final_taxid', 'res_eval', 
                   'remark_eval'])
-
+    # return Series([one_csv_index_val, int(taxid_to_eval), remark_eval],
+    #               index=['index', 'final_taxid', 'remark_eval'])
 
 
 # FROM CLUST_TAX.PY:
