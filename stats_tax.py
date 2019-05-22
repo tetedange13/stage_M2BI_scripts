@@ -647,7 +647,20 @@ if __name__ == "__main__":
         # my_csv[list_new_col] = my_csv.final_taxid.dropna().apply(
         #                             lambda val: df_eval.loc[val, list_new_col])
 
+
+        # CORRECTION of B. intestinalis:
+        # if False:
+        if guessed_db == 'rrn':
+            print("\n  >>> CORRECTION OF INTESTINALIS FOR RRN!\n")
+            are_intestinalis = my_csv.final_taxid == 1963032
+            my_csv.loc[are_intestinalis, 'res_eval'] = 'TP'
+            my_csv.loc[are_intestinalis, 'final_taxid'] = 1423
+            ancest_subtilis = taxfoo.get_dict_lineage_as_taxids(1423)[taxo_cutoff]
+            my_csv.loc[are_intestinalis, 'taxid_ancester'] = ancest_subtilis
+
+
         my_csv['species'] = my_csv.taxid_ancester.apply(get_ancester_name)
+
         # sys.exit()
 
 
