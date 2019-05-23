@@ -386,15 +386,17 @@ def stats_base(db_to_stat):
     taxids_zymo_gen += [286, 5206, 1386] # Add 'Pseudomonas', 'Bacillus' and 'Cryptococcus'
     
     with open(to_seqid2taxid, 'r') as seqid2taxid_file:
-        set_taxids = {line.rstrip('\n').split('\t')[1] 
-                      for line in seqid2taxid_file}
+        list_taxids = [line.rstrip('\n').split('\t')[1] 
+                       for line in seqid2taxid_file]
+
+    print(sum(map(pll.is_trash, list_taxids)));sys.exit()
     
     dict_tmp = {}
     dict_bacil = {'Bacillus intestinalis':0, 'Bacillus subtilis':0}
     dict_counts_sp = {a_key:0 for a_key in dict_name2taxid}
     dict_counts_gen = {a_key.split()[0]:0 for a_key in dict_name2taxid}
 
-    for taxid in set_taxids:
+    for taxid in list_taxids:
         dict_tmp[taxid] = taxfoo.get_taxid_rank(int(taxid))
         if taxfoo.is_strain(int(taxid)): # Strain => rk='no rank' && rk_parent='species'
             dict_tmp[taxid] = 'strain'
@@ -578,7 +580,7 @@ if __name__ == "__main__":
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
     #                         "taxids_complete_lineage")
 
-    # stats_base('RRN')
-    detect_RRN_litige(to_dbs_RRN+'acc2taxid', to_dbs_RRN+'species_annotation')
-    # transform_EPI2ME_CSV("../EPI2ME_16S_primers_500K_toNCBIbact.sam")
+    stats_base('SILVA')
+    # detect_RRN_litige(to_dbs_RRN+'acc2taxid', to_dbs_RRN+'species_annotation')
+    # transform_EPI2ME_CSV("../EPI2ME_cusco_run2_toNCBIbact.sam")
     # extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")

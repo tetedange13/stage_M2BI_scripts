@@ -21,11 +21,17 @@ def is_trash(taxid_to_eval):
         return False   
     # assert(taxid_name)
     
-    if ('metagenome' in taxid_name or 'uncultured' in taxid_name or 
-        'unidentified' in taxid_name or 'phage' in taxid_name.lower() or
-        taxid_name == 'synthetic construct' or 
-        'virus' in taxid_name.lower()):
-        return True
+    tax_name_to_eval = taxid_name.lower()
+    if 'metagenome' in tax_name_to_eval: return True
+    elif 'uncultured' in tax_name_to_eval:
+        # print(eval.taxfoo.get_taxid_name(taxid_to_eval))
+        print(eval.taxfoo.get_lineage(taxid_to_eval))
+        return True 
+    elif 'unidentified' in tax_name_to_eval: return True
+    elif 'phage' in tax_name_to_eval: return True
+    elif tax_name_to_eval == 'synthetic construct': return True
+    elif 'virus' in tax_name_to_eval: return True
+        
     return False
 
 
