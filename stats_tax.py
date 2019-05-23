@@ -204,10 +204,10 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
     
         print("SENSITIVITY:", sensitivity, " | ", "FNR:", 
               round(1 - sensitivity, 4)) # TPR = TP/(TP+FN) (or sensitivity, hit rate, recall) 
-        print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
-        print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
-        print("ACCURACY:", round(skm.accuracy_score(y_true, y_pred), 4)) # ACC = (TP+TN)/(TP+FP+FN+TN) (overall accuracy)
-        print("SPECIFICITY:", calc_specificity(dict_stats_to_convert))
+        # print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
+        # print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
+        # print("ACCURACY:", round(skm.accuracy_score(y_true, y_pred), 4)) # ACC = (TP+TN)/(TP+FP+FN+TN) (overall accuracy)
+        # print("SPECIFICITY:", calc_specificity(dict_stats_to_convert))
         # NPV = 1 - calc_FOR(dict_stats_to_convert)
         # print("FOR:", 1 - NPV, " | ", "NPV:", NPV)
     else:
@@ -743,11 +743,10 @@ if __name__ == "__main__":
         print(my_csv[is_TP].species.value_counts())
         # print(my_csv[is_TP].type_align.value_counts().sort_index())
         # print(my_csv[is_TP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
-
         print()
 
 
-        # EXTRACTION of aligned sequeces within reference DB:
+        # EXTRACTION of aligned sequeces within reference DB (use for custom_NanoSim):
         extract_ref = False
         if extract_ref:
             print("EXTRACTIING..")
@@ -786,7 +785,8 @@ if __name__ == "__main__":
         print("FP STATS:")
         # print(my_csv[is_FP][['species', 'remark_eval']].groupby(['species', 'remark_eval']).size())
         # print(my_csv[is_FP].remark_eval.value_counts().sort_index())
-        print(my_csv[is_FP].species.value_counts().nlargest(20))
+        # print(my_csv[is_FP].final_taxid.value_counts().nlargest(20))
+        print(my_csv[is_FP].final_taxid.apply(taxfoo.get_taxid_name).value_counts().nlargest(20))
         # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')].final_taxid.value_counts())
         # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]['lineage'].apply(lambda lin: 's'.join(set(lin.strip(';').split('s')))).value_counts())
         print()
