@@ -26,6 +26,9 @@ library(stringr)
 df2 <- read.csv(data_to_load, header=T, sep=';', comment.char="#")
 stopifnot(ncol(df2)%%2 == 1)
 
+# Remove 'topOne' cols for report:
+# df2$sens_2.topOne <- NULL ; df2$FDR_2.topOne <- NULL 
+
 melted <- melt(df2, "run")
 # print(melted)
 
@@ -47,8 +50,8 @@ melted$variable <- factor(vect_debut)
 # print(melted)
 
 # Safeguards:
-# stopifnot(length(levels(melted$variable)) == )
-# stopifnot(length(levels(melted$cat)) == (ncol(df2)-1)/2)
+stopifnot(length(levels(melted$variable)) == 2)
+stopifnot(length(levels(melted$cat)) == (ncol(df2)-1)/2)
 
 
 # Need to be descendant with 'variable' col, to have 'sens' BEFORE 'FDR':
@@ -86,21 +89,22 @@ if (reprod_cusco) {
 
 print(melted)
 p <- ggplot(melted, aes(x=cat, y=value, fill=variable)) +
-        geom_bar(stat='identity', position='stack', na.rm=T) +
+        geom_bar(stat='identity', position='stack') +
+        facet_grid(cols=vars(run), scales="free_x") + # No x-tick for missing + bars same widt
         scale_fill_manual(values=my_palette[1:length(levels(melted$variable))]) + 
-        geom_text(aes(y=label_ypos, label=value), 
+        geom_text(aes(y=label_ypos, label=value, fontface="bold"), 
                   vjust=0.5, color="white", size=3.5) +
         theme(axis.text.x=element_text(angle=90, hjust=1, face="bold", 
                                        size=12)) +
-        facet_grid(~ run, scales='free_x', space='free') + # No x-tick for missing + bars same width
         # labs(title=paste(title_plot, "- lvl SPECIES"), 
         labs(title=title_plot,
              x="\nDifferent conditions", 
              y="Recall + FDR", fill=" Metrics") + # 'fill' = legend title
-        theme(plot.title=element_text(hjust = 0.5), 
+        theme(plot.title=element_text(hjust = 0.5, face="bold"), 
               panel.background=element_rect(fill="light grey"),
               panel.grid.major=element_blank(),
-              strip.background=element_rect(fill="grey")) +
+              strip.background=element_rect(fill="grey"),
+              strip.text=element_text(face="bold")) +
         scale_y_continuous(breaks=c(0, 0.25, 0.5, 0.75, 1))
 
 # ggplot_build(p)$data
