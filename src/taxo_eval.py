@@ -60,9 +60,9 @@ def generate_df_zymo():
     """
     """
     # Define the species contained within the Zymo mock community:
-    # dict_name2taxid = {'Listeria monocytogenes':1639, 
-    #                    'Bacillus subtilis':1423, 
-    #                    'Staphylococcus aureus':1280, 
+    # dict_name2taxid = {'Listeria monocytogenes':[1639 , 15.9], 
+    #                    'Bacillus subtilis':[1423 , 15.7], 
+    #                    'Staphylococcus aureus':[1280, 13.3], 
     #                    'Escherichia coli':562, 
     #                    'Lactobacillus fermentum':1613, 
     #                    'Enterococcus faecalis':1351,
