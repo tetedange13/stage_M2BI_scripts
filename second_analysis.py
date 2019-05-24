@@ -69,12 +69,16 @@ if __name__ == '__main__':
     ARGS = docopt(__doc__, version='0.1')
     to_infile, infile_base, _, _, ext_infile = check.infile(ARGS["--inOTUs"], 
                                                         ['csv', 'tsv', 'txt'])
+    
+    print()
     print("Loading taxonomic Python module...")
     import src.taxo_eval as eval
     pd = eval.pd
     print("Taxonomic Python module loaded !\n")
     taxo_cutoff = check.acceptable_str(ARGS["--taxoCut"], 
                                        eval.want_taxo + ['kingdom'])
+
+    print("Processing:", infile_base)
 
     # With the 'python engine', it is possible to use regex as separator
     # ( here, it says sep = ';' OR '\t' ):
@@ -143,12 +147,13 @@ if __name__ == '__main__':
                            log_modulus_series.index)))
     else:
         print(';'.join(log_modulus_series.index))
-    print(';'.join(str(round(val, 2)) for val in log_modulus_series.values))
+    print(';'.join(str(round(val, 3)) for val in log_modulus_series.values))
     print()
     
     # Relative abundances:
-    print(';'.join(str(round(val, 2)) for val in df_counts.obs_counts/sum(df_counts.obs_counts)))
-    # print(';'.join(str(round(val, 2)) for val in df_counts.expect_counts/sum(df_counts.expect_counts)))
+    print("Relative abundances (freq from raw counts):")
+    print(';'.join(str(round(val, 3)) for val in df_counts.obs_counts/sum(df_counts.obs_counts)))
+    # print(';'.join(str(round(val, 3)) for val in df_counts.expect_counts/sum(df_counts.expect_counts)))
 
 
     plot_stacked_bar = False
