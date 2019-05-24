@@ -24,7 +24,7 @@ library(stringr)
 # melted[melted$variable != 'value1',]$cat <- "second"
 
 df2 <- read.csv(data_to_load, header=T, sep=';', comment.char="#")
-stopifnot(ncol(df2)%%2 == 1)
+# stopifnot(ncol(df2)%%2 == 1)
 
 # Remove 'topOne' cols for report:
 # df2$sens_2.topOne <- NULL ; df2$FDR_2.topOne <- NULL 
@@ -49,9 +49,28 @@ melted$cat <- factor(vect_end)
 melted$variable <- factor(vect_debut)
 # print(melted)
 
-# Safeguards:
-stopifnot(length(levels(melted$variable)) == 2)
-stopifnot(length(levels(melted$cat)) == (ncol(df2)-1)/2)
+# Colors palette colorblind-friendly:
+my_palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", 
+                "#0072B2", "#D55E00", "#CC79A7", "#999999", "#000000")
+# my_palette <- rev(my_palette) # Reverse order, to have pink and orange 1st
+
+reprod_cusco = T
+if (!reprod_cusco) {
+    # Safeguards:
+    stopifnot(length(levels(melted$variable)) == 2)
+    stopifnot(length(levels(melted$cat)) == (ncol(df2)-1)/2)
+} else {
+    # To reproduce data plots from Cusco_2018:
+    palette_cusco = c("#A6CEE3", "#569DA3", "#51AE41", "#F68A89", "#F06C44", 
+                      "#F6860F", "#B295C8", "#C7B69A", "#B15928")
+    felix <- c(0.0, 0.157, 0.104, 0.100, 0.188, 0.159, 0.046, 0.113, 0.133)
+    tmp_df <- cbind.data.frame(rep("Mock_db", 9), unique(melted$variable), felix, 
+                               rep("ref", 9))
+    colnames(tmp_df) <- colnames(melted)
+    melted <- rbind(tmp_df, melted)
+    my_palette <- palette_cusco
+}
+# print(melted);exit()
 
 
 # Need to be descendant with 'variable' col, to have 'sens' BEFORE 'FDR':
@@ -68,31 +87,14 @@ melted['label_ypos'] <- unlist(grouped$total)
 # print(melted)
 filename <- basename(data_to_load)
 title_plot <- substr(filename, 1, regexpr("\\.", filename)[1]-1)
-my_palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", 
-                "#0072B2", "#D55E00", "#CC79A7", "#999999", "#000000")
-# my_palette <- rev(my_palette) # Reverse order, to have pink and orange 1st
-
-
-# To reproduce data plots from Cusco_2018:
-reprod_cusco = F
-if (reprod_cusco) {
-    palette_cusco = c("#A6CEE3", "#569DA3", "#51AE41", "#F68A89", "#F06C44", 
-                      "#F6860F", "#B295C8", "#C7B69A", "#B15928")
-    felix <- rev(c(0.0, 0.16, 0.1, 0.1, 0.19, 0.16, 0.05, 0.11, 0.13))
-    tmp_df <- cbind.data.frame(rep("Mock_db", 9), unique(melted$variable), felix, 
-                               rep("ref", 9), rep(NA, 9))
-    colnames(tmp_df) <- colnames(melted)
-    melted <- rbind(tmp_df, melted)
-    my_palette <- palette_cusco
-}
 
 
 print(melted)
 p <- ggplot(melted, aes(x=cat, y=value, fill=variable)) +
         geom_bar(stat='identity', position='stack') +
-        facet_grid(cols=vars(run), scales="free_x") + # No x-tick for missing + bars same widt
+        facet_grid(cols=vars(run), scales="free_x", space="free_x") + # No x-tick for missing + bars same widt
         scale_fill_manual(values=my_palette[1:length(levels(melted$variable))]) + 
-        geom_text(aes(y=label_ypos, label=value, fontface="bold"), 
+        geom_text(aes(y=label_ypos, label=round(value, 4), fontface="bold"), 
                   vjust=0.5, color="white", size=3.5) +
         theme(axis.text.x=element_text(angle=90, hjust=1, face="bold", 
                                        size=12)) +
@@ -105,7 +107,7 @@ p <- ggplot(melted, aes(x=cat, y=value, fill=variable)) +
               panel.grid.major=element_blank(),
               strip.background=element_rect(fill="grey"),
               strip.text=element_text(face="bold")) +
-        scale_y_continuous(breaks=c(0, 0.25, 0.5, 0.75, 1))
+        scale_y_continuous(breaks=c(0, 0.25, 0.5, 0.75, 1, 1.25))
 
 # ggplot_build(p)$data
 
