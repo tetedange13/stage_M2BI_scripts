@@ -241,6 +241,8 @@ if __name__ == "__main__":
     # Guess the database used:
     if "toZymo" in infile_base:
         guessed_db = 'zymo'
+    elif "toNewlot_zymo" in infile_base:
+        guessed_db = 'newlot_zymo'
     elif "toRrn" in infile_base:
         guessed_db = 'rrn'
     elif "toSilva" in infile_base:
@@ -576,6 +578,33 @@ if __name__ == "__main__":
                   "~ {}% removed".format(int(nb_removed/nb_not_nan*100)))
         # sys.exit()
 
+
+        # Filter only reads that are taxonomically evaluable (mapped):
+        my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage].reset_index()
+        nb_reads_to_process = len(my_csv_to_pll.index)
+
+
+        # Compute counts:
+        dict_count = {'second_uniq':0, 'second_plural':0, 'unmapped':0,
+                      'only_suppl':0}
+        counts_type_align = my_csv.type_align.value_counts()
+        for type_aln, count in counts_type_align.items():
+            dict_count[type_aln] = count
+        del type_aln, count
+        dict_count['tot_second'] = (dict_count['second_plural'] + 
+                                    dict_count['second_uniq'])
+        dict_count["tot_reads"] = sum(counts_type_align)
+        dict_count["tot_mapped"] = nb_reads_to_process   
+        dict_stats['FN'] += dict_count['unmapped']
+
+        # Print general counting results:
+        print()
+        print(dict_count)
+        tot_reads = dict_count['tot_reads']
+        print("TOT READS:", tot_reads)
+        print("% UNMAPPED:", round(dict_count["unmapped"]/tot_reads*100, 2))
+        
+
         # MODE = 'LCA'
         MODE = 'MINOR_RM_LCA'
         # MODE = 'TOP_ONE'
@@ -583,12 +612,8 @@ if __name__ == "__main__":
         # if IS_SAM_FILE:
         #     MODE = 'MAJO'
 
+        print("\nMODE FOR HANDLING MULTI-HITS:", MODE)
         print()
-        print("MODE FOR HANDLING MULTI-HITS:", MODE)
-        print()
-
-        my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage].reset_index()
-        nb_reads_to_process = len(my_csv_to_pll.index)
         print("PROCESSING {} reads from CSV to EVALUATE TAXO..".format(
                                                         nb_reads_to_process))
         print("(Tot nb of entries: {})".format(
@@ -664,20 +689,6 @@ if __name__ == "__main__":
         # sys.exit()
 
 
-        # Compute counts:
-        dict_count = {'second_uniq':0, 'second_plural':0, 'unmapped':0,
-                      'only_suppl':0}
-        counts_type_align = my_csv.type_align.value_counts()
-        for type_aln, count in counts_type_align.items():
-            dict_count[type_aln] = count
-        del type_aln, count
-        dict_count['tot_second'] = (dict_count['second_plural'] + 
-                                    dict_count['second_uniq'])
-        dict_count["tot_reads"] = sum(counts_type_align)
-        dict_count["tot_mapped"] = nb_reads_to_process   
-        dict_stats['FN'] += dict_count['unmapped']
-
-
         # To access evaluation results of a given species:
         tmp_df = my_csv[['species', 'res_eval']].drop_duplicates()
         dict_species2res = tmp_df.set_index('species')['res_eval'].to_dict()
@@ -690,7 +701,7 @@ if __name__ == "__main__":
         # sys.exit()
 
         
-        write_map = False
+        write_map = True
         if write_map:
             # OTU mapping file writting:
             # (NaN values are automatically EXCLUDED during the 'groupby')
@@ -805,14 +816,6 @@ if __name__ == "__main__":
 
         # print("TOT READS EVALUATED:", sum(dict_stats.values()))
         # print()
-
-
-        # Print general counting results:
-        print(dict_count)
-        tot_reads = dict_count['tot_reads']
-        print("TOT READS:", tot_reads)
-        print("% UNMAPPED:", round(dict_count["unmapped"]/tot_reads*100, 4))
-        print()
 
 
         # AT THE TAXA LEVEL:
