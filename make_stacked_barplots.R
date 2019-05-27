@@ -27,7 +27,8 @@ df2 <- read.csv(data_to_load, header=T, sep=';', comment.char="#")
 # stopifnot(ncol(df2)%%2 == 1)
 
 # Remove 'topOne' cols for report:
-# df2$sens_2.topOne <- NULL ; df2$FDR_2.topOne <- NULL 
+df2$sens_2.topOne <- NULL ; df2$FDR_2.topOne <- NULL
+print("Warning: removed the 'topOne' column from the input df")
 
 melted <- melt(df2, "run")
 # print(melted)
