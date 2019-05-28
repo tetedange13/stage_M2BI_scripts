@@ -24,11 +24,19 @@ library(stringr)
 # melted[melted$variable != 'value1',]$cat <- "second"
 
 df2 <- read.csv(data_to_load, header=T, sep=';', comment.char="#")
-# stopifnot(ncol(df2)%%2 == 1)
+
+reprod_cusco <- F
+if (!reprod_cusco) {
+    stopifnot(ncol(df2)%%2 == 1)
+}
+print(df2)
 
 # Remove 'topOne' cols for report:
-df2$sens_2.topOne <- NULL ; df2$FDR_2.topOne <- NULL
-print("Warning: removed the 'topOne' column from the input df")
+rm_topOne = F
+if (rm_topOne) {
+    df2$sens_2.topOne <- NULL ; df2$FDR_2.topOne <- NULL
+    writeLines("Warning: removed the 'topOne' column from the input df\n")
+}
 
 melted <- melt(df2, "run")
 # print(melted)
@@ -55,18 +63,18 @@ my_palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442",
                 "#0072B2", "#D55E00", "#CC79A7", "#999999", "#000000")
 # my_palette <- rev(my_palette) # Reverse order, to have pink and orange 1st
 
-reprod_cusco = T
+
 if (!reprod_cusco) {
     # Safeguards:
     stopifnot(length(levels(melted$variable)) == 2)
     stopifnot(length(levels(melted$cat)) == (ncol(df2)-1)/2)
 } else {
     # To reproduce data plots from Cusco_2018:
-    palette_cusco = c("#A6CEE3", "#569DA3", "#51AE41", "#F68A89", "#F06C44", 
-                      "#F6860F", "#B295C8", "#C7B69A", "#B15928")
+    palette_cusco <- c("#A6CEE3", "#569DA3", "#51AE41", "#F68A89", "#F06C44", 
+                       "#F6860F", "#B295C8", "#C7B69A", "#B15928")
     felix <- c(0.0, 0.157, 0.104, 0.100, 0.188, 0.159, 0.046, 0.113, 0.133)
-    tmp_df <- cbind.data.frame(rep("Mock_db", 9), unique(melted$variable), felix, 
-                               rep("ref", 9))
+    tmp_df <- cbind.data.frame(rep("Mock_db", 9), unique(melted$variable), 
+                               felix, rep("ref", 9))
     colnames(tmp_df) <- colnames(melted)
     melted <- rbind(tmp_df, melted)
     my_palette <- palette_cusco
@@ -95,7 +103,7 @@ p <- ggplot(melted, aes(x=cat, y=value, fill=variable)) +
         geom_bar(stat='identity', position='stack') +
         facet_grid(cols=vars(run), scales="free_x", space="free_x") + # No x-tick for missing + bars same widt
         scale_fill_manual(values=my_palette[1:length(levels(melted$variable))]) + 
-        geom_text(aes(y=label_ypos, label=round(value, 4), fontface="bold"), 
+        geom_text(aes(y=label_ypos, label=round(value, 3), fontface="bold"), 
                   vjust=0.5, color="white", size=3.5) +
         theme(axis.text.x=element_text(angle=90, hjust=1, face="bold", 
                                        size=12)) +

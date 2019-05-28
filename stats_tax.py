@@ -223,7 +223,7 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'txt', 'sam'])
 
     # Common variables:
-    NB_THREADS = 10
+    NB_THREADS = 15
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
@@ -545,8 +545,8 @@ if __name__ == "__main__":
         # FILTER CENTRIFUGE results on score and/or hitLength
         if not IS_SAM_FILE:
         # if False:
-            # cutoff_on_centriScore, cutoff_on_centriHitLength = 300, 50
-            cutoff_on_centriScore, cutoff_on_centriHitLength = 0, 0
+            cutoff_on_centriScore, cutoff_on_centriHitLength = 300, 50
+            # cutoff_on_centriScore, cutoff_on_centriHitLength = 0, 0
 
             def get_min_hitLength(hitLength_val):
                 if type(hitLength_val) == str:
@@ -570,8 +570,9 @@ if __name__ == "__main__":
             if not cutoff_on_centriScore:
                 print("   >> CENTRI NOT FILTERED")
             else:
-                print("CUTOFF CENTRI SCORE:", cutoff_on_centriScore, " | ",
-                      "CUTOFF CENTRI HitLength:", cutoff_on_centriHitLength)
+                print("   >> CUTOFF CENTRI SCORE:", cutoff_on_centriScore, 
+                      " | ", "CUTOFF CENTRI HitLength:", 
+                      cutoff_on_centriHitLength)
             print("NB OF UNCLASSIF:", nb_nan, 
                   ' | NB_NOT_NaNs:', nb_not_nan)
             print("NB REMOVED (NaNs excepted):", nb_removed, 
@@ -701,7 +702,7 @@ if __name__ == "__main__":
         # sys.exit()
 
         
-        write_map = True
+        write_map = False
         if write_map:
             # OTU mapping file writting:
             # (NaN values are automatically EXCLUDED during the 'groupby')
@@ -795,9 +796,9 @@ if __name__ == "__main__":
 
         print("FP STATS:")
         # print(my_csv[is_FP][['species', 'remark_eval']].groupby(['species', 'remark_eval']).size())
-        # print(my_csv[is_FP].remark_eval.value_counts().sort_index())
+        print(my_csv[is_FP].remark_eval.value_counts().sort_index())
         # print(my_csv[is_FP].final_taxid.value_counts().nlargest(20))
-        print(my_csv[is_FP].final_taxid.apply(taxfoo.get_taxid_name).value_counts().nlargest(20))
+        # print(my_csv[is_FP].final_taxid.apply(taxfoo.get_taxid_name).value_counts().nlargest(20))
         # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')].final_taxid.value_counts())
         # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]['lineage'].apply(lambda lin: 's'.join(set(lin.strip(';').split('s')))).value_counts())
         print()

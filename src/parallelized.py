@@ -25,7 +25,7 @@ def is_trash(taxid_to_eval):
     if 'metagenome' in tax_name_to_eval: return True
     elif 'uncultured' in tax_name_to_eval:
         # print(eval.taxfoo.get_taxid_name(taxid_to_eval))
-        print(eval.taxfoo.get_lineage(taxid_to_eval))
+        # print(eval.taxfoo.get_lineage(taxid_to_eval))
         return True 
     elif 'unidentified' in tax_name_to_eval: return True
     elif 'phage' in tax_name_to_eval: return True
