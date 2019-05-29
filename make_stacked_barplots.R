@@ -30,6 +30,7 @@ if (!reprod_cusco) {
     stopifnot(ncol(df2)%%2 == 1)
 }
 print(df2)
+writeLines("\n")
 
 # Remove 'topOne' cols for report:
 rm_topOne = F
