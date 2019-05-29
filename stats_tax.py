@@ -607,9 +607,9 @@ if __name__ == "__main__":
         
 
         # MODE = 'LCA'
-        MODE = 'MINOR_RM_LCA'
-        # MODE = 'TOP_ONE'
         # MODE = 'MAJO_OLD'
+        # MODE = 'TOP_ONE'
+        MODE = 'MINOR_RM_LCA'
         # if IS_SAM_FILE:
         #     MODE = 'MAJO'
 
@@ -796,9 +796,9 @@ if __name__ == "__main__":
 
         print("FP STATS:")
         # print(my_csv[is_FP][['species', 'remark_eval']].groupby(['species', 'remark_eval']).size())
-        print(my_csv[is_FP].remark_eval.value_counts().sort_index())
+        # print(my_csv[is_FP].remark_eval.value_counts().sort_index())
         # print(my_csv[is_FP].final_taxid.value_counts().nlargest(20))
-        # print(my_csv[is_FP].final_taxid.apply(taxfoo.get_taxid_name).value_counts().nlargest(20))
+        print(my_csv[is_FP].final_taxid.apply(taxfoo.get_taxid_name).value_counts().nlargest(20))
         # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')].final_taxid.value_counts())
         # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]['lineage'].apply(lambda lin: 's'.join(set(lin.strip(';').split('s')))).value_counts())
         print()
