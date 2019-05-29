@@ -144,11 +144,12 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
 
         else: # More than 1 unique taxid
             if mode == 'MAJO_OLD':
-                res_second_handling = eval.majo_voting_old(list_taxid_target, 'species')
+                res_second_handling = eval.majo_voting_old(list_taxid_target, 
+                                                           'species')
             elif mode == 'MINOR_RM_LCA':
                 res_second_handling = eval.majo_voting(list_taxid_target)
             elif mode == 'LCA':
-                res_second_handling = eval.make_lca(list_taxid_target)
+                res_second_handling = eval.make_lca(set(list_taxid_target))
             elif mode == 'TOP_ONE':
                 # Like that, we always take the 1st one
                 res_second_handling = ('topOne_only', list_taxid_target[0])
