@@ -25,7 +25,7 @@ library(stringr)
 
 df2 <- read.csv(data_to_load, header=T, sep=';', comment.char="#")
 
-reprod_cusco <- F
+reprod_cusco <- T
 if (!reprod_cusco) {
     stopifnot(ncol(df2)%%2 == 1)
 }
@@ -73,7 +73,8 @@ if (!reprod_cusco) {
     # To reproduce data plots from Cusco_2018:
     palette_cusco <- c("#A6CEE3", "#569DA3", "#51AE41", "#F68A89", "#F06C44", 
                        "#F6860F", "#B295C8", "#C7B69A", "#B15928")
-    felix <- c(0.0, 0.157, 0.104, 0.100, 0.188, 0.159, 0.046, 0.113, 0.133)
+    # felix <- c(0.0, 0.157, 0.104, 0.100, 0.188, 0.159, 0.046, 0.113, 0.133)
+    felix <- c(0.0, 0.174, 0.099, 0.101, 0.184, 0.141, 0.042, 0.104, 0.155) # NEW LOT
     tmp_df <- cbind.data.frame(rep("Mock_db", 9), unique(melted$variable), 
                                felix, rep("ref", 9))
     colnames(tmp_df) <- colnames(melted)
