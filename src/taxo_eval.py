@@ -148,35 +148,18 @@ def majo_voting_old(list_taxid_target, taxonomic_cutoff):
 
     list_taxids_ancesters = [dict_taxid2ancester[taxid] 
                              for taxid in list_taxid_target]
-    majo_ancester, _ = get_majo_old(list_taxids_ancesters, 0.5)
+    if len(set(list_taxids_ancesters)) > 1:
+        majo_ancester, _ = get_majo_old(list_taxids_ancesters, 0.5)
+        if majo_ancester == 'noMajo': # Still NO majoritary
+            return ('no_majo_found', )
+        else:
+            if 'notInKey' in majo_ancester:
+                return ('majo_notInKey', majo_ancester.split('_')[1])
+            # assert (majo_ancester != 'notInKey')
+            return ('majo_found', majo_ancester) # Majo found only after the 2nd round
 
-    if majo_ancester == 'noMajo': # Still NO majoritary
-        return ('no_majo_found', )
     else:
-        if 'notInKey' in majo_ancester:
-            return ('majo_notInKey', majo_ancester.split('_')[1])
-        # assert (majo_ancester != 'notInKey')
-        return ('majo_found', majo_ancester) # Majo found only after the 2nd round
-
-
-def get_majo(list_of_things, cutoff_majo):
-    """
-    Given a list of things (could be numbers of list of strings), determine
-    wether there is one whose frequency is up to a given cutoff (so that can be
-    considered as majority)
-    """
-    val_counts = pd.Series(list_of_things).value_counts()
-    freq_counts = val_counts/len(list_of_things)
-    are_up_to_cutoff  = freq_counts > cutoff_majo
-    nb_majo = sum(are_up_to_cutoff)
-    assert(nb_majo < 2)
-
-    to_return = [val for val in val_counts]
-    if nb_majo == 1: # 1 unique majoritary
-        return ('majo_found', str(freq_counts.idxmax()))
-    # print(val_counts)
-
-    return ('noMajo', None) # NO majoritary
+        return ('single_taxid', list_taxid_target[0])
 
 
 def remove_minor_lca(list_of_things, cutoff_discard):
@@ -230,8 +213,8 @@ def majo_voting(list_taxid_target):
     list_taxids_ancesters = [dict_taxid2ancester[taxid] 
                              for taxid in list_taxid_target]
     if len(set(list_taxids_ancesters)) > 1:
-        # remark_majo, majo_ancester = get_majo(list_taxids_ancesters, 0.5)
-        remark_majo, majo_ancester = remove_minor_lca(list_taxids_ancesters, 0.2)
+        remark_majo, majo_ancester = remove_minor_lca(list_taxids_ancesters, 
+                                                      0.2)
         if remark_majo == 'noMajo': # Still NO majoritary
             return ('no_majo_found', )
         else:
