@@ -610,8 +610,6 @@ if __name__ == "__main__":
         # MODE = 'MAJO_OLD'
         # MODE = 'TOP_ONE'
         MODE = 'MINOR_RM_LCA'
-        # if IS_SAM_FILE:
-        #     MODE = 'MAJO'
 
         print("\nMODE FOR HANDLING MULTI-HITS:", MODE)
         print()
@@ -797,8 +795,11 @@ if __name__ == "__main__":
         print("FP STATS:")
         # print(my_csv[is_FP][['species', 'remark_eval']].groupby(['species', 'remark_eval']).size())
         # print(my_csv[is_FP].remark_eval.value_counts().sort_index())
-        # print(my_csv[is_FP].final_taxid.value_counts().nlargest(20))
+        #print(my_csv[is_FP].final_taxid.value_counts().nlargest(20))
         print(my_csv[is_FP].final_taxid.apply(taxfoo.get_taxid_name).value_counts().nlargest(20))
+        # test = pd.DataFrame(my_csv.final_taxid.value_counts()).reset_index()
+        # test['felix'] = test['index'].apply(taxfoo.is_strain);print(test)
+        # print(my_csv.final_taxidvalue_counts())
         # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')].final_taxid.value_counts())
         # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]['lineage'].apply(lambda lin: 's'.join(set(lin.strip(';').split('s')))).value_counts())
         print()
