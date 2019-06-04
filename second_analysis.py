@@ -27,6 +27,7 @@ import src.check_args as check
 
 def gether_counts(a_taxo_csv, taxonomic_cutoff, name_series):
     """
+    Given a certain taxonomic cutoff, sum counts for taxa that share taxonomy 
     """
     tmp_dict = {}
     for idx, row in a_taxo_csv.iterrows():
@@ -97,6 +98,7 @@ if __name__ == '__main__':
     # plot_pie_chart(counts_sp_obs, False, "MON BEAU CAMEMBERT")
     # plt.show()
 
+    # Compute reference counts based on number of mapped reads and ref freq:
     df_prok_ref = eval.generate_df_zymo()
     df_prok_ref = df_prok_ref.assign(abs_count=df_prok_ref.rel_count * 
                                                tot_nb_mapped / 100)
@@ -114,6 +116,20 @@ if __name__ == '__main__':
         gap = tot_nb_mapped - tot_expect 
         assert(gap < 9 and pd.np.sign(gap) == 1.)
         for i in range(gap): df_counts.expect_counts[i] += 1
+
+
+    write_map = True
+    if write_map:
+        print("Writting a fake (reads) mapping file for reference..")
+        with open('ref_oldLot.map', 'w') as ref_map_file:
+            for idx, count in df_prok_ref.abs_count.items():
+                list_readIDs = map(lambda val: 'refOldLot_rd.' + str(val), 
+                                   range(int(count)))
+                ref_map_file.write(str(int(idx)) + '\t' + 
+                                   '\t'.join(list_readIDs) + '\n')
+                # print(idx, count)
+        print()
+
 
     # Gether all 'misassigned' together:
     dict_tmp = {'0-misassigned':0}
