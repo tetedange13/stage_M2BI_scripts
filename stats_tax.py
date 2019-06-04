@@ -254,6 +254,7 @@ if __name__ == "__main__":
     else:
         print("Unkown database !\n")
         sys.exit(2)
+    pos_name = infile_base.find("_to")
     
     print("DB GUESSED:", guessed_db)
     print("PROCESSING FILE:", infile_base)
@@ -700,16 +701,19 @@ if __name__ == "__main__":
         # sys.exit()
 
         
-        write_map = False
+        write_map = True
         if write_map:
             # OTU mapping file writting:
             # (NaN values are automatically EXCLUDED during the 'groupby')
             grped_by_fin_taxid = my_csv.groupby(by=['final_taxid'])
             tool_used = 'centri'
             if IS_SAM_FILE:
-                tool_used = 'Cusco2018.2.minimap'
-            sampl_prefix = (tool_used + guessed_db.capitalize() + 
-                            MODE.lower().capitalize())
+                tool_used = 'minimap'
+                if guessed_db == 'NCBIbact':
+                    tool_used = 'epi2me'
+            run_name = '.'.join(infile_base[0:pos_name].split('_'))
+            sampl_prefix = (run_name + '.' + tool_used + 
+                            guessed_db.capitalize() + MODE.lower().capitalize())
 
             with open(infile_base + '_' + MODE + '.map', 'w') as my_map:
             # with open(sampl_prefix + '.map', 'w') as my_map:
