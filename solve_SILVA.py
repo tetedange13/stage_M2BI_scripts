@@ -548,6 +548,23 @@ def detect_RRN_litige(to_acc2taxid, to_species_annot):
     print("TOT NB LITIGES (len==2):", len(dict_litiges.keys()))
 
 
+def tiny_func_for_STAMP(to_biom):
+    """
+    Format the result biom convert -i a_biom.biom -o to_tsv_biom --to-tsv, to
+    transform it into a spf profile file 
+    """
+    to_tsv_biom = "felix.tsv"
+    tmp_csv = pd.read_csv(to_tsv_biom, sep='\t', header=1)
+    tmp_csv.columns = ['taxid'] + list(tmp_csv.columns)[1:]
+    tmp_csv['sp_name'] = tmp_csv.taxid.apply(taxfoo.get_taxid_name)
+    tmp_csv.set_index('sp_name', inplace=True)
+    tmp_csv.drop('taxid', axis='columns', inplace=True)
+
+    out_spf = osp.splitext(to_biom)[0] + '.spf'
+    tmp_csv.to_csv(out_spf, sep='\t')
+    print(tmp_csv)
+
+
 
 # MAIN:
 if __name__ == "__main__":
@@ -580,7 +597,10 @@ if __name__ == "__main__":
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
     #                         "taxids_complete_lineage")
 
-    stats_base('SILVA')
+    # stats_base('SILVA')
     # detect_RRN_litige(to_dbs_RRN+'acc2taxid', to_dbs_RRN+'species_annotation')
     # transform_EPI2ME_CSV("../EPI2ME_cusco_run2_toNCBIbact.sam")
     # extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
+
+    if len(sys.argv) > 1:
+        tiny_func_for_STAMP(sys.argv[1])
