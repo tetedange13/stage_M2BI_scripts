@@ -25,7 +25,7 @@ library(stringr)
 
 df2 <- read.csv(data_to_load, header=T, sep=';', comment.char="#")
 
-reprod_cusco <- T
+reprod_cusco <- F
 if (!reprod_cusco) {
     stopifnot(ncol(df2)%%2 == 1)
 }
@@ -107,7 +107,7 @@ p <- ggplot(melted, aes(x=cat, y=value, fill=variable)) +
         scale_fill_manual(values=my_palette[1:length(levels(melted$variable))]) + 
         geom_text(aes(y=label_ypos, label=round(value, 3), fontface="bold"), 
                   vjust=0.5, color="white", size=3.5) +
-        theme(axis.text.x=element_text(angle=90, hjust=1, face="bold", 
+        theme(axis.text.x=element_text(angle=45, hjust=1, face="bold", 
                                        size=12)) +
         # labs(title=paste(title_plot, "- lvl SPECIES"), 
         labs(title=title_plot,
