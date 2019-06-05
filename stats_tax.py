@@ -713,7 +713,8 @@ if __name__ == "__main__":
                     tool_used = 'epi2me'
             run_name = '.'.join(infile_base[0:pos_name].split('_'))
             sampl_prefix = (run_name + '.' + tool_used + 
-                            guessed_db.capitalize() + MODE.lower().capitalize())
+                            guessed_db.capitalize() + 
+                            MODE.split('_')[0].lower().capitalize())
 
             with open(infile_base + '_' + MODE + '.map', 'w') as my_map:
             # with open(sampl_prefix + '.map', 'w') as my_map:
@@ -731,6 +732,7 @@ if __name__ == "__main__":
                     else:
                         taxid_to_write = taxid_grp
                         print("NB OF 'NO_MAJO':", len(grp))
+                        # continue # Like, 'no_majo_found' are excluded ? 
 
                     my_map.write(str(taxid_to_write) + '\t' + 
                                  '\t'.join(readIDs_to_write) + '\n')
