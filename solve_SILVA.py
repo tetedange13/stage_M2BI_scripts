@@ -556,13 +556,46 @@ def tiny_func_for_STAMP(to_biom):
     to_tsv_biom = "felix.tsv"
     tmp_csv = pd.read_csv(to_tsv_biom, sep='\t', header=1)
     tmp_csv.columns = ['taxid'] + list(tmp_csv.columns)[1:]
-    tmp_csv['sp_name'] = tmp_csv.taxid.apply(taxfoo.get_taxid_name)
+    tmp_csv['sp_name'] = tmp_csv[tmp_csv.taxid != 'no_majo_found'].taxid.astype('int').apply(taxfoo.get_taxid_name)
+    print(tmp_csv.taxid.dtype)
     tmp_csv.set_index('sp_name', inplace=True)
     tmp_csv.drop('taxid', axis='columns', inplace=True)
 
     out_spf = osp.splitext(to_biom)[0] + '.spf'
     tmp_csv.to_csv(out_spf, sep='\t')
     print(tmp_csv)
+
+
+def correct_spf(to_spf):
+    """
+    """
+    print("Input spf file:", to_spf)
+    test = pd.read_csv(to_spf, sep='\t')
+    # 
+
+    for idx, row in test.iterrows():
+        are_other = row.apply(lambda val_from_list: val_from_list=='Other')
+
+        if test.loc[idx, 'Level_1'] == 'None':
+            print("Removing Unclassified entry !")
+            test.drop(idx, inplace=True)
+            # test.loc[idx, 'Level_1'] = 'Unclassified'
+            # for i in range(2, 8): test.loc[idx, 'Level_' + str(i)] = pd.np.nan
+        if sum(are_other) > 0:
+            print(test.loc[idx, :])
+            test.loc[idx, are_other] = 'Unclassified'
+            print(idx+2, sum(are_other), list(test.loc[idx, test.columns[-5:-1]]))
+            # test.drop(idx, inplace=True)
+    # print(test.loc[1687, :])
+    #fo
+    #if test
+
+    test.loc[:, 'Level_7'] = test.Level_6 + ' ' + test.Level_7
+
+    print('New spf file:', to_spf.rstrip('0'))
+    test.to_csv(to_spf.rstrip('0'), sep='\t', index=False)
+    
+    
 
 
 
@@ -602,5 +635,8 @@ if __name__ == "__main__":
     # transform_EPI2ME_CSV("../EPI2ME_cusco_run2_toNCBIbact.sam")
     # extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
 
-    if len(sys.argv) > 1:
+    correct_spf("OTUs_maps_n_tables/toRrn.spf0")
+
+    if False:
+    # if len(sys.argv) > 1:
         tiny_func_for_STAMP(sys.argv[1])
