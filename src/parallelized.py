@@ -50,8 +50,8 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
                      'len_align' : representative["len_align"]}
     
     if nb_alignments_for_readID > 1: # Secondary alignment
-        assert(not representative["is_suppl"])
-        assert(not representative["is_second"])
+        # assert(not representative["is_suppl"])
+        # assert(not representative["is_second"])
 
         # Get rid of supplementaries:
         no_suppl_list = [align_obj for align_obj in align_list 
@@ -70,7 +70,7 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
             only_equiv_list = [dico for dico in no_suppl_list 
                                if dico["AS"] == max_AS]
 
-            if representative["has_SA"]:
+            if representative["has_SA"]: # 1st alignment is a supplementary
                 # print(readID, "suppl_as_repr")
                 max_mapq = max([align_obj["mapq"] for align_obj in align_list 
                                 if align_obj["has_SA"]])
