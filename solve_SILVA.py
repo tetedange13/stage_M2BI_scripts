@@ -556,14 +556,16 @@ def tiny_func_for_STAMP(to_biom):
     to_tsv_biom = "felix.tsv"
     tmp_csv = pd.read_csv(to_tsv_biom, sep='\t', header=1)
     tmp_csv.columns = ['taxid'] + list(tmp_csv.columns)[1:]
-    tmp_csv['sp_name'] = tmp_csv[tmp_csv.taxid != 'no_majo_found'].taxid.astype('int').apply(taxfoo.get_taxid_name)
-    print(tmp_csv.taxid.dtype)
+    not_no_majo_found = tmp_csv.taxid != 'no_majo_found'
+    tmp_csv['sp_name'] = tmp_csv[not_no_majo_found].taxid.astype('int').apply(
+                                                        taxfoo.get_taxid_name)
+    tmp_csv.loc[-not_no_majo_found, 'sp_name'] = 'no_majo_found'
     tmp_csv.set_index('sp_name', inplace=True)
     tmp_csv.drop('taxid', axis='columns', inplace=True)
 
     out_spf = osp.splitext(to_biom)[0] + '.spf'
     tmp_csv.to_csv(out_spf, sep='\t')
-    print(tmp_csv)
+    # print(tmp_csv)
 
 
 def correct_spf(to_spf):
@@ -635,8 +637,8 @@ if __name__ == "__main__":
     # transform_EPI2ME_CSV("../EPI2ME_cusco_run2_toNCBIbact.sam")
     # extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
 
-    correct_spf("OTUs_maps_n_tables/toRrn.spf0")
+    # correct_spf("OTUs_maps_n_tables/toRrn.spf0")
 
-    if False:
-    # if len(sys.argv) > 1:
+    # if False:
+    if len(sys.argv) > 1:
         tiny_func_for_STAMP(sys.argv[1])
