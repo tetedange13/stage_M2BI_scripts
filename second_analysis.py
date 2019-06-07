@@ -118,7 +118,7 @@ if __name__ == '__main__':
         for i in range(gap): df_counts.expect_counts[i] += 1
 
 
-    write_map = True
+    write_map = False
     if write_map:
         print("Writting a fake (reads) mapping file for reference..")
         with open('ref_oldLot.map', 'w') as ref_map_file:
