@@ -18,11 +18,24 @@ data <- read.csv(data_to_load, header=T, sep=";", row.names="Zymo_sp",
 print(paste("MIN_VAL_DF:", data[which(data == min(data), arr.ind = TRUE)]))
 print(paste("MAX_VAL_DF:", data[which(data == max(data), arr.ind = TRUE)]))
 
-min_val <- -5
-max_val <- 5
+data_old <- data
+print(data_old)
+writeLines("\n\n")
+# print(sapply(data_old, class))
+
+# Convert into differential proportion relative to ref_prop:
+data <- data.frame(sweep(data.matrix(data[-c(1), ]), MARGIN=2, 
+                         STATS=as.numeric(data[1, ])) * 100)
+data <- rbind(expected=rep(0, 9), data)
+
+min_val <- -15
+max_val <- 15
 nb_var <- ncol(data)
-data <- rbind(rep(max_val, nb_var) , rep(min_val, nb_var) , data)
+data <- rbind(rep(max_val, nb_var), rep(min_val, nb_var), data)
 print(data)
+writeLines("\n\n")
+
+
 
 # Plot 2: Same plot with custom features
 colors_border=c( rgb(0.6,0.6,0.6,0.4), rgb(0.2,0.5,0.5,0.9), 
