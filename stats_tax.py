@@ -596,7 +596,7 @@ if __name__ == "__main__":
         dict_count['tot_second'] = (dict_count['second_plural'] + 
                                     dict_count['second_uniq'])
         dict_count["tot_reads"] = sum(counts_type_align)
-        dict_count["tot_mapped"] = nb_reads_to_process   
+        dict_count["tot_mapped"] = nb_reads_to_process 
         dict_stats['FN'] += dict_count['unmapped']
 
         # Print general counting results:
@@ -607,8 +607,8 @@ if __name__ == "__main__":
         print("% UNMAPPED:", round(dict_count["unmapped"]/tot_reads*100, 2))
         
 
-        # MODE = 'LCA'
-        # MODE = 'MAJO_OLD'
+        MODE = 'LCA'
+        MODE = 'MAJO_OLD'
         # MODE = 'TOP_ONE'
         MODE = 'MINOR_RM_LCA'
 
@@ -678,6 +678,7 @@ if __name__ == "__main__":
         if guessed_db == 'rrn':
             print("\n  >>> CORRECTION OF INTESTINALIS FOR RRN!\n")
             are_intestinalis = my_csv.final_taxid == 1963032
+            print("(NB of corrected reads: {})".format(sum(are_intestinalis)))
             my_csv.loc[are_intestinalis, 'res_eval'] = 'TP'
             my_csv.loc[are_intestinalis, 'final_taxid'] = 1423
             ancest_subtilis = taxfoo.get_dict_lineage_as_taxids(1423)[taxo_cutoff]
@@ -695,13 +696,15 @@ if __name__ == "__main__":
         del tmp_df
 
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
+        print("NB of 'no_majo_found':", 
+              sum(my_csv.final_taxid == 'no_majo_found'))
         print()
 
         # print(my_csv[pd.to_numeric(my_csv.score) <= 300]['res_eval'].value_counts())
         # sys.exit()
 
         
-        write_map = True
+        write_map = False
         if write_map:
             # OTU mapping file writting:
             # (NaN values are automatically EXCLUDED during the 'groupby')
