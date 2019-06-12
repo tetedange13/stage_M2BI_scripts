@@ -33,7 +33,7 @@ print(df2)
 writeLines("\n")
 
 # Remove 'topOne' cols for report:
-rm_topOne = F
+rm_topOne = T
 if (rm_topOne) {
     df2$sens_2.topOne <- NULL ; df2$FDR_2.topOne <- NULL
     writeLines("Warning: removed the 'topOne' column from the input df\n")
@@ -73,12 +73,17 @@ if (!reprod_cusco) {
     # To reproduce data plots from Cusco_2018:
     palette_cusco <- c("#A6CEE3", "#569DA3", "#51AE41", "#F68A89", "#F06C44", 
                        "#F6860F", "#B295C8", "#C7B69A", "#B15928")
-    # felix <- c(0.0, 0.157, 0.104, 0.100, 0.188, 0.159, 0.046, 0.113, 0.133)
-    felix <- c(0.0, 0.174, 0.099, 0.101, 0.184, 0.141, 0.042, 0.104, 0.155) # NEW LOT
+    oldLot <- c(0.0, 0.157, 0.104, 0.100, 0.188, 0.159, 0.046, 0.113, 0.133)
+    newLot <- c(0.0, 0.174, 0.099, 0.101, 0.184, 0.141, 0.042, 0.104, 0.155) # NEW LOT
     tmp_df <- cbind.data.frame(rep("Mock_db", 9), unique(melted$variable), 
-                               felix, rep("ref", 9))
+                               oldLot, rep("ref", 9))
     colnames(tmp_df) <- colnames(melted)
     melted <- rbind(tmp_df, melted)
+    tmp_df2 <- cbind.data.frame(rep("Mock_db", 9), unique(melted$variable), 
+                               newLot, rep("ref_new", 9))
+    colnames(tmp_df2) <- colnames(melted)
+    melted <- rbind(melted, tmp_df2)
+
     my_palette <- palette_cusco
 }
 # print(melted);exit()
@@ -105,7 +110,7 @@ p <- ggplot(melted, aes(x=cat, y=value, fill=variable)) +
         geom_bar(stat='identity', position='stack') +
         facet_grid(cols=vars(run), scales="free_x", space="free_x") + # No x-tick for missing + bars same widt
         scale_fill_manual(values=my_palette[1:length(levels(melted$variable))]) + 
-        geom_text(aes(y=label_ypos, label=round(value, 3), fontface="bold"), 
+        geom_text(aes(y=label_ypos, label=round(value, 2), fontface="bold"), 
                   vjust=0.5, color="white", size=3.5) +
         theme(axis.text.x=element_text(angle=45, hjust=1, face="bold", 
                                        size=12)) +
