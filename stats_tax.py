@@ -697,14 +697,14 @@ if __name__ == "__main__":
 
         print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
         print("NB of 'no_majo_found':", 
-              sum(my_csv.final_taxid == 'no_majo_found'))
+              sum(my_csv.final_taxid.astype(str) == 'no_majo_found'))
         print()
 
         # print(my_csv[pd.to_numeric(my_csv.score) <= 300]['res_eval'].value_counts())
         # sys.exit()
 
         
-        write_map = False
+        write_map = True
         if write_map:
             # OTU mapping file writting:
             # (NaN values are automatically EXCLUDED during the 'groupby')
