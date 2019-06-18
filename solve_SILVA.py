@@ -10,7 +10,7 @@ from functools import partial
 import src.parallelized as pll
 from Bio import SeqIO
 
-
+eval = pll.eval
 taxfoo = pll.eval.taxfoo
 pd = pll.eval.pd
 
@@ -568,12 +568,21 @@ def tiny_func_for_STAMP(to_biom):
     # print(tmp_csv)
 
 
+def tiny_func_for_STAMP_2(to_biom_txt):
+    """
+    """ 
+    df_prok_ref = eval.generate_df_zymo()
+    my_taxo_csv = pd.read_csv(to_biom_txt, sep=';|\t', skiprows=[0], 
+                              engine='python')
+    print(my_taxo_csv.head())
+    sys.exit()
+
+
 def correct_spf(to_spf):
     """
     """
     print("Input spf file:", to_spf)
     test = pd.read_csv(to_spf, sep='\t')
-    # 
 
     for idx, row in test.iterrows():
         are_other = row.apply(lambda val_from_list: val_from_list=='Other')
@@ -637,6 +646,7 @@ if __name__ == "__main__":
     # transform_EPI2ME_CSV("../EPI2ME_cusco_run2_toNCBIbact.sam")
     # extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
 
+    tiny_func_for_STAMP_2("OTUs_maps_n_tables/toRrn_L7_newHeader.txt")
     # correct_spf("OTUs_maps_n_tables/toRrn.spf0")
 
     # if False:
