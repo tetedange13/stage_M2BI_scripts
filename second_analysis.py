@@ -168,8 +168,9 @@ if __name__ == '__main__':
     
     # Relative abundances:
     print("Relative abundances (freq from raw counts):")
-    print(';'.join(str(round(val, 3)) for val in df_counts.obs_counts/sum(df_counts.obs_counts)))
-    # print(';'.join(str(round(val, 3)) for val in df_counts.expect_counts/sum(df_counts.expect_counts)))
+    print(';'.join(str(round(val, 3)) for val in df_counts.obs_counts))
+    print(';'.join(str(round(val, 3)) for val in df_counts.expect_counts))
+    #print(';'.join(str(round(val, 3)) for val in df_counts.expect_counts/sum(df_counts.expect_counts)))
 
 
     plot_stacked_bar = False
