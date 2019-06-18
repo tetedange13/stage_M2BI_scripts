@@ -13,8 +13,7 @@ library(fmsb)
 # data=as.data.frame(matrix( sample( 0:20 , 15 , replace=F) , ncol=5))
 data <- read.csv(data_to_load, header=T, sep=";", row.names="Zymo_sp", 
                  comment.char="#")
-#colnames(data)=c("math" , "english" , "biology" , "music" , "R-coding" )
-#rownames(data) <- data["Zymo_sp"]
+
 print(paste("MIN_VAL_DF:", data[which(data == min(data), arr.ind = TRUE)]))
 print(paste("MAX_VAL_DF:", data[which(data == max(data), arr.ind = TRUE)]))
 
