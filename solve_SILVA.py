@@ -570,12 +570,50 @@ def tiny_func_for_STAMP(to_biom):
 
 def tiny_func_for_STAMP_2(to_biom_txt):
     """
+    Taking a tsv format OTU table output from 'summarize_taxa.py' script 
+    (can be a merged OTUs, with mmore than 2 different samples), merge all
+    entries different from the eight expected into a 'misassigned' category
+    and produce a proper spf file 
     """ 
     df_prok_ref = eval.generate_df_zymo()
-    my_taxo_csv = pd.read_csv(to_biom_txt, sep=';|\t', skiprows=[0], 
-                              engine='python')
-    print(my_taxo_csv.head())
-    sys.exit()
+    set_taxids = df_prok_ref.index
+    # my_taxo_csv = pd.read_csv(to_biom_txt, sep=';|\t', skiprows=[0], engine='python')
+    my_taxo_csv = pd.read_csv(to_biom_txt, sep='\t', skiprows=[0])
+    assert(len(my_taxo_csv.index) >= 8)
+    # print(my_taxo_csv.head())
+    list_taxo = [eval.taxo_from_taxid(taxid) for taxid in set_taxids]
+
+    samples_names = my_taxo_csv.columns[1:]
+    nb_samples = len(samples_names)
+    print('Detected {} different samples'. format(nb_samples))
+
+    misassigned = pd.Series([0]*nb_samples, index=samples_names)
+    future_spf = pd.DataFrame(columns=samples_names)
+
+    i = 0
+    for idx, row in my_taxo_csv.iterrows():
+        taxo = row["#OTU ID"]
+
+        if taxo not in list_taxo:
+            misassigned = misassigned.add(row[1:])
+        else:
+            splitted_taxo = taxo.split(';')
+            sp_name = splitted_taxo[-1]
+            if len(splitted_taxo) == 7:
+                sp_name = splitted_taxo[-2] + ' ' + splitted_taxo[-1]
+
+            future_spf.loc[sp_name, :] = row
+            i += 1
+    del idx, row
+
+    future_spf.loc['misassigned', :] = misassigned
+    assert(len(future_spf.index) == 9)
+    # print(); print(future_spf)
+    to_out_spf = osp.splitext(to_biom_txt)[0] + '.spf'
+    future_spf.index.name = 'sp_name'
+    # print(future_spf.head())
+    print("Wrote:", to_out_spf) ; print()
+    future_spf.to_csv(to_out_spf, sep='\t', index=True)
 
 
 def correct_spf(to_spf):
@@ -646,9 +684,10 @@ if __name__ == "__main__":
     # transform_EPI2ME_CSV("../EPI2ME_cusco_run2_toNCBIbact.sam")
     # extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
 
-    tiny_func_for_STAMP_2("OTUs_maps_n_tables/toRrn_L7_newHeader.txt")
+    # tiny_func_for_STAMP_2("OTUs_maps_n_tables/toZymo_L7.txt")
     # correct_spf("OTUs_maps_n_tables/toRrn.spf0")
 
     # if False:
     if len(sys.argv) > 1:
-        tiny_func_for_STAMP(sys.argv[1])
+        # tiny_func_for_STAMP(sys.argv[1])
+        tiny_func_for_STAMP_2(sys.argv[1])
