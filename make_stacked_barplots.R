@@ -117,7 +117,7 @@ p <- ggplot(melted, aes(x=cat, y=value, fill=variable)) +
         # labs(title=paste(title_plot, "- lvl SPECIES"), 
         labs(title=title_plot,
              x="\nDifferent conditions", 
-             y="Recall + FDR", fill=" Metrics") + # 'fill' = legend title
+             y="Sensitivity + FDR", fill=" Metrics") + # 'fill' = legend title
         theme(plot.title=element_text(hjust = 0.5, face="bold"), 
               panel.background=element_rect(fill="light grey"),
               panel.grid.major=element_blank(),
