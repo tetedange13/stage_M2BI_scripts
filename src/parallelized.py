@@ -139,7 +139,7 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
                 remark_eval = type_align + ';' + remark_eval
                 # /!\ CAREFUL WITH THE ORDER HERE:
                 return Series([one_csv_index_val, 'no_majo_found', 
-                               'no_majo_found', 'FP', remark_eval],
+                               'no_majo_found', 'miss', remark_eval],
                               index=['index', 'taxid_ancester', 'final_taxid', 
                                      'res_eval', 'remark_eval'])
             else:

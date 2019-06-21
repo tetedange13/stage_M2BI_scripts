@@ -209,20 +209,20 @@ def in_zymo(taxo_taxid, set_levels_prok, taxonomic_cutoff):
     lineage = taxfoo.get_dict_lineage_as_taxids(taxo_taxid)
 
     if not lineage: # "cannot find taxid {a_taxid}; quitting." --> empty dict
-        return (pd.np.nan, 'FP', 'taxid_unknown')
+        return (pd.np.nan, 'miss', 'taxid_unknown')
     else:
         taxo_levels = lineage.keys()
 
         if taxonomic_cutoff not in taxo_levels:
-            # return ('notDeterminable', 'FP')
-            return (pd.np.nan, 'FP', 'notInKeys')
+            # return ('notDeterminable', 'miss')
+            return (pd.np.nan, 'miss', 'notInKeys')
         else:
             taxid_ancester = lineage[taxonomic_cutoff]
             assert(taxid_ancester)
             taxo_name = taxfoo.get_taxid_name(taxid_ancester)
             if taxo_name in set_levels_prok:
-                return (taxid_ancester, 'TP', 'true_pos')
-            return (taxid_ancester, 'FP', 'misassigned')
+                return (taxid_ancester, 'well', 'true_pos')
+            return (taxid_ancester, 'miss', 'misassigned')
 
 
 def in_zymo_new(taxo_taxid, set_levels_prok, taxonomic_cutoff):
@@ -231,25 +231,25 @@ def in_zymo_new(taxo_taxid, set_levels_prok, taxonomic_cutoff):
     organism belongs to the Zymo mock comm, at a given taxonomic cutoff 
     """
     if taxo_taxid == 'no_majo_found':
-        returned_list = ['no_majo_found', 'FP', 'no_majo_found']
+        returned_list = ['no_majo_found', 'miss', 'no_majo_found']
 
     else:
         lineage = taxfoo.get_dict_lineage_as_taxids(taxo_taxid)
 
         if not lineage: # "cannot find taxid {a_taxid}; quitting." --> empty dict
-            returned_list = [pd.np.nan, 'FP', 'taxid_unknown']
+            returned_list = [pd.np.nan, 'miss', 'taxid_unknown']
         else:
             taxo_levels = lineage.keys()
 
             if taxonomic_cutoff not in taxo_levels:
-                returned_list = [pd.np.nan, 'FP', 'notInKeys']
+                returned_list = [pd.np.nan, 'miss', 'notInKeys']
             else:
                 taxid_ancester = lineage[taxonomic_cutoff]
                 assert(taxid_ancester)
                 taxo_name = taxfoo.get_taxid_name(taxid_ancester)
                 if taxo_name in set_levels_prok:
-                    returned_list = [taxid_ancester, 'TP', 'true_pos']
+                    returned_list = [taxid_ancester, 'well', 'true_pos']
                 else:
-                    returned_list = [taxid_ancester, 'FP', 'misassigned']
+                    returned_list = [taxid_ancester, 'miss', 'misassigned']
 
     return pd.Series(returned_list)

@@ -21,7 +21,7 @@ import time as t
 import subprocess as sub
 import pysam as pys
 import multiprocessing as mp
-import matplotlib.pyplot as plt
+import mawelllotlib.pyplot as plt
 from itertools import islice
 from functools import partial
 from docopt import docopt
@@ -113,10 +113,10 @@ def get_ancester_name(arg_taxid_ancest):
     return 'notDeterminable'
 
 
-def discriminate_FP(arg_taxid, wanted_taxo, df_proks_arg):
+def discriminate_miss(arg_taxid, wanted_taxo, df_proks_arg):
     """
-    Given the taxid of a FP, discriminate between FFP (= in Zymo but taxo too 
-    high) and TFP (= 'final_taxid' misassigned or taxo lvl above 'Bacteria')
+    Given the taxid of a miss, discriminate between Fmiss (= in Zymo but taxo too 
+    high) and Tmiss (= 'final_taxid' misassigned or taxo lvl above 'Bacteria')
     """
     lineage = taxfoo.get_dict_lineage_as_taxids(arg_taxid, 
                                                 want_taxonomy=wanted_taxo)
@@ -128,61 +128,33 @@ def discriminate_FP(arg_taxid, wanted_taxo, df_proks_arg):
             res_eval = evaluate.in_zymo(current_ancester, 
                                         current_set_proks, taxo_lvl)[-1]
             if res_eval == 'true_pos':
-                return pd.Series(['FFP', current_ancester,
+                return pd.Series(['Fmiss', current_ancester,
                                   taxfoo.get_taxid_name(current_ancester)])
 
     del taxo_lvl
 
-    return pd.Series(['TFP', arg_taxid, taxfoo.get_taxid_name(int(arg_taxid))])
+    return pd.Series(['Tmiss', arg_taxid, taxfoo.get_taxid_name(int(arg_taxid))])
 
 
 def dict_stats_to_vectors(dict_res):
     """
     Generate 2 vectors (for predicted and true values), based on the values of
-    'TP', 'FP' etc contained in the dict_res given as arg
+    'well', 'miss' etc contained in the dict_res given as arg
     """
     vec_pred, vec_true = [], []
 
     for res in dict_res:
-        if res == 'TP':
+        if res == 'well':
             vec_true.extend([True]*dict_res[res]) # Positive in reality
             vec_pred.extend([True]*dict_res[res]) # Well predicted positive
-        elif res == 'TN':
-            vec_true.extend([False]*dict_res[res]) # Negative in reality
-            vec_pred.extend([False]*dict_res[res]) # Well predicted negative
-        elif res == 'FN':
+        elif res == 'unass':
             vec_true.extend([True]*dict_res[res]) # Positive in reality
             vec_pred.extend([False]*dict_res[res]) # But predicted negative
-        else: # if res == 'FP':
+        else: # if res == 'miss':
             vec_true.extend([False]*dict_res[res]) # Negative in reality
             vec_pred.extend([True]*dict_res[res]) # But predicted positive
 
     return (vec_true, vec_pred)
-
-
-def calc_specificity(dict_res):
-    # Specificity or true negative rate: TNR = TN/(TN+FP) 
-    # Negative predictive value: NPV = TN/(TN+FN)
-    # Fall out or false positive rate: FPR = FP/(FP+TN)
-    # False negative rate: FNR = FN/(TP+FN)
-    # False discovery rate: FDR = FP/(TP+FP)
-    
-    try:
-        spe = dict_res['TN']/(dict_res['TN'] + dict_res['FP'])
-        return spe
-    except ZeroDivisionError:
-        return 'NA'
-
-
-def calc_FOR(dict_res):
-    # Negative predictive value: NPV = TN/(TN+FN)
-    # FOR = 1 - NPV
-
-    try:
-        spe = dict_res['FN']/(dict_res['TN'] + dict_res['FN'])
-        return spe
-    except ZeroDivisionError:
-        return 'NA'
 
 
 def compute_metrics(dict_stats_to_convert, at_taxa_level):
@@ -193,7 +165,7 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
     import sklearn.metrics as skm
     y_true, y_pred = dict_stats_to_vectors(dict_stats_to_convert)
 
-    precision = round(skm.precision_score(y_true, y_pred), 4) # PPV = TP/(TP+FP) (positive predictive value or precision)
+    precision = round(skm.precision_score(y_true, y_pred), 4) # PPV = well/(well+miss) (positive predictive value or precision)
     print("PRECISION:", precision, " | ", "FDR:", round(1 - precision, 4))#, 
           #" | TEST:", round(pd.np.exp(2-precision), 4))
 
@@ -201,13 +173,7 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
         sensitivity = round(skm.recall_score(y_true, y_pred), 4)
     
         print("SENSITIVITY:", sensitivity, " | ", "FNR:", 
-              round(1 - sensitivity, 4)) # TPR = TP/(TP+FN) (or sensitivity, hit rate, recall) 
-        # print("F1-SCORE:", round(skm.f1_score(y_true, y_pred), 4))
-        # print("MATTHEWS:", round(skm.matthews_corrcoef(y_true, y_pred), 4))
-        # print("ACCURACY:", round(skm.accuracy_score(y_true, y_pred), 4)) # ACC = (TP+TN)/(TP+FP+FN+TN) (overall accuracy)
-        # print("SPECIFICITY:", calc_specificity(dict_stats_to_convert))
-        # NPV = 1 - calc_FOR(dict_stats_to_convert)
-        # print("FOR:", 1 - NPV, " | ", "NPV:", NPV)
+              round(1 - sensitivity, 4)) # TPR = well/(well+unass) (or sensitivity, hit rate, recall) 
     else:
         return precision
 
@@ -221,10 +187,10 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'txt', 'sam'])
 
     # Common variables:
-    NB_THREADS = 15
+    NB_THREADS = 10
     to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
-    dict_stats = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
+    dict_stats = {'unass':0, 'well':0, 'miss':0}
 
     print()
     print("Loading taxonomic Python module...")
@@ -572,7 +538,7 @@ if __name__ == "__main__":
                                     dict_count['second_uniq'])
         dict_count["tot_reads"] = sum(counts_type_align)
         dict_count["tot_mapped"] = nb_reads_to_process 
-        dict_stats['FN'] += dict_count['unmapped']
+        dict_stats['unass'] += dict_count['unmapped']
 
         # Print general counting results:
         print()
@@ -634,7 +600,7 @@ if __name__ == "__main__":
             print("\n  >>> CORRECTION OF INTESTINALIS FOR RRN!\n")
             are_intestinalis = my_csv.final_taxid == 1963032
             print("(NB of corrected reads: {})".format(sum(are_intestinalis)))
-            my_csv.loc[are_intestinalis, 'res_eval'] = 'TP'
+            my_csv.loc[are_intestinalis, 'res_eval'] = 'well'
             my_csv.loc[are_intestinalis, 'final_taxid'] = 1423
             ancest_subtilis = taxfoo.get_dict_lineage_as_taxids(1423)[taxo_cutoff]
             my_csv.loc[are_intestinalis, 'taxid_ancester'] = ancest_subtilis
@@ -695,17 +661,17 @@ if __name__ == "__main__":
             print()
 
 
-        # Count TP and FP for statistics:
+        # Count well and miss for statistics:
         cutoff_nb_trashes = my_csv.nb_trashes.max()
         # cutoff_nb_trashes = 4
         print("CUTOFF ON THE NB OF TRASHES:", cutoff_nb_trashes)
-        is_FP = ((my_csv.res_eval == 'FP') &
+        is_miss = ((my_csv.res_eval == 'miss') &
                  (my_csv.nb_trashes <= cutoff_nb_trashes))
-        is_TP = ((my_csv.res_eval == 'TP') &
+        is_well = ((my_csv.res_eval == 'well') &
                  (my_csv.nb_trashes <= cutoff_nb_trashes))
 
-        print("TP STATS:")
-        print(my_csv[is_TP].species.value_counts())
+        print("WELL STATS:")
+        print(my_csv[is_well].species.value_counts())
         print()
 
 
@@ -725,8 +691,8 @@ if __name__ == "__main__":
                         continue
                     else:
                         query_name = alignment.query_name
-                        # Take only TP reads (FP suposed noisy):
-                        if my_csv.loc[query_name, 'res_eval'] == 'TP':
+                        # Take only well reads (miss suposed noisy):
+                        if my_csv.loc[query_name, 'res_eval'] == 'well':
                             assert(alignment.query_name not in dict_felix.keys())
                             tmp_list = [alignment.reference_name, 
                                         alignment.reference_start, 
@@ -734,7 +700,7 @@ if __name__ == "__main__":
                             dict_felix[alignment.query_name] = tmp_list
                 del idx, alignment
 
-            print("{} extractable sequences (FP only)".format(len(dict_felix)))
+            print("{} extractable sequences (miss only)".format(len(dict_felix)))
             test_df = pd.DataFrame.from_dict(dict_felix, orient='index', 
                                              columns=['ref_name', 'start_pos', 
                                                       'end_pos'])
@@ -745,30 +711,30 @@ if __name__ == "__main__":
             sys.exit()
 
 
-        print("FP STATS:")
-        print(my_csv[is_FP].remark_eval.value_counts())
+        print("MISS STATS:")
+        print(my_csv[is_miss].remark_eval.value_counts())
         print()
 
-        # Add numbers of TP and FP to the dict of stats:
-        dict_stats['FP'] += sum(is_FP)
-        dict_stats['FP'] += sum(my_csv['type_align'] == 'only_suppl')
-        dict_stats['TP'] += sum(is_TP)
+        # Add numbers of well and miss to the dict of stats:
+        dict_stats['miss'] += sum(is_miss)
+        dict_stats['miss'] += sum(my_csv['type_align'] == 'only_suppl')
+        dict_stats['well'] += sum(is_well)
 
 
 
         # AT THE TAXA LEVEL:
         print("RESULTS AT THE TAXA LEVEL:")
-        list_FP = [val for val in dict_species2res 
-                   if dict_species2res[val] == 'FP']
-        list_TP = [val for val in dict_species2res 
-                   if dict_species2res[val] == 'TP']
+        list_miss = [val for val in dict_species2res 
+                   if dict_species2res[val] == 'miss']
+        list_well = [val for val in dict_species2res 
+                   if dict_species2res[val] == 'well']
         nb_pos_to_find = len(set_proks)
-        recall_at_taxa_level = len(list_TP)/nb_pos_to_find
-        print("TO FIND:", list_TP)
-        print("NB_FP", len(list_FP), " | NB_TP", len(list_TP))
-        dict_stats_sp_level = {'TP':len(list_TP),
-                               'FP':len(list_FP)}
-        prec_at_taxa_level = round(len(list_TP) / (len(list_TP)+len(list_FP)), 
+        recall_at_taxa_level = len(list_well)/nb_pos_to_find
+        print("TO FIND:", list_well)
+        print("NB_miss", len(list_miss), " | NB_well", len(list_well))
+        dict_stats_sp_level = {'well':len(list_well),
+                               'miss':len(list_miss)}
+        prec_at_taxa_level = round(len(list_well) / (len(list_well)+len(list_miss)), 
                                    4)
         FDR_at_taxa_level = round(1-prec_at_taxa_level, 4)
         print("PRECISION:  {} | FDR: {}".format(prec_at_taxa_level, 
@@ -781,34 +747,34 @@ if __name__ == "__main__":
         print()
 
 
-        # Make difference between TFP and FFP:
-        print("DISCRIMINATION between TFP and FFP (at read lvl):")
+        # Make difference between Tmiss and Fmiss:
+        print("DISCRIMINATION between Tmiss and Fmiss (at read lvl):")
         possible_notInKeys = my_csv.remark_eval.apply(
                                                 lambda val: "notInKeys" in str(val))
-        FP_notInKey = my_csv[is_FP & possible_notInKeys]
+        miss_notInKey = my_csv[is_miss & possible_notInKeys]
 
-        if FP_notInKey.empty:
-            print("NOT POSSIBLE ! (no FP and/or no 'notInKeys')")
+        if miss_notInKey.empty:
+            print("NOT POSSIBLE ! (no miss and/or no 'notInKeys')")
         else:
-            counts_FP_NotInKey = FP_notInKey.final_taxid.value_counts()
-            counts_FP_NotInKey.name = 'counts'
+            counts_miss_NotInKey = miss_notInKey.final_taxid.value_counts()
+            counts_miss_NotInKey.name = 'counts'
 
             # We remove 'superkingdom' and 'species' lvls
             taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
-            df_FP = pd.DataFrame(counts_FP_NotInKey).reset_index()
-            tmp_df = df_FP['index'].apply(discriminate_FP, 
+            df_miss = pd.DataFrame(counts_miss_NotInKey).reset_index()
+            tmp_df = df_miss['index'].apply(discriminate_miss, 
                                           args=(taxo_not_bact, df_proks)) 
-            df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
+            df_miss = df_miss.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
                                  ancester_name=tmp_df[2])
             del tmp_df
 
-            tot_FFP = sum(df_FP[df_FP.status == 'FFP'].counts)
+            tot_Fmiss = sum(df_miss[df_miss.status == 'Fmiss'].counts)
 
-            print('TOT NB OF FFP: {} | OVER {} FP_notInKey'.format(tot_FFP,
-                                                                   len(FP_notInKey)))
-            tot_FP = dict_stats['FP']
-            print("Total of {} FP --> {} + {} otherFP".format(tot_FP, tot_FFP, 
-                                                              tot_FP-tot_FFP))
+            print('TOT NB OF Fmiss: {} | OVER {} miss_notInKey'.format(tot_Fmiss,
+                                                                   len(miss_notInKey)))
+            tot_miss = dict_stats['miss']
+            print("Total of {} miss --> {} + {} othermiss".format(tot_miss, tot_Fmiss, 
+                                                              tot_miss-tot_Fmiss))
         print()
 
 
