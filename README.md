@@ -2,8 +2,9 @@
 
 <img src=https://img.shields.io/badge/Python-%3E=3-blue.svg> 
 <img src=https://img.shields.io/badge/Runnable-Impossible-red.svg>
+<img src=https://img.shields.io/badge/Plateform-Linux64-lightgrey.svg>
 
-<p align="center"><img src="project_img.svg" width="50%"></p>  
+<p align="center"><img src="img/project_img.svg" width="50%"></p>  
 
 ## Description of this respository
 This Github repository contains scripts developped within the scope of ANR
@@ -41,10 +42,11 @@ be run on an external machine. So no need to clone it.
 The program is composed of 4 python scripts (`0-solve_SILVA.py`, 
 `1-assign_pipeline.py`, `2-prim_analysis.py`, `3-second_analysis.py`), and 2 R 
 scripts (`make_stackbar.R`, `make_radar_plot.R`). All in the base directory.  
-All modules are stored in the `src/` directory. <br>
+All modules are stored in the `src/` directory and can produce proper usage 
+helps using `-h | --help` (expect for `0-solve_SILVA.py`) <br>
 
 
-- Show help: <br>
+- Example of help (from `2-prim_analysis.py`): <br>
   ```
     Mapping statistics computation
 
@@ -76,10 +78,10 @@ And then: `./solve_SILVA`
 
 ## Examples of results
 - Example of stdout produced by `2-prim_analysis.py` script:
-<img src="eg_stdout.svg" width="50%">
+<img src="img/eg_stdout.svg" width="50%">
 
 - Example of R plots that can be produced using R scripts:
-<img src="eg_metrics_stacked.svg" width="50%">
+<img src="img/eg_metrics_stacked.svg" width="50%">
 
 
 ## Features
