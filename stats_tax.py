@@ -92,7 +92,6 @@ def str_from_res_conv(dict_res_conv):
         lineage_to_write = dict_res_conv['lineage']
     else:
         lineage_to_write = dict_res_conv['lineage']
-        # lineage_to_write = ';'.join(str(taxid) for taxid in lineage)
 
     return (",".join(to_return + [lineage_to_write] + 
                      [str(x[1]) for x in rest]), 
@@ -121,7 +120,6 @@ def discriminate_FP(arg_taxid, wanted_taxo, df_proks_arg):
     """
     lineage = taxfoo.get_dict_lineage_as_taxids(arg_taxid, 
                                                 want_taxonomy=wanted_taxo)
-    # print("\n", taxid)
     for taxo_lvl in wanted_taxo:
         if taxo_lvl in lineage.keys():
             current_ancester = lineage[taxo_lvl]
@@ -129,7 +127,6 @@ def discriminate_FP(arg_taxid, wanted_taxo, df_proks_arg):
                                         df_proks_arg[taxo_lvl]))
             res_eval = evaluate.in_zymo(current_ancester, 
                                         current_set_proks, taxo_lvl)[-1]
-            # print(evaluate.taxfoo.get_taxid_name(current_ancester), res_eval)
             if res_eval == 'true_pos':
                 return pd.Series(['FFP', current_ancester,
                                   taxfoo.get_taxid_name(current_ancester)])
@@ -181,7 +178,6 @@ def calc_FOR(dict_res):
     # Negative predictive value: NPV = TN/(TN+FN)
     # FOR = 1 - NPV
 
-    # return dict_res['TP']/(dict_res['TP'] + dict_res['FP'])
     try:
         spe = dict_res['FN']/(dict_res['TN'] + dict_res['FN'])
         return spe
@@ -191,6 +187,8 @@ def calc_FOR(dict_res):
 
 def compute_metrics(dict_stats_to_convert, at_taxa_level):
     """
+    Compute different metrics with sklearn, from a dict counting miss, well and
+    unass
     """
     import sklearn.metrics as skm
     y_true, y_pred = dict_stats_to_vectors(dict_stats_to_convert)
