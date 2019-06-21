@@ -1,6 +1,6 @@
 # Jan 2019: 6-months M2 (BIB) internship
 
-<img src=https://img.shields.io/badge/Python-%3E=3-blue.svg> 
+<img src=https://img.shields.io/badge/Python-%3E%3D3-blue.svg> 
 <img src=https://img.shields.io/badge/Runnable-Impossible-red.svg>
 <img src=https://img.shields.io/badge/Plateform-Linux64-lightgrey.svg>
 
