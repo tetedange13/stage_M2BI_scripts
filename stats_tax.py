@@ -374,7 +374,6 @@ if __name__ == "__main__":
         del readID
 
         dict_gethered.clear()
-        # sys.exit()
 
         # /!\ CAREFUL WITH THE ORDER HERE:
         my_csv = pd.DataFrame.from_dict(tmp_dict, orient='index',
@@ -409,14 +408,12 @@ if __name__ == "__main__":
             print("Extracting information from SAM file...")
             START_SAM_PARSING = t.time()
             input_samfile = pys.AlignmentFile(to_infile, "r")
-            # input_samfile = pys.AlignmentFile(to_infile, "r", check_sq=False)
 
             dict_gethered = {}
             list_suppl = []
             list_unmapped = []
 
             for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
-            # for idx, alignment in enumerate(input_samfile.fetch()):
                 if (idx+1) % 500000 == 0:
                     print("500 000 SAM entries elapsed !")
                 query_name = alignment.query_name
@@ -428,10 +425,8 @@ if __name__ == "__main__":
                 else:
                     dict_align = ali_to_dict(alignment)
                     if query_name in dict_gethered.keys():
-                    # if alignment.is_secondary or alignment.is_supplementary:
                         dict_gethered[query_name].append(dict_align)
                     else:
-                        #assert(query_name not in dict_gethered.keys())
                         dict_gethered[query_name] = [dict_align]
                        
             input_samfile.close()
@@ -447,11 +442,7 @@ if __name__ == "__main__":
             print("Converting SAM into CSV...")
             conv_partial = partial(pll.SAM_to_CSV, 
                                    conv_seqid2taxid=dict_seqid2taxid)
-            # Parallel version:
-            # VERSION 1 (use a lot of RAM, but quite fast):
-            # from contextlib import closing
-            # with closing(mp.Pool(NB_THREADS)) as my_pool: 
-            #     results = my_pool.map_async(conv_partial, dict_gethered.items()).get()
+
 
             # VERSION 2 (use much less RAM but a bit slower):
             dict_light = (tupl for tupl in dict_gethered.items())
@@ -481,11 +472,6 @@ if __name__ == "__main__":
             dict_gethered.clear()
 
 
-            # Serial version (need list casting to have output):
-            # results = list(map(conv_partial, dict_gethered.items())) 
-            # sys.exit()
-
-
             # Write outfile:
             with open(to_out_file, 'w') as out_file:
                 # Write mapped reads:
@@ -495,7 +481,6 @@ if __name__ == "__main__":
                         header_for_file = ','.join([''] + list_header)
                     out_file.write(to_write + '\n')
                 del dict_res_conv
-                # print(header_for_file);sys.exit()
 
                 # Write unmapped reads:
                 if list_unmapped:
@@ -508,8 +493,7 @@ if __name__ == "__main__":
                 content = out_file.read()
                 out_file.seek(0)
                 out_file.write(header_for_file + '\n' + content)
-                # out_file.write(",type_align,lineage,nb_trashes,mapq,len_align," +
-                #                "ratio_len,de\n")
+
 
             print("CSV CONVERSION TIME:", t.time() - TOTO)
             sys.exit()
@@ -521,8 +505,6 @@ if __name__ == "__main__":
             my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
             print("CSV loaded !")
 
-        # pd.Series(list_second_len, 
-        #           name='Boxplot len_second (p1N300)').plot.box()#;plt.show()
 
 
     if not CLUST_MODE:
@@ -533,11 +515,9 @@ if __name__ == "__main__":
             bins_val = felix.max()
             felix.plot.hist(bins=bins_val, log=True)
             print("% DE + DE 25 SECOND:", sum(felix > 26)/len(felix)*100)
-            # plt.plot([100]*bins_val)
             plt.show()
-            # print(my_csv['type_align'].value_counts())
-            # print(sum(my_csv['type_align']))
             sys.exit()
+
 
         TIME_CSV_TREATMENT = t.time()
         with_lineage = ((my_csv.type_align != 'unmapped') & 
@@ -545,9 +525,7 @@ if __name__ == "__main__":
 
         # FILTER CENTRIFUGE results on score and/or hitLength
         if not IS_SAM_FILE:
-        # if False:
             cutoff_on_centriScore, cutoff_on_centriHitLength = 300, 50
-            # cutoff_on_centriScore, cutoff_on_centriHitLength = 0, 0
 
             def get_min_hitLength(hitLength_val):
                 if type(hitLength_val) == str:
@@ -578,7 +556,6 @@ if __name__ == "__main__":
                   ' | NB_NOT_NaNs:', nb_not_nan)
             print("NB REMOVED (NaNs excepted):", nb_removed, 
                   "~ {}% removed".format(int(nb_removed/nb_not_nan*100)))
-        # sys.exit()
 
 
         # Filter only reads that are taxonomically evaluable (mapped):
@@ -644,10 +621,6 @@ if __name__ == "__main__":
             result_chunks = [r.get() for r in proc_results]
         print("PLL PROCESS FINISHED !")
 
-        # SERIAL VERSION:
-        # results_eval = eval_pool.map(partial_eval, my_csv_to_pll.iterrows())
-        # eval_pool.close()
-        # results_eval = list(map(partial_eval, my_csv_to_pll.index)) 
         del my_csv_to_pll
 
         print('Finalizing evaluation..')
@@ -656,25 +629,9 @@ if __name__ == "__main__":
         my_csv = pd.concat([my_csv, my_res.set_index('index')], axis='columns', 
                            sort=False, copy=False)
 
-        # NEW WAY (take ages...):
-        # df_eval = pd.DataFrame(my_res.final_taxid.value_counts()).reset_index()
-        # df_eval.columns = ['fin_taxid', 'counting']
-        # list_new_col = ['taxid_ancest', 'res_eval', 'next_remark'] 
-        # df_eval[list_new_col] = df_eval.fin_taxid.apply(evaluate.in_zymo, 
-        #                                         args=(set_proks, taxo_cutoff))
-        # # Count FP and TP:
-        # dict_stats['FP'] += sum(df_eval[df_eval.res_eval == 'FP'].counting)
-        # dict_stats['TP'] += sum(df_eval[df_eval.res_eval == 'TP'].counting)
-
-        # df_eval.drop('counting', axis='columns', inplace=True)
-        # df_eval.set_index('fin_taxid', inplace=True)
-
-        # my_csv[list_new_col] = my_csv.final_taxid.dropna().apply(
-        #                             lambda val: df_eval.loc[val, list_new_col])
 
 
         # CORRECTION of B. intestinalis:
-        # if False:
         if guessed_db == 'rrn':
             print("\n  >>> CORRECTION OF INTESTINALIS FOR RRN!\n")
             are_intestinalis = my_csv.final_taxid == 1963032
@@ -687,8 +644,6 @@ if __name__ == "__main__":
 
         my_csv['species'] = my_csv.taxid_ancester.apply(get_ancester_name)
 
-        # sys.exit()
-
 
         # To access evaluation results of a given species:
         tmp_df = my_csv[['species', 'res_eval']].drop_duplicates()
@@ -699,9 +654,6 @@ if __name__ == "__main__":
         print("NB of 'no_majo_found':", 
               sum(my_csv.final_taxid.astype(str) == 'no_majo_found'))
         print()
-
-        # print(my_csv[pd.to_numeric(my_csv.score) <= 300]['res_eval'].value_counts())
-        # sys.exit()
 
         
         write_map = True
@@ -720,18 +672,14 @@ if __name__ == "__main__":
                             MODE.split('_')[0].lower().capitalize())
 
             with open(infile_base + '_' + MODE + '.map', 'w') as my_map:
-            # with open(sampl_prefix + '.map', 'w') as my_map:
-                #my_map.write('#OTU ID\t' + 'SampleID' + '\n')
                 for taxid_grp, grp in grped_by_fin_taxid:
                     readIDs_to_write = map(lambda readID: sampl_prefix + '_' + 
                                                           str(readID), 
                                            grp.index)
                                         
-                    # taxo_to_write = ';'.join(['Other'] * 7)
                     if taxid_grp != 'no_majo_found':
                         # 'int' casting needed for the taxid
                         taxid_to_write = int(taxid_grp)
-                        # taxo_to_write = evaluate.taxo_from_taxid(taxid_grp)
                     else:
                         taxid_to_write = taxid_grp
                         print("NB OF 'NO_MAJO':", len(grp))
@@ -760,8 +708,6 @@ if __name__ == "__main__":
 
         print("TP STATS:")
         print(my_csv[is_TP].species.value_counts())
-        # print(my_csv[is_TP].type_align.value_counts().sort_index())
-        # print(my_csv[is_TP][['remark_eval', 'nb_trashes']].groupby(['remark_eval', 'nb_trashes']).size())
         print()
 
 
@@ -802,15 +748,7 @@ if __name__ == "__main__":
 
 
         print("FP STATS:")
-        # print(my_csv[is_FP][['species', 'remark_eval']].groupby(['species', 'remark_eval']).size())
-        # print(my_csv[is_FP].remark_eval.value_counts().sort_index())
-        #print(my_csv[is_FP].final_taxid.value_counts().nlargest(20))
-        print(my_csv[is_FP].final_taxid.apply(taxfoo.get_taxid_name).value_counts().nlargest(20))
-        # test = pd.DataFrame(my_csv.final_taxid.value_counts()).reset_index()
-        # test['felix'] = test['index'].apply(taxfoo.is_strain);print(test)
-        # print(my_csv.final_taxidvalue_counts())
-        # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')].final_taxid.value_counts())
-        # print(my_csv[is_FP & (my_csv.remark_eval == 'minors_rm_lca;notInKeys')]['lineage'].apply(lambda lin: 's'.join(set(lin.strip(';').split('s')))).value_counts())
+        print(my_csv[is_FP].remark_eval.value_counts())
         print()
 
         # Add numbers of TP and FP to the dict of stats:
@@ -819,19 +757,9 @@ if __name__ == "__main__":
         dict_stats['TP'] += sum(is_TP)
 
 
-        # pd.DataFrame({'TP_nb_trashes':my_csv[is_TP]['nb_trashes'].value_counts(), 
-        #               'FP_nb_trashes':my_csv[is_FP]['nb_trashes'].value_counts()
-        #               }).plot.bar(title="Distrib nb_trashes between FP and TP",
-        #                           color=('red', 'green'))
-        # plt.show()
-
-        # print("TOT READS EVALUATED:", sum(dict_stats.values()))
-        # print()
-
 
         # AT THE TAXA LEVEL:
         print("RESULTS AT THE TAXA LEVEL:")
-        # print(dict_species2res)
         list_FP = [val for val in dict_species2res 
                    if dict_species2res[val] == 'FP']
         list_TP = [val for val in dict_species2res 
@@ -842,7 +770,6 @@ if __name__ == "__main__":
         print("NB_FP", len(list_FP), " | NB_TP", len(list_TP))
         dict_stats_sp_level = {'TP':len(list_TP),
                                'FP':len(list_FP)}
-        # precision_at_taxa_level = compute_metrics(dict_stats_sp_level, True)
         prec_at_taxa_level = round(len(list_TP) / (len(list_TP)+len(list_FP)), 
                                    4)
         FDR_at_taxa_level = round(1-prec_at_taxa_level, 4)
@@ -860,7 +787,6 @@ if __name__ == "__main__":
         print("DISCRIMINATION between TFP and FFP (at read lvl):")
         possible_notInKeys = my_csv.remark_eval.apply(
                                                 lambda val: "notInKeys" in str(val))
-        # == 'minors_rm_lca;notInKeys') |(my_csv.remark_eval == 'minors_rm_lca;notInKeys')
         FP_notInKey = my_csv[is_FP & possible_notInKeys]
 
         if FP_notInKey.empty:
@@ -872,16 +798,13 @@ if __name__ == "__main__":
             # We remove 'superkingdom' and 'species' lvls
             taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
             df_FP = pd.DataFrame(counts_FP_NotInKey).reset_index()
-            # print(df_FP);sys.exit()
             tmp_df = df_FP['index'].apply(discriminate_FP, 
                                           args=(taxo_not_bact, df_proks)) 
-            # print(FP_notInKey)
             df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
                                  ancester_name=tmp_df[2])
             del tmp_df
 
             tot_FFP = sum(df_FP[df_FP.status == 'FFP'].counts)
-            # print(df_FP.set_index('index')) ; print()
 
             print('TOT NB OF FFP: {} | OVER {} FP_notInKey'.format(tot_FFP,
                                                                    len(FP_notInKey)))
@@ -889,11 +812,9 @@ if __name__ == "__main__":
             print("Total of {} FP --> {} + {} otherFP".format(tot_FP, tot_FFP, 
                                                               tot_FP-tot_FFP))
         print()
-        # sys.exit()
 
 
         sum_stats, sum_counts = sum(dict_stats.values()),sum(dict_count.values())
-        # assert(sum_stats == tot_reads - nb_evaluated_suppl)
         print("RESULTS AT THE READ LEVEL:")
         print(sorted(dict_stats.items()))
         dict_to_convert = dict_stats
@@ -901,81 +822,7 @@ if __name__ == "__main__":
 
     if CLUST_MODE:
         print('PAS LAAAAAA');sys.exit()
-        df_hits = pd.read_csv(to_infile, sep='\t', index_col=0, header=0)
-        dict_stats_propag = {'TN':0, 'FN':0, 'TP':0, 'FP':0}
-
-        # CALCULATION OF STATISTICS:
-        cutoff_e_val = 0.00001 # 10^-5
-        dict_str = {'TN': "Assigned et un de nos Euk",
-                    'TP': "Assigned et une de nos bactos !",
-                    'FN': "Not assigned ! (cutoff plus bas dans l'arbre)",
-                    'FP': "Assigned, mais appartient pas à la Zymo"}
-        
-        rownames_df = df_hits.index
-        rows_clust = [rowname for rowname in rownames_df if "clust" in rowname]
-
-        for clust in rows_clust:
-            splitted_remarks = df_hits.loc[clust, "remarks"].split()
-            e_val  = splitted_remarks[-1]
-            score = splitted_remarks[-2]
-            
-            print("\n", clust, " | ", "E-VAL:", e_val, " | ", "SCORE:", score)   
-            print("NAME:", df_hits.loc[clust, "topHit"], " | ", 
-                  "RANK:", df_hits.loc[clust, "rank"])
-            
-            if float(e_val) < cutoff_e_val:
-                res = evaluate.in_zymo(df_hits.loc[clust, "taxid"], taxo_cutoff, 
-                                   tupl_sets_levels)
-                # res = in_zymo(df_hits.loc[clust, "topHit"], 
-                #               df_hits.loc[clust, "rank"], 
-                #               taxo_cutoff)
-              
-                dict_stats_propag[res] += df_hits.loc[clust, "nb_memb"]
-                # if res == "FP":
-                if False:
-                    # Look for alternative hits:
-                    print("Not within the Zymo --> Look for alternative hit!")
-
-                    alt_index = "alt_" + clust.split('_')[1] + "_1"
-                    if alt_index in rownames_df:
-                        res_alt = in_zymo(df_hits.loc[alt_index, "topHit"], 
-                                          df_hits.loc[alt_index, "rank"], 
-                                          taxo_cutoff)
-                        if res_alt != 'FP':
-                            print("FOUND:", df_hits.loc[alt_index, "topHit"], 
-                                  " | ", "RANK:", 
-                                  df_hits.loc[alt_index, "rank"]) 
-                            remarks_alt = df_hits.loc[alt_index, "remarks"]
-                            splitted_remarks_alt = remarks_alt.split()
-                            print(alt_index, " | ", "E-VAL:", 
-                                  splitted_remarks_alt[-1], " | ", "SCORE:", 
-                                  splitted_remarks_alt[-2])        
-                        else:
-                            print("The alternative is still a FP")
-                          
-                        dict_stats[res_alt] += 1
-                        print(dict_str[res_alt])
-                          
-                    else:
-                        print("NO alternative hit available")
-                        dict_stats[res] += 1 
-                      
-              
-                else:
-                    # print(dict_str[res])
-                    dict_stats[res] += 1    
-            
-            
-            else: # Not assigned because of the e_val cutoff
-                print("Not assigned because of the e_val cutoff")
-                dict_stats['FN'] += 1     
-        
-        print()
-        print("AVANT PROPAG:", dict_stats)
-        print("APRES PROPAG:", dict_stats_propag)
-        assert(sum(dict_stats.values()) == len(rows_clust))
-        assert(sum(dict_stats_propag.values()) == sum(df_hits["nb_memb"]))
-        dict_to_convert = dict_stats_propag
+       
 
 
 

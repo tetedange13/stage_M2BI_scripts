@@ -57,13 +57,10 @@ if __name__ == "__main__":
     
     path_apps = "/home/sheldon/Applications/"
     path_proj = "/projets/metage_ONT_2019/"
-    #print("Processing " + tail_input_fq, '\n')
     
     
     # Adaptators trimming using Porechop:
     path_to_porechop = "/home/sheldon/SEGO/Porechop/porechop-runner.py"
-    #args_porechop = " --min_split_read_size 100 --extra_middle_trim_bad_side 10"
-    #args_porechop = " --middle_threshold 90"
     args_porechop = " --discard_middle"
     dirOut_porechop = path_proj + "1_trim/"
     trimmed_file = in_fq_base + "_trmd" + in_fq_ext
@@ -84,17 +81,12 @@ if __name__ == "__main__":
         
     else:
         pass
-        # print('\n', cmd_porechop)
-        # print(porechop_log_path, '\n')
-
-    #print("Trimming finished !")
     
     
 
     # Reads overlapping with Minimap2 followed by chim detection yacrd:
     to_marginAlign = path_apps + "marginAlign-23jan19/" # Minimap2 inside
     to_minimap2 = to_marginAlign + "submodules/minimap2/"
-    #path_to_paftools = to_minimap2 + "misc/"
     args_minimap2_ovlp = "-t" + nb_threads + " -x ava-ont "
     dirOut_yacrd = path_proj + "2_chim/"
     overlapped_file = dirOut_yacrd + in_fq_base + "_ovlp"
@@ -127,8 +119,8 @@ if __name__ == "__main__":
         
         cmd_yacrd = (path_to_yacrd + " -i " + overlapped_file + '.paf' + 
                      " -f " + trmd_file_path) 
-        # print(cmd_yacrd);sys.exit()
         log_yacrd = open(log_yacrd_path, 'w')
+
         # Start by writting the header:            
         log_yacrd.write("type_of_read" +'\t' + "id_in_mapping_file" +
                         '\t' + "length_of_read" + '\t' +
@@ -146,9 +138,7 @@ if __name__ == "__main__":
                   flag_ext, dirOut_yacrd + in_fq_base + flag_ext)           
         
     else:
-        pass
-        # print('\n', cmd_overlap)
-        # print(overlapped_file, '\n')               
+        pass            
     
    
     # TAXONOMIC DETERMINATION STEP:
@@ -158,7 +148,6 @@ if __name__ == "__main__":
 
     
     if DETER == "minimap2":
-        # dirOut_minimap = path_proj + "3-deter_minimap2/"
         dirOut_minimap = path_proj + "3-deter_minimap2_second/"
 
         args_minimap2_map = "-N25 -t" + nb_threads + " -ax map-ont "
@@ -170,23 +159,19 @@ if __name__ == "__main__":
         cmd_minimap = (to_minimap2 + "minimap2 " + args_minimap2_map + " " +
                        to_minimap_idxes + DB_NAME + ".mmi " + 
                        in_fq_path)
-        # print(cmd_minimap, " | ", root_minimap_outfiles) ; sys.exit()
+
         START_MINIMAP = t.time()
         log_minimap = open(root_minimap_outfiles + ".log", 'w')
         with open(root_minimap_outfiles + ".sam", 'w') as minimap_SAM:
             sub.Popen(cmd_minimap.split(), stdout=minimap_SAM,
                                            stderr=log_minimap).communicate()
         
-        #log_minimap.write("\n\nRUNTIME MAPPING WITH MINIMAP2: " + 
-        #                  str(t.time() - START_MINIMAP)) # --> MARCHE PAS
         log_minimap.close()
         print("MAPPING FINISHED !")
         sys.exit()
         
     
     elif DETER == "centri": # Classification using centrifuge:
-        # CMD COMPILATION CENTRIFUGE:
-#/usr/bin/g++  -O3 -m64 -msse2 -funroll-loops -g3 -std=c++11 -DCOMPILER_OPTIONS="\"-O3 -m64 -msse2 -funroll-loops -g3 -std=c++11 -DPOPCNT_CAPABILITY\"" -DPOPCNT_CAPABILITY -fno-strict-aliasing -DCENTRIFUGE_VERSION="\"1.0.4\"" -DBUILD_HOST="\"`hostname`\"" -DBUILD_TIME="\"`date`\"" -DCOMPILER_VERSION="\"`/usr/bin/g++  -v 2>&1 | tail -1`\"" -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE   -DBOWTIE_MM   -DCENTRIFUGE -DBOWTIE2 -DBOWTIE_64BIT_INDEX -DNDEBUG -Wall  -I third_party  -o centrifuge-class centrifuge.cpp ccnt_lut.cpp ref_read.cpp alphabet.cpp shmem.cpp edit.cpp bt2_idx.cpp reference.cpp ds.cpp limit.cpp random_source.cpp tinythread.cpp qual.cpp pat.cpp read_qseq.cpp ref_coord.cpp mask.cpp pe.cpp aligner_seed_policy.cpp scoring.cpp presets.cpp simple_func.cpp random_util.cpp outq.cpp centrifuge_main.cpp -lpthread
         
         to_Centri_idxes = to_dbs + "Centri_idxes/"
         dirOut_centri = path_proj + "3-deter_centri/"
@@ -200,73 +185,11 @@ if __name__ == "__main__":
                       in_fq_path + " -x " + to_Centri_idxes + DB_NAME +
                       " --report-file " + centri_outfile_root + "_report.tsv " + 
                       "-S " + centri_outfile_root + "_classif.tsv")
-        # print(cmd_centri);sys.exit()
         
         centri_log_path = (dirOut_centri + in_fq_base + "_to" + 
                            DB_NAME.capitalize() + "."  + DETER + "log")
         
-        # with open(centri_classif_path, 'w') as classif_centri, \
-        #      open(centri_log_path, 'w') as centri_log:
         with open(centri_log_path, 'w') as centri_log:
             sub.Popen(cmd_centri.split(),
                       stderr=centri_log).communicate()
-    
-    
-    sys.exit()
-
-    # De novo clustering using CARNAC-LR:
-    path_to_carnac = path_apps + "CARNAC-LR_git93dd640/"
-    dirOut_carnac = "./CARNAC/"
-    carnac_filout = dirOut_carnac + in_fq_base # Prefix for CARNAC output
-    cmd_carnac_convert = ("python3 " + path_to_carnac + 
-                          "scripts/paf_to_CARNAC.py " + ovlp_paf_path + " " +
-                          trmd_file_path + " input_CARNAC.txt")                   
-    cmd_carnac = (path_to_carnac + "CARNAC-LR -f input_CARNAC.txt -o " + 
-                  carnac_filout + "_CARNAC.txt -t " + 
-                  nb_threads)
-    
-    proceed = False
-    if proceed:
-        CARNAC_TIME = t.time()
-        os.system(cmd_carnac_convert)
-        
-        with open(carnac_filout + "_CARNAC.log", 'w') as carnac_log:
-            sub.Popen(cmd_carnac.split(), stdout=carnac_log).communicate()
-            carnac_log.write("\n\nTIME CARNAC = " + str(t.time()-CARNAC_TIME) + 
-                             "\n\n")
-         
-        os.remove("input_CARNAC.txt") # input_CARNAC is temporary
-        # Moving CARNAC "*_metrics.txt" files:
-        os.rename("clusters_metrics.txt", 
-                  dirOut_carnac + in_fq_base + "_clust_metrics.txt")
-        os.rename("nodes_metrics.txt", 
-                  dirOut_carnac + in_fq_base + "_nodes_metrics.txt")
-    
-    else:
-        print(cmd_carnac_convert)
-        print(cmd_carnac)
-    
-    sys.exit()
-
-        
-    # Mapping using NGMLR:
-    NGMLR_TIME =  t.time()
-    path_to_ngmlr = (path_apps + "ngmlr-0.2.7/bin/ngmlr-0.2.7/"+
-                     "ngmlr")
-    cmd_ngmlr = (path_to_ngmlr + " -t 4 -r reference.fasta -q reads.fastq " +
-                 "-o test.sam -x ont")
-    print("Mapping with NGMLR in progress...")
-    print('\n', cmd_ngmlr, '\n')
-    print("Mapping with NGMLR finished !")
-    print("TIME NGMLR =", t.time()-NGMLR_TIME, '\n')
-
-
-    # Correct reads with CANU:
-    path_to_canu = "/home/sheldon/SEGO/canu/Linux-amd64/bin/"
-    
-    
-    # Mapping with LordFAST:*
-    path_to_lordfast = path_apps + "lordfast-0.0.10/lordfast"
-    #cmd_lordfast = (path_to_lordfast + "--search " + refgen.fa " --seq " +
-    #                reads.fastq + " > map.sam")
         

@@ -13,15 +13,7 @@ library(ggplot2)
 library(reshape2)
 library(stringr)
 
-# test  <- data.frame(person=c("A", "B", "C", "D", "E"), 
-#                     value1=c(100,150,120,80,150),     
-#                     value2=c(25,30,45,30,30) , 
-#                     value3=c(100,120,150,150,200))
-#melted <- melt(test, "person")
-#print(melted$variable == 'value1')
-# melted$cat <- ''
-# melted[melted$variable == 'value1',]$cat <- "first"
-# melted[melted$variable != 'value1',]$cat <- "second"
+
 
 df2 <- read.csv(data_to_load, header=T, sep=';', comment.char="#")
 
@@ -40,7 +32,7 @@ if (rm_topOne) {
 }
 
 melted <- melt(df2, "run")
-# print(melted)
+
 
 test <- str_locate(melted$variable, '_')[, "start"]
 vect_debut <- c()
@@ -57,7 +49,7 @@ for (i in 1:length(melted$variable)) {
 
 melted$cat <- factor(vect_end)
 melted$variable <- factor(vect_debut)
-# print(melted)
+
 
 # Colors palette colorblind-friendly:
 my_palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", 
@@ -86,21 +78,18 @@ if (!reprod_cusco) {
 
     my_palette <- palette_cusco
 }
-# print(melted);exit()
+
 
 
 # Need to be descendant with 'variable' col, to have 'sens' BEFORE 'FDR':
 melted <- melted %>% arrange(run, cat, desc(variable))
-# print(melted)
 
 grouped <- melted %>%
             group_by(run, cat) %>%
             do(total=cumsum(.$value)-0.5*.$value)
-# print.data.frame(grouped)
 
 melted['label_ypos'] <- unlist(grouped$total)
 
-# print(melted)
 filename <- basename(data_to_load)
 title_plot <- substr(filename, 1, regexpr("\\.", filename)[1]-1)
 
@@ -125,7 +114,6 @@ p <- ggplot(melted, aes(x=cat, y=value, fill=variable)) +
               strip.text=element_text(face="bold")) +
         scale_y_continuous(breaks=c(0, 0.25, 0.5, 0.75, 1, 1.25))
 
-# ggplot_build(p)$data
 
 X11()
 print(p)

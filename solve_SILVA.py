@@ -34,8 +34,7 @@ def seqid2taxid_from_taxmap(to_taxmap_file, to_headers_list_file):
                 dict_acc2taxid[pacc] = taxid
             else:
                 assert(dict_acc2taxid[pacc] == taxid)
-                # print("DUPLICATE:", pacc, taxid)
-                # sys.exit(2)
+
     
     done_headers = set()
     with open(to_headers_list_file, 'r') as headers_file, \
@@ -55,6 +54,7 @@ def seqid2taxid_from_taxmap(to_taxmap_file, to_headers_list_file):
 def detect_problems(to_seqid2taxid, to_seqid2acc, to_target_list, dirOut="./"):
     """
     to_target_list = list of seqid that have been mapped
+    Detect taxids that are 'unknown' within our current NCBI taxo
     """
     import src.ncbi_taxdump_utils as taxo_utils
     print("Loading taxonomic module...")
@@ -64,16 +64,13 @@ def detect_problems(to_seqid2taxid, to_seqid2acc, to_target_list, dirOut="./"):
     taxfoo.load_nodes_dmp(nodes_path)
     taxfoo.load_names_dmp(names_path)
     print("Module loaded !")
-    # print(taxfoo.get_lineage(307514));sys.exit()
 
     dict_seqid2taxid = {}
     with open(to_seqid2taxid, 'r') as seqid2taxid_file:#, \
-         #open("problems.txt", 'w') as pbs_file:
         for line in seqid2taxid_file:
             seqid, taxid = line.rstrip('\n').split('\t')
             assert(seqid not in dict_seqid2taxid.keys())
             dict_seqid2taxid[seqid] = taxid
-            # print(list(dict_seqid2taxid.keys())[list(dict_seqid2taxid.values()).index(pacc)])    
 
     dict_seqid2acc = {}
     with open(to_seqid2acc) as seqid2acc_file:
@@ -93,10 +90,7 @@ def detect_problems(to_seqid2taxid, to_seqid2acc, to_target_list, dirOut="./"):
             if name_taxid == "unidentified":
                 set_uniden.add(current_taxid)
 
-            # lineage_dict = taxfoo.get_lineage_as_dict(int(current_taxid))
-            # if 'genus' in lineage_dict.keys() and lineage_dict['genus'] == "Pythium": 
-            #     print(current_taxid)
-                # sys.exit()
+
             if (not name_taxid and current_taxid or 
                 current_taxid in problematic_taxids):
                 if current_taxid not in done_taxids:
@@ -117,16 +111,10 @@ def detect_problems(to_seqid2taxid, to_seqid2acc, to_target_list, dirOut="./"):
 
 def remote_taxid_search(to_problems_file, dirOut="./"):
     """
+    Search taxid using remmote Biopython, used in cases when local search failed 
     """
     import src.remote as remote
     print("REMOTE TAXID SEARCH...")
-
-    # handle = remote.Entrez.efetch(db="Taxonomy", id="1963032", retmode="xml")
-    # handle = remote.Entrez.esearch(db="Taxonomy", term="Bacillus intestinalis", retmode="text")
-    # records = remote.Entrez.read(handle) ; handle.close()
-    # print(records) # With esearch
-    # print(records[0].keys()) # With efetch
-    # sys.exit()
 
     dict_wrong2good = {} # Conversion between wrong and good taxid
     to_wrong2good_file = osp.join(dirOut, "wrong2good_taxids")
@@ -298,7 +286,8 @@ def write_complete_lineage(to_seqid2taxid):
 
 def parse_and_rewrite_nodes(filename, to_complete_lineage):
     """"
-    Parse the NCBI nodes_dmp file.
+    Parse the NCBI nodes_dmp file. and rewrite it, to keep only species that 
+    within a certain database 
     """
     with open(to_complete_lineage, 'r') as complete_lineage_file:
         set_taxids_to_keep = {line.rstrip('\n') 
@@ -316,7 +305,8 @@ def parse_and_rewrite_nodes(filename, to_complete_lineage):
 
 def parse_and_rewrite_names(filename, to_complete_lineage):
     """
-    Parse an NCBI names.dmp file.
+    Parse the NCBI names_dmp file. and rewrite it, to keep only species that 
+    within a certain database 
     """
     with open(to_complete_lineage, 'r') as complete_lineage_file:
         set_taxids_to_keep = {line.rstrip('\n') for line in complete_lineage_file}
@@ -330,7 +320,6 @@ def parse_and_rewrite_names(filename, to_complete_lineage):
         for line in fp:
             line = line.rstrip('\t|\n')
             taxid, name, uniqname, name_class = line.split('\t|\t')
-            # taxid = int(taxid)
 
             if (name_class == 'scientific name' and 
                 taxid in set_taxids_to_keep):
@@ -347,9 +336,6 @@ def write_metadat_file(to_seqid2taxid, base_used):
 
     with open('taxids_complete_lineage', 'r') as complete_lineage, \
          open(base_used + '_tax_metadat.tsv', 'w') as metadat_file:
-        # metadat_file.write('#OTU ID\ttaxonomy\n')
-        # metadat_file.write('no_majo_found' + '\t' + ';'.join(['Other'] * 7) + 
-        #                    '\n')
         metadat_file.write('unmapped' + '\t' + ';'.join(['no'] * 7) + 
                            '\n')
         
@@ -364,6 +350,8 @@ def write_metadat_file(to_seqid2taxid, base_used):
 
 def stats_base(db_to_stat):
     """
+    Produce statistics of each databases, concerning the number of different
+    taxonomic ranks, present sequences of our 8 expected bacteria etc.
     """
     to_seqid2taxid = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/" +
                       "metage_ONT_2019/Centri_idxes/" + db_to_stat.lower() +
@@ -377,9 +365,9 @@ def stats_base(db_to_stat):
                        'Enterococcus faecalis':1351,
                        'Pseudomonas aeruginosa':287, 
                        'Salmonella enterica':28901,
-                       'Cryptococcus neoformans':5207, 
-    # dict_euk = {'Cryptococcus neoformans':5207, 
-                'Saccharomyces cerevisiae':4932}
+    # dict_euk = { 
+                'Saccharomyces cerevisiae':4932,
+                'Cryptococcus neoformans':5207}
 
     taxids_zymo_sp = list(dict_name2taxid.values())
     taxids_zymo_gen = [taxfoo.get_taxid_parent(taxid) for taxid in taxids_zymo_sp]
@@ -419,7 +407,6 @@ def stats_base(db_to_stat):
 
     print(dict_bacil)
         
-    #print(pd.DataFrame.from_dict(dict_tmp, orient='index')[0])
     print("STATS OF {} DB:".format(db_to_stat.upper()))
     print(pd.Series(dict_tmp).value_counts())
     print()
@@ -446,8 +433,6 @@ def transform_EPI2ME_CSV(to_initial_csv):
     initial_csv['lineage'] = initial_csv.taxid.apply(
                                             lambda val: ';' + str(val) + ';')
 
-    # print(initial_csv[initial_csv.exit_status=="Classification below QC threshold"][["exit_status", "taxid"]]);sys.exit()
-    
     def exitStatus_to_typeAlign(val):
         if val == 'Classification successful':
             return 'normal'
@@ -521,8 +506,6 @@ def detect_RRN_litige(to_acc2taxid, to_species_annot):
     with open(to_acc2taxid, 'r') as acc2taxid_file:
         dict_acc2taxid = {line.rstrip('\n').split('\t')[0]:line.rstrip('\n').split('\t')[1] 
                           for line in acc2taxid_file}
-    # print(dict_acc2taxid);sys.exit()
-
 
     with open(to_species_annot, 'r') as sp_annot:
         dict_litiges = {}
@@ -565,7 +548,6 @@ def tiny_func_for_STAMP(to_biom):
 
     out_spf = osp.splitext(to_biom)[0] + '.spf'
     tmp_csv.to_csv(out_spf, sep='\t')
-    # print(tmp_csv)
 
 
 def tiny_func_for_STAMP_2(to_biom_txt):
@@ -577,10 +559,9 @@ def tiny_func_for_STAMP_2(to_biom_txt):
     """ 
     df_prok_ref = eval.generate_df_zymo()
     set_taxids = df_prok_ref.index
-    # my_taxo_csv = pd.read_csv(to_biom_txt, sep=';|\t', skiprows=[0], engine='python')
     my_taxo_csv = pd.read_csv(to_biom_txt, sep='\t', skiprows=[0])
     assert(len(my_taxo_csv.index) >= 8)
-    # print(my_taxo_csv.head())
+
     list_taxo = [eval.taxo_from_taxid(taxid) for taxid in set_taxids]
 
     samples_names = my_taxo_csv.columns[1:]
@@ -608,16 +589,15 @@ def tiny_func_for_STAMP_2(to_biom_txt):
 
     future_spf.loc['misassigned', :] = misassigned
     assert(len(future_spf.index) == 9)
-    # print(); print(future_spf)
     to_out_spf = osp.splitext(to_biom_txt)[0] + '.spf'
     future_spf.index.name = 'sp_name'
-    # print(future_spf.head())
     print("Wrote:", to_out_spf) ; print()
     future_spf.to_csv(to_out_spf, sep='\t', index=True)
 
 
 def correct_spf(to_spf):
     """
+    Another func trying to produce a properly formatted input file for STAMP...
     """
     print("Input spf file:", to_spf)
     test = pd.read_csv(to_spf, sep='\t')
@@ -628,16 +608,11 @@ def correct_spf(to_spf):
         if test.loc[idx, 'Level_1'] == 'None':
             print("Removing Unclassified entry !")
             test.drop(idx, inplace=True)
-            # test.loc[idx, 'Level_1'] = 'Unclassified'
-            # for i in range(2, 8): test.loc[idx, 'Level_' + str(i)] = pd.np.nan
+
         if sum(are_other) > 0:
             print(test.loc[idx, :])
             test.loc[idx, are_other] = 'Unclassified'
             print(idx+2, sum(are_other), list(test.loc[idx, test.columns[-5:-1]]))
-            # test.drop(idx, inplace=True)
-    # print(test.loc[1687, :])
-    #fo
-    #if test
 
     test.loc[:, 'Level_7'] = test.Level_6 + ' ' + test.Level_7
 
@@ -645,7 +620,6 @@ def correct_spf(to_spf):
     test.to_csv(to_spf.rstrip('0'), sep='\t', index=False)
     
     
-
 
 
 # MAIN:

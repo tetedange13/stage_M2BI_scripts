@@ -10,7 +10,7 @@ if (length(args) == 0) {
 
 library(fmsb)
 
-# data=as.data.frame(matrix( sample( 0:20 , 15 , replace=F) , ncol=5))
+
 data <- read.csv(data_to_load, header=T, sep=";", row.names="Zymo_sp", 
                  comment.char="#")
 
@@ -20,7 +20,6 @@ print(paste("MAX_VAL_DF:", data[which(data == max(data), arr.ind = TRUE)]))
 data_old <- data
 print(data_old)
 writeLines("\n\n")
-# print(sapply(data_old, class))
 
 # Convert into differential proportion relative to ref_prop:
 data <- data.frame(sweep(data.matrix(data[-c(1), ]), MARGIN=2, 

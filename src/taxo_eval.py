@@ -41,7 +41,6 @@ def taxo_from_taxid(arg_taxid):
 
             if taxo_lvl == 'species':
                 found_taxa_lvls = set(list_lvls)
-                # if len(found_taxa_lvls) == 3 and 'Other' in set(list_lvls):
                 if 'Other' in found_taxa_lvls: # If taxo is found incomplete
                     pass # taxo_str kept as a jointure of all 'species' words
                 else: # Else we keep only all 'species' words except the 1st one
@@ -59,18 +58,6 @@ def taxo_from_taxid(arg_taxid):
 def generate_df_zymo():
     """
     """
-    # Define the species contained within the Zymo mock community:
-    # dict_name2taxid = {'Listeria monocytogenes':[1639 , 15.9], 
-    #                    'Bacillus subtilis':[1423 , 15.7], 
-    #                    'Staphylococcus aureus':[1280, 13.3], 
-    #                    'Escherichia coli':562, 
-    #                    'Lactobacillus fermentum':1613, 
-    #                    'Enterococcus faecalis':1351,
-    #                    'Pseudomonas aeruginosa':287, 
-    #                    'Salmonella enterica':28901}
-    # dict_euk = {'Cryptococcus neoformans':5207, 
-    #             'Saccharomyces cerevisiae':4932}
-
     dict_prok = {1639 : 15.9, 
                  1423 : 15.7, 
                  1280 : 13.3, 
@@ -85,29 +72,11 @@ def generate_df_zymo():
     for taxid in set_taxids_prok:
         dict_tmp[taxid] = taxo_from_taxid(taxid).split(';')
         dict_tmp[taxid] += [dict_prok[taxid]]
-        # print(list_taxa_names)
     del taxid
 
     return pd.DataFrame.from_dict(data=dict_tmp, 
                                   columns=want_taxo+['rel_count'], 
                                   orient='index')
-
-
-def calc_taxo_shift(arg_taxid, taxonomic_cutoff):
-    """
-    Calculate the 'taxonomic shift', i.e. the number of taxonomic levels of
-    difference, between a taxonomic cutoff and the rank of a taxid
-    """
-    idx_cutoff = want_taxo.index(taxonomic_cutoff) + 1
-    sublist_taxo = want_taxo[0:idx_cutoff]
-    shift = len(taxfoo.get_lineage(arg_taxid)) - len(sublist_taxo)
-
-    print("BONJ", taxfoo.get_taxid_name(arg_taxid), shift)
-    return shift
-    # if shift <= 0:
-    #     pass
-    
-    # print(len(taxfoo.))
 
 
 def get_majo_old(list_of_things, cutoff_majo):
@@ -121,8 +90,6 @@ def get_majo_old(list_of_things, cutoff_majo):
     are_up_to_cutoff  = freq_counts > cutoff_majo
     nb_majo = sum(are_up_to_cutoff)
     assert(nb_majo < 2)
-    # if len(set(val_counts)) == 1:
-    #     print([taxfoo.get_taxid_name(taxid) for taxid in val_counts.index])
 
     to_return = [val for val in val_counts]
     if nb_majo == 1: # 1 unique majoritary
@@ -142,7 +109,6 @@ def majo_voting_old(list_taxid_target, taxonomic_cutoff):
         if taxonomic_cutoff in lineage.keys():
             dict_taxid2ancester[taxid] = lineage[taxonomic_cutoff]
         else:
-            # dict_taxid2ancester[taxid] = 'notInKey'
             dict_taxid2ancester[taxid] = 'notInKey_' + str(taxid)
     del taxid
 
@@ -155,7 +121,6 @@ def majo_voting_old(list_taxid_target, taxonomic_cutoff):
         else:
             if 'notInKey' in majo_ancester:
                 return ('majo_notInKey', majo_ancester.split('_')[1])
-            # assert (majo_ancester != 'notInKey')
             return ('majo_found', majo_ancester) # Majo found only after the 2nd round
 
     else:
@@ -175,7 +140,6 @@ def remove_minor_lca(list_of_things, cutoff_discard):
         test = pd.DataFrame(freq_counts.apply(round, args=(2, ))).reset_index()
         test = test.assign(sp_name=test['index'].apply(taxfoo.get_taxid_name),
                            diff_freq=lambda x: round(x.freq - 1/len(freq_counts), 2))
-        # print('\n', test.set_index('index'))
     are_down_to_cutoff  = freq_counts < cutoff_discard
     nb_majo = len(are_down_to_cutoff) - sum(are_down_to_cutoff)
     to_return = [val for val in val_counts]
@@ -184,10 +148,11 @@ def remove_minor_lca(list_of_things, cutoff_discard):
         print('noMajo:', 
               [(taxfoo.get_taxid_name(a_taxid), a_freq) 
                for a_taxid, a_freq in freq_counts.items()])
-        # print('noMajo!\n', freq_counts)
         return ('noMajo', None) # NO majoritary
+    
     elif nb_majo == 1: # 1 unique majoritary
         return ('uniq_majo', freq_counts.idxmax())
+    
     else:
         # '-' before a pdSeries of bool invert the Series:
         return ('minors_rm_lca', 
@@ -206,8 +171,6 @@ def majo_voting(list_taxid_target):
             dict_taxid2ancester[taxid] = lineage['species']
         else:
             dict_taxid2ancester[taxid] = taxid
-            # if taxfoo.get_taxid_rank(taxid) == 'no rank':
-            #     print(taxfoo.get_taxid_name(taxid))
     del taxid
 
     list_taxids_ancesters = [dict_taxid2ancester[taxid] 
@@ -279,7 +242,6 @@ def in_zymo_new(taxo_taxid, set_levels_prok, taxonomic_cutoff):
             taxo_levels = lineage.keys()
 
             if taxonomic_cutoff not in taxo_levels:
-                # return ('notDeterminable', 'FP')
                 returned_list = [pd.np.nan, 'FP', 'notInKeys']
             else:
                 taxid_ancester = lineage[taxonomic_cutoff]
