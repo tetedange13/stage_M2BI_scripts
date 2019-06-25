@@ -28,6 +28,74 @@ from docopt import docopt
 import src.check_args as check
 
 
+def transform_ONT_CSV(to_SAM_csv):
+    """
+    Transform the CSV produced by Epi2me to make it usable by my scripts
+    """
+    base_filename = osp.basename(to_SAM_csv).lower()
+
+    if "epi2me" in base_filename:
+        detected_tool = 'EPI2ME'
+        name_col_readID = 'read_id'
+        name_col_taxid = 'taxid'
+    elif "wimp" in base_filename:
+        detected_tool = 'WIMP'
+        name_col_readID = 'readid'
+        name_col_taxid = 'taxID'
+    else:
+        print("ERROR ! Filename must contain either 'EPI2ME' or 'WIMP'")
+        sys.exit()
+
+    print("Transforming EPI2ME CSV from {} tool..".format(detected_tool))
+
+    initial_csv = pd.read_csv(to_SAM_csv, header=0, sep=',', 
+                             # usecols=['exit_status', 'taxid', 'accuracy', 
+                             #          'lca'])
+                             usecols=[name_col_readID, 'exit_status', 
+                                      name_col_taxid])
+
+    if all(initial_csv[name_col_readID].isnull()): # Actually NO readID...
+        print("NO readID actually found --> adding a pseudo-readID..")
+        nb_rows = len(initial_csv.index)
+        initial_csv[name_col_readID] = [foo[0]+str(foo[1]) 
+                                    for foo 
+                                    in zip(['read_']*nb_rows, range(nb_rows))]
+    else:
+        # If 'False' here, will need more code to group entries...
+        assert(len(initial_csv[name_col_readID]) == len(initial_csv[name_col_readID].unique()))
+        
+    initial_csv['lineage'] = initial_csv[name_col_taxid].apply(
+                                            lambda val: ';' + str(val) + ';')
+
+    def exitStatus_to_typeAlign(val):
+        """
+        /!\ This func assert that every status different from 
+        'Classif successful' can be considered as 'unmapped' 
+        """
+        if val in ('Classification successful', 'Classified'):
+        # 'Classified' for WIMP and 'Classification successful' for EPI2ME
+            return 'normal'
+        return 'unmapped'
+
+    # print("All different 'exit_status' in this file:")
+    # print(initial_csv.exit_status.value_counts())
+
+    initial_csv['type_align'] = initial_csv.exit_status.apply(
+                                                    exitStatus_to_typeAlign)
+    not_unmapped = initial_csv.type_align != 'unmapped'
+    initial_csv['nb_trashes'] = initial_csv[not_unmapped][name_col_taxid].apply(
+                                        lambda val: int(pll.is_trash(val)))
+
+    initial_csv.drop(columns=[name_col_taxid, 'exit_status'], inplace=True)
+    print("Done ! Head of the written new CSV:")
+    print(initial_csv.head())
+    inbase = osp.splitext(osp.basename(to_SAM_csv))[0]
+    initial_csv.set_index([name_col_readID]).to_csv(inbase+'.csv', 
+                                                    index_label=False)
+    # print("FINISHED ! Wrote: {}.csv".format(inbase))
+    print()
+
+
 def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
     """
     Draw a thin histogram from a list of values
@@ -238,6 +306,9 @@ if __name__ == "__main__":
     print("Taxonomic Python module loaded !\n")
 
     taxo_cutoff = check.acceptable_str(ARGS["--taxoCut"], evaluate.want_taxo)
+
+    is_ONT_tool = ('epi2me' in infile_base.lower() or 
+                   'wimp' in infile_base.lower())
     # Guess the database used:
     if "toZymo" in infile_base:
         guessed_db = 'zymo'
@@ -249,7 +320,10 @@ if __name__ == "__main__":
         guessed_db = 'silva'
     elif "toP_compressed" in infile_base:
         guessed_db = 'p_compressed'
-    elif 'toNCBIbact' in infile_base:
+    # elif 'toNCBIbact' in infile_base:
+    #     guessed_db = 'NCBIbact'
+    elif is_ONT_tool:
+        # print("ONT tool (WIMP or EPI2ME) detected")
         guessed_db = 'NCBIbact'
     else:
         print("Unkown database !\n")
@@ -395,6 +469,12 @@ if __name__ == "__main__":
         to_seqid2taxid = to_dbs + "Centri_idxes/" + guessed_db + "/seqid2taxid"
         print()
 
+        # If ONT tool (WIMP or EPI2ME), we just need to reformat the
+        # (pseudo-) SAM input (actually a CSV) to make it usable:
+        if is_ONT_tool:
+            transform_ONT_CSV(to_infile)
+
+
         to_out_file = infile_base + ".csv"
         if not osp.isfile(to_out_file):
             # To make correspond operon number and taxid:
@@ -512,7 +592,7 @@ if __name__ == "__main__":
                 #                "ratio_len,de\n")
 
             print("CSV CONVERSION TIME:", t.time() - TOTO)
-            sys.exit()
+            # sys.exit()
 
                     
         else:
@@ -704,7 +784,7 @@ if __name__ == "__main__":
         # sys.exit()
 
         
-        write_map = True
+        write_map = False
         if write_map:
             # OTU mapping file writting:
             # (NaN values are automatically EXCLUDED during the 'groupby')
@@ -712,8 +792,11 @@ if __name__ == "__main__":
             tool_used = 'centri'
             if IS_SAM_FILE:
                 tool_used = 'minimap'
-                if guessed_db == 'NCBIbact':
-                    tool_used = 'epi2me'
+                if is_ONT_tool:
+                    if 'wimp' in infile_base.lower():
+                        tool_used = 'wimp'
+                    else:
+                        tool_used = 'epi2me'
             run_name = '.'.join(infile_base[0:pos_name].split('_'))
             sampl_prefix = (run_name + '.' + tool_used + 
                             guessed_db.capitalize() + 
