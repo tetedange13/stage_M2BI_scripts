@@ -52,7 +52,7 @@ if __name__ == "__main__":
     # Get arguments:
     ARGS = docopt(__doc__, version='0.1')
     input_db_path = check.infile(ARGS["--infileDB"], 
-                                 ('fa', 'fasta', 'fq', 'fastq'))[0]
+                                 ('fna', 'fa', 'fasta', 'fq', 'fastq'))[0]
     dirOut = ARGS["--dirOut"]                            
     list_gi_path = ARGS["--accList"]
     NB_THREADS = check.input_nb(ARGS["--threads"]) # TYPE STRING
@@ -147,13 +147,13 @@ if __name__ == "__main__":
     # BUILDING INDEX
     path_to_centriBuild = ("/home/sheldon/Applications/centrifuge-master21" +
                                "jan19/build/bin/centrifuge-build")
-    db_name = "rrn"
+    db_name = "ncbi_16s"
     cmd_centriBuild = (path_to_centriBuild + " -p " + NB_THREADS + 
                        " --conversion-table " + dirOut + "seqid2taxid " + 
                        "--taxonomy-tree " + dirOut + 
                        "nodes.dmp --name-table " + dirOut + "names.dmp " + 
                        input_db_path + " " + dirOut + db_name)
-    print("Building centrifuge index...")
+    print("Building custom Centrifuge index...")
     # print(cmd_centriBuild);sys.exit()
     with open(dirOut + "centri-build.log", 'w') as centriBuild_log:
         sub.Popen(cmd_centriBuild.split(), stdout=centriBuild_log).communicate()
