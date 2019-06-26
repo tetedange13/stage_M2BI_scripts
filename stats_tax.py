@@ -46,7 +46,7 @@ def transform_ONT_CSV(to_SAM_csv):
         print("ERROR ! Filename must contain either 'EPI2ME' or 'WIMP'")
         sys.exit()
 
-    print("Transforming EPI2ME CSV from {} tool..".format(detected_tool))
+    print("Transforming CSV generated with {} ONT tool..".format(detected_tool))
 
     initial_csv = pd.read_csv(to_SAM_csv, header=0, sep=',', 
                              # usecols=['exit_status', 'taxid', 'accuracy', 
@@ -268,7 +268,9 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
           #" | TEST:", round(pd.np.exp(2-precision), 4))
 
     if not at_taxa_level:
-        sensitivity = round(skm.recall_score(y_true, y_pred), 4)
+        # sensitivity = round(skm.recall_score(y_true, y_pred), 4)
+        tp, fp = dict_stats_to_convert['TP'], dict_stats_to_convert['FP'] # CORRECTION !
+        sensitivity = round(tp/(tp + fp + dict_stats_to_convert['FN']), 4)
     
         print("SENSITIVITY:", sensitivity, " | ", "FNR:", 
               round(1 - sensitivity, 4)) # TPR = TP/(TP+FN) (or sensitivity, hit rate, recall) 
@@ -304,7 +306,7 @@ if __name__ == "__main__":
     taxfoo = evaluate.taxfoo
     # print(evaluate.taxfoo.get_taxid_rank(136841));sys.exit()
     print("Taxonomic Python module loaded !\n")
-
+   
     taxo_cutoff = check.acceptable_str(ARGS["--taxoCut"], evaluate.want_taxo)
 
     is_ONT_tool = ('epi2me' in infile_base.lower() or 
@@ -320,6 +322,8 @@ if __name__ == "__main__":
         guessed_db = 'silva'
     elif "toP_compressed" in infile_base:
         guessed_db = 'p_compressed'
+    elif 'toNcbi_16s' in infile_base:
+        guessed_db = 'ncbi_16s'
     # elif 'toNCBIbact' in infile_base:
     #     guessed_db = 'NCBIbact'
     elif is_ONT_tool:
@@ -348,7 +352,7 @@ if __name__ == "__main__":
 
     # Guess the "mode":
     # Mode for handling of reads-clustering results
-    CLUST_MODE = "_to" not in infile_base 
+    CLUST_MODE = "_to" not in infile_base and not is_ONT_tool
     IS_SAM_FILE = ext_infile == ".sam"
 
     if not CLUST_MODE and not IS_SAM_FILE:
@@ -593,6 +597,7 @@ if __name__ == "__main__":
 
             print("CSV CONVERSION TIME:", t.time() - TOTO)
             # sys.exit()
+            my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
 
                     
         else:
@@ -658,8 +663,7 @@ if __name__ == "__main__":
                   ' | NB_NOT_NaNs:', nb_not_nan)
             print("NB REMOVED (NaNs excepted):", nb_removed, 
                   "~ {}% removed".format(int(nb_removed/nb_not_nan*100)))
-        # sys.exit()
-
+        # print(my_csv.columns);sys.exit()
 
         # Filter only reads that are taxonomically evaluable (mapped):
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage].reset_index()
@@ -710,6 +714,9 @@ if __name__ == "__main__":
 
 
         proc_chunks, chunksize = [], nb_reads_to_process//NB_THREADS
+        if nb_reads_to_process < NB_THREADS: # Case when the nb of reads is too small
+            chunksize = 1
+
         for i_proc in range(NB_THREADS):
             chunkstart = i_proc * chunksize
             # make sure to include the division remainder for the last process
@@ -732,9 +739,14 @@ if __name__ == "__main__":
 
         print('Finalizing evaluation..')
         # Add res to the main CSV:
-        my_res = pd.concat(result_chunks)
-        my_csv = pd.concat([my_csv, my_res.set_index('index')], axis='columns', 
-                           sort=False, copy=False)
+        my_res = pd.concat(result_chunks, sort=True)
+        col_to_add = ['taxid_ancester', 'final_taxid', 'res_eval', 
+                      'remark_eval']
+        my_csv = pd.concat([my_csv, my_res.set_index('index')[col_to_add]], 
+                           axis='columns', sort=True, copy=False)
+        list_col_my_res = my_res.set_index('index').columns.values.tolist()
+        list_col_my_csv = my_csv.columns.values.tolist()
+        assert(sorted(my_csv.columns) == sorted(set(list_col_my_res+list_col_my_csv)))
 
         # NEW WAY (take ages...):
         # df_eval = pd.DataFrame(my_res.final_taxid.value_counts()).reset_index()
@@ -775,7 +787,8 @@ if __name__ == "__main__":
         dict_species2res = tmp_df.set_index('species')['res_eval'].to_dict()
         del tmp_df
 
-        print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
+        print("TIME FOR CSV PROCESSING:", 
+              round(t.time() - TIME_CSV_TREATMENT, 4))
         print("NB of 'no_majo_found':", 
               sum(my_csv.final_taxid.astype(str) == 'no_majo_found'))
         print()
@@ -898,7 +911,7 @@ if __name__ == "__main__":
 
         # Add numbers of TP and FP to the dict of stats:
         dict_stats['FP'] += sum(is_FP)
-        dict_stats['FP'] += sum(my_csv['type_align'] == 'only_suppl')
+        dict_stats['FP'] += sum(my_csv.type_align == 'only_suppl')
         dict_stats['TP'] += sum(is_TP)
 
 
@@ -919,9 +932,9 @@ if __name__ == "__main__":
                    if dict_species2res[val] == 'FP']
         list_TP = [val for val in dict_species2res 
                    if dict_species2res[val] == 'TP']
-        nb_pos_to_find = len(set_proks)
-        recall_at_taxa_level = len(list_TP)/nb_pos_to_find
-        print("TO FIND:", list_TP)
+        nb_positive = len(set_proks)
+        recall_at_taxa_level = len(list_TP)/nb_positive
+        print("TO FIND:", sorted(set_proks))
         print("NB_FP", len(list_FP), " | NB_TP", len(list_TP))
         dict_stats_sp_level = {'TP':len(list_TP),
                                'FP':len(list_FP)}
@@ -939,40 +952,41 @@ if __name__ == "__main__":
         print()
 
 
-        # Make difference between TFP and FFP:
-        print("DISCRIMINATION between TFP and FFP (at read lvl):")
-        possible_notInKeys = my_csv.remark_eval.apply(
-                                                lambda val: "notInKeys" in str(val))
-        # == 'minors_rm_lca;notInKeys') |(my_csv.remark_eval == 'minors_rm_lca;notInKeys')
-        FP_notInKey = my_csv[is_FP & possible_notInKeys]
+        if False:
+            # Make difference between TFP and FFP:
+            print("DISCRIMINATION between TFP and FFP (at read lvl):")
+            possible_notInKeys = my_csv.remark_eval.apply(
+                                                    lambda val: "notInKeys" in str(val))
+            # == 'minors_rm_lca;notInKeys') |(my_csv.remark_eval == 'minors_rm_lca;notInKeys')
+            FP_notInKey = my_csv[is_FP & possible_notInKeys]
 
-        if FP_notInKey.empty:
-            print("NOT POSSIBLE ! (no FP and/or no 'notInKeys')")
-        else:
-            counts_FP_NotInKey = FP_notInKey.final_taxid.value_counts()
-            counts_FP_NotInKey.name = 'counts'
+            if FP_notInKey.empty:
+                print("NOT POSSIBLE ! (no FP and/or no 'notInKeys')")
+            else:
+                counts_FP_NotInKey = FP_notInKey.final_taxid.value_counts()
+                counts_FP_NotInKey.name = 'counts'
 
-            # We remove 'superkingdom' and 'species' lvls
-            taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
-            df_FP = pd.DataFrame(counts_FP_NotInKey).reset_index()
-            # print(df_FP);sys.exit()
-            tmp_df = df_FP['index'].apply(discriminate_FP, 
-                                          args=(taxo_not_bact, df_proks)) 
-            # print(FP_notInKey)
-            df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
-                                 ancester_name=tmp_df[2])
-            del tmp_df
+                # We remove 'superkingdom' and 'species' lvls
+                taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
+                df_FP = pd.DataFrame(counts_FP_NotInKey).reset_index()
+                # print(df_FP);sys.exit()
+                tmp_df = df_FP['index'].apply(discriminate_FP, 
+                                              args=(taxo_not_bact, df_proks)) 
+                # print(FP_notInKey)
+                df_FP = df_FP.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
+                                     ancester_name=tmp_df[2])
+                del tmp_df
 
-            tot_FFP = sum(df_FP[df_FP.status == 'FFP'].counts)
-            # print(df_FP.set_index('index')) ; print()
+                tot_FFP = sum(df_FP[df_FP.status == 'FFP'].counts)
+                # print(df_FP.set_index('index')) ; print()
 
-            print('TOT NB OF FFP: {} | OVER {} FP_notInKey'.format(tot_FFP,
-                                                                   len(FP_notInKey)))
-            tot_FP = dict_stats['FP']
-            print("Total of {} FP --> {} + {} otherFP".format(tot_FP, tot_FFP, 
-                                                              tot_FP-tot_FFP))
-        print()
-        # sys.exit()
+                print('TOT NB OF FFP: {} | OVER {} FP_notInKey'.format(tot_FFP,
+                                                                       len(FP_notInKey)))
+                tot_FP = dict_stats['FP']
+                print("Total of {} FP --> {} + {} otherFP".format(tot_FP, tot_FFP, 
+                                                                  tot_FP-tot_FFP))
+            print()
+            # sys.exit()
 
 
         sum_stats, sum_counts = sum(dict_stats.values()),sum(dict_count.values())
