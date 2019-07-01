@@ -27,9 +27,26 @@ import os
 import sys
 import subprocess as sub
 import time as t
+import pandas as pd
 import os.path as osp
 from docopt import docopt
 import src.check_args as check
+
+
+
+def check_list_config(list_config, name_param):
+    """
+    Take a list of config arguments (supposed to be of size 1)
+    """
+    if len(list_config) != 1:
+        if not list_config: # Empty list ==> NO config found for given params:
+            print("ERROR: NO proper config found for '{}'".format(name_param))
+        else: # 
+            print("ERROR: Several possible params for '{}'".format(name_param))
+        print()
+        sys.exit()
+    
+    return list_config[0]
         
         
 
@@ -48,19 +65,49 @@ if __name__ == "__main__":
     CHIM = check.acceptable_str(ARGS["--chim"], ["yacrd", "no"])
     DETER = check.acceptable_str(ARGS["--deter"], 
                                  ["minimap2", "centri", "no"])
-    nb_threads = check.input_nb(ARGS["--threads"], "'-t number of threads'")   
+    nb_threads = check.input_nb(ARGS["--threads"], "'-t number of threads'")
+
+    print()
+    print("Tool: {} | Against: {}".format(DETER, DB_NAME))
+
+
+    # Extracting parameters from 'pipeline.conf' file:
+    conf_csv = pd.read_csv('pipeline.conf', sep=';', comment='#')
+    params_csv = conf_csv[conf_csv.tool == DETER].drop(['tool'], axis='columns')
+
+    cond_to_tool = params_csv.type_param == 'to_exe'
+    list_to_tool = params_csv[cond_to_tool].supplField_1.values
+    if len(list_to_tool) > 1:
+        print("ERROR: Several possible params for 'to_exe'") ; sys.exit()
+
+    cond_to_ref_db = ((params_csv.type_param == 'to_ref') & 
+                      (params_csv.supplField_1 == DB_NAME))
+    list_to_ref_db = params_csv[cond_to_ref_db].supplField_2.values
+    to_ref_db = outDir = check_list_config(list_to_ref_db, 'to_ref')
+    if DETER != 'centri':
+        assert(osp.isfile(to_ref_db))
+
+    cond_outDir = params_csv.type_param == 'out_dir'
+    list_outDir = params_csv[cond_outDir].supplField_1.values
+    outDir = check_list_config(list_outDir, 'outDir')
+    assert(osp.isdir(outDir))
+
+    print()
+    print("Deducted from conf file:")
+    print("To reference database:", to_ref_db)
+    print("Output directory:", outDir)
+    # sys.exit()
 
                 
     #Common variables/params:
     # To databases directory:
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
-    
     path_apps = "/home/sheldon/Applications/"
     path_proj = "/projets/metage_ONT_2019/"
     
     
     # Adaptators trimming using Porechop:
-    path_to_porechop = "/home/sheldon/SEGO/Porechop/porechop-runner.py"
+    path_to_porechop = "home/sheldon/Applications/Porechop-0.2.4/porechop-runner.py"
     args_porechop = " --discard_middle"
     dirOut_porechop = path_proj + "1_trim/"
     trimmed_file = in_fq_base + "_trmd" + in_fq_ext
@@ -78,15 +125,15 @@ if __name__ == "__main__":
         with open(porechop_log_path, 'w') as porechop_log:
             porechop_log.write(out_porechop.decode())
             porechop_log.write("TIME TRIM = " + str(t.time()-TRIM_TIME)+"\n\n")
-        
-    else:
-        pass
     
     
 
     # Reads overlapping with Minimap2 followed by chim detection yacrd:
-    to_marginAlign = path_apps + "marginAlign-23jan19/" # Minimap2 inside
-    to_minimap2 = to_marginAlign + "submodules/minimap2/"
+    to_minimap2 = 'minimap2' # If nothing specified, use $PATH Unix var
+    if len(list_to_tool) == 1: # NO tool path defined within conf file
+        to_minimap2 = list_to_tool[0]
+        assert(osp.isfile(to_minimap2))
+
     args_minimap2_ovlp = "-t" + nb_threads + " -x ava-ont "
     dirOut_yacrd = path_proj + "2_chim/"
     overlapped_file = dirOut_yacrd + in_fq_base + "_ovlp"
@@ -142,38 +189,18 @@ if __name__ == "__main__":
     
    
     # TAXONOMIC DETERMINATION STEP:
-    print("TAXONOMIC DETERMINATION WITH:", DETER + "...")
-    print("AGAINST the DB:", DB_NAME.upper())
-    file_to_map = dirOut_yacrd + in_fq_base + flag_ext
-
+    print("Proceeding...")
     
     if DETER == "minimap2":
-        dirOut_minimap = path_proj + "3-deter_minimap2_second/"
-
-        # Determine path to fasta of reference DB:
-        if DB_NAME == 'zymo':
-            to_ref_fa = path_proj + 'zymo_SEGO.fa' 
-        elif DB_NAME == 'rrn':
-            to_ref_fa = to_dbs + 'rrn_8feb19/operons.100.fa'
-        elif DB_NAME == 'silva':
-            to_ref_fa = (to_dbs + 'SILVA_refNR132_28feb19/' + 
-                         'SILVA_132_SSURef_Nr99_tax_silva.fasta')
-        elif DB_NAME == 'ncbi_16s':
-            to_ref_fa = to_dbs + 'NCBI_16S_18-06-2019/bacteria.16SrRNA.fna'
-        else: # Has to be Silva db
-            print("DB not correct with Minimap2..")
-            sys.exit()
-
-        args_minimap2_map = "-K300M -N25 -t" + nb_threads + " -ax map-ont "
+        dirOut_minimap = outDir
+        args_minimap2_map = "-K300M -N25 -t" + nb_threads + " -ax map-ont"
         # args_minimap2_map = "-N25 -t" + nb_threads + " -ax map-ont "
         print("  >> WITH PARAM:", args_minimap2_map)
 
-        to_minimap_idxes = to_dbs + "minimap2_idxes/"
         root_minimap_outfiles = (dirOut_minimap + in_fq_base + "_to" + 
                                  DB_NAME.capitalize())
-        cmd_minimap = (to_minimap2 + "minimap2 " + args_minimap2_map + " " +
-                       to_minimap_idxes + DB_NAME + ".mmi " + 
-                       in_fq_path)
+        cmd_minimap = " ".join([to_minimap2, args_minimap2_map, 
+                                to_ref_db, in_fq_path])
 
         START_MINIMAP = t.time()
         log_minimap = open(root_minimap_outfiles + ".log", 'w')
@@ -183,13 +210,10 @@ if __name__ == "__main__":
         
         log_minimap.close()
         print("MAPPING FINISHED !")
-        sys.exit()
         
     
     elif DETER == "centri": # Classification using centrifuge:
-        
-        to_Centri_idxes = to_dbs + "Centri_idxes/"
-        dirOut_centri = path_proj + "3-deter_centri/"
+        dirOut_centri = outDir
         centri_outfile_root = (dirOut_centri + in_fq_base + "_to" +  
                                DB_NAME.capitalize() )
         
@@ -197,10 +221,10 @@ if __name__ == "__main__":
         if in_fq_ext.lstrip('.') in ('fasta', 'fa', 'mfasta'):
             param_infile = ' -f '
         cmd_centri = ("centrifuge -t -p " + nb_threads + param_infile + 
-                      in_fq_path + " -x " + to_Centri_idxes + DB_NAME +
+                      in_fq_path + " -x " + to_ref_db +
                       " --report-file " + centri_outfile_root + "_report.tsv " + 
                       "-S " + centri_outfile_root + "_classif.tsv")
-        
+        # print(cmd_centri);sys.exit()
         centri_log_path = (dirOut_centri + in_fq_base + "_to" + 
                            DB_NAME.capitalize() + "."  + DETER + "log")
         
