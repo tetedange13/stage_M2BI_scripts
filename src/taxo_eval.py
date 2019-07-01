@@ -5,8 +5,10 @@ Aims to containing functions common to several scripts
 """
 
 
+import sys
 import pandas as pd
 import src.ncbi_taxdump_utils as taxo_utils
+import os.path as osp
 
 
 global taxfoo
@@ -14,9 +16,15 @@ taxfoo = taxo_utils.NCBI_TaxonomyFoo()
 want_taxo = taxo_utils.default_want_taxonomy
 
 # Path to dump files:
-to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
-nodes_path = to_dbs + "nt_db/taxo_18feb19/nodes.dmp"
-names_path = to_dbs + "nt_db/taxo_18feb19/names.dmp"
+to_dumps = "dump_files/"
+if not osp.isdir(to_dumps):
+    print("ERROR: Need to create a 'dump_files/' folder and put dump files" + 
+          " within it")
+    print()
+    sys.exit()
+
+nodes_path = osp.join(to_dumps, "nodes.dmp")
+names_path = osp.join(to_dumps, "names.dmp")
 taxfoo.load_nodes_dmp(nodes_path)
 taxfoo.load_names_dmp(names_path)
 

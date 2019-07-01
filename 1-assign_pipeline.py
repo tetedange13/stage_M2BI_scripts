@@ -4,7 +4,7 @@
 Long-reads (LR) classification pipeline
 
 Usage:
-  main.py (-i <inputFqFile>) [-d <db>] [-T <trim>] [-C <chim>] [-D <deter>] [-t <threads>]
+  1-assign_pipeline.py (-i <inputFqFile>) [-d <db>] [-T <trim>] [-C <chim>] [-D <deter>] [-t <threads>]
   
 Options:
   -h --help                  help
@@ -40,9 +40,9 @@ def check_list_config(list_config, name_param):
     """
     if len(list_config) != 1:
         if not list_config: # Empty list ==> NO config found for given params:
-            print("ERROR: NO proper config found for '{}'".format(name_param))
-        else: # 
-            print("ERROR: Several possible params for '{}'".format(name_param))
+            print("ERROR: NO config found with given args for '{}' param".format(name_param))
+        else: # len() > 1 ==> More than 1 possible config
+            print("ERROR: Several config possible for '{}' param".format(name_param))
         print()
         sys.exit()
     
@@ -201,6 +201,7 @@ if __name__ == "__main__":
                                  DB_NAME.capitalize())
         cmd_minimap = " ".join([to_minimap2, args_minimap2_map, 
                                 to_ref_db, in_fq_path])
+        print("Core cmd ran:", cmd_minimap)
 
         START_MINIMAP = t.time()
         log_minimap = open(root_minimap_outfiles + ".log", 'w')
@@ -224,7 +225,7 @@ if __name__ == "__main__":
                       in_fq_path + " -x " + to_ref_db +
                       " --report-file " + centri_outfile_root + "_report.tsv " + 
                       "-S " + centri_outfile_root + "_classif.tsv")
-        # print(cmd_centri);sys.exit()
+        print("Core cmd ran:", cmd_centri)
         centri_log_path = (dirOut_centri + in_fq_base + "_to" + 
                            DB_NAME.capitalize() + "."  + DETER + "log")
         
