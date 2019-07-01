@@ -5,13 +5,15 @@
 Mapping statistics computation
 
 Usage:
-  stats_tax.py (-i <inFile>) (-l <taxoCut>)
+  2-prim_analysis.py (-i <inFile>) (-l <taxoCut>) [-w <writeMap>] [-o <outDir>]
   
 Options:
   -h --help                  help
   --version                  version of the script
   -i --inFile=input_file     input file
   -l --taxoCut=taxo_cutoff   cutoff for the taxonomic level
+  -w --writeMap=write_map    flag to either write (reads-vs-OTUs) mapping file [default: F] 
+  -o --outDir=out_dir        /path/to/output_csv [default: ./]
 """
 
 
@@ -21,7 +23,7 @@ import time as t
 import subprocess as sub
 import pysam as pys
 import multiprocessing as mp
-import mawelllotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from itertools import islice
 from functools import partial
 from docopt import docopt
@@ -94,23 +96,6 @@ def transform_ONT_CSV(to_SAM_csv):
                                                     index_label=False)
     # print("FINISHED ! Wrote: {}.csv".format(inbase))
     print()
-
-
-def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
-    """
-    Draw a thin histogram from a list of values
-    """
-    fig = plt.figure()
-    axis = plt.subplot(111)
-    plt.title(title_arg)
-
-    max_val = max(list_values)
-    min_val = min(list_values)
-
-
-    plt.hist(list_values, bins=int(256/1), log=y_log)
-    plt.xlim(xlims)
-    plt.show()
 
 
 def ali_to_dict(align_obj):
@@ -234,13 +219,12 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
     y_true, y_pred = dict_stats_to_vectors(dict_stats_to_convert)
 
     precision = round(skm.precision_score(y_true, y_pred), 4) # PPV = well/(well+miss) (positive predictive value or precision)
-    print("PRECISION:", precision, " | ", "FDR:", round(1 - precision, 4))#, 
-          #" | TEST:", round(pd.np.exp(2-precision), 4))
+    print("PRECISION:", precision, " | ", "FDR:", round(1 - precision, 4))
 
     if not at_taxa_level:
         # sensitivity = round(skm.recall_score(y_true, y_pred), 4)
-        tp, fp = dict_stats_to_convert['TP'], dict_stats_to_convert['FP'] # CORRECTION !
-        sensitivity = round(tp/(tp + fp + dict_stats_to_convert['FN']), 4)
+        tp, fp = dict_stats_to_convert['well'], dict_stats_to_convert['miss'] # CORRECTION !
+        sensitivity = round(tp/(tp + fp + dict_stats_to_convert['unass']), 4)
     
         print("SENSITIVITY:", sensitivity, " | ", "FNR:", 
               round(1 - sensitivity, 4)) # TPR = well/(well+unass) (or sensitivity, hit rate, recall) 
@@ -255,10 +239,12 @@ if __name__ == "__main__":
     ARGS = docopt(__doc__, version='0.1')
     to_infile, infile_base, _, _, ext_infile = check.infile(ARGS["--inFile"], 
                                                 ['csv', 'tsv', 'txt', 'sam'])
+    write_map = check.bool_type(ARGS["--writeMap"])
+    outDir = ARGS["--outDir"]
+    assert(osp.isdir(outDir))
 
     # Common variables:
     NB_THREADS = 10
-    to_apps = "/home/sheldon/Applications/"
     to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'unass':0, 'well':0, 'miss':0}
 
@@ -268,7 +254,6 @@ if __name__ == "__main__":
     evaluate = pll.eval
     pd = evaluate.pd
     taxfoo = evaluate.taxfoo
-    # print(evaluate.taxfoo.get_taxid_rank(136841));sys.exit()
     print("Taxonomic Python module loaded !\n")
    
     taxo_cutoff = check.acceptable_str(ARGS["--taxoCut"], evaluate.want_taxo)
@@ -300,6 +285,7 @@ if __name__ == "__main__":
     
     print("DB GUESSED:", guessed_db)
     print("PROCESSING FILE:", infile_base)
+    print("OutDir:", outDir)
     print("Script PARALLELIZED on {} CPUs".format(NB_THREADS))
 
 
@@ -442,7 +428,7 @@ if __name__ == "__main__":
             transform_ONT_CSV(to_infile)
 
 
-        to_out_file = infile_base + ".csv"
+        to_out_file = osp.join(outDir, infile_base + ".csv")
         if not osp.isfile(to_out_file):
             # To make correspond operon number and taxid:
             dict_seqid2taxid = {}
@@ -714,9 +700,8 @@ if __name__ == "__main__":
         print()
 
         
-        write_map = False
+        # Mapping file writting (reads vs OTUs):
         if write_map:
-            # OTU mapping file writting:
             # (NaN values are automatically EXCLUDED during the 'groupby')
             grped_by_fin_taxid = my_csv.groupby(by=['final_taxid'])
             tool_used = 'centri'
@@ -743,8 +728,8 @@ if __name__ == "__main__":
                         taxid_to_write = int(taxid_grp)
                     else:
                         taxid_to_write = taxid_grp
-                        print("NB OF 'NO_MAJO':", len(grp))
-                        # continue # Like, 'no_majo_found' are excluded ? 
+                        # Like this, 'no_majo_found' are excluded ? 
+                        # continue 
 
                     my_map.write(str(taxid_to_write) + '\t' + 
                                  '\t'.join(readIDs_to_write) + '\n')
@@ -754,7 +739,8 @@ if __name__ == "__main__":
                                         my_csv[my_csv.type_align == 'unmapped'].index)     
                 my_map.write('unmapped\t' +  '\t'.join(unmapped_to_write) + 
                              '\n')
-            print("  >> Wrote OTUs mapping file for '{}' !".format(sampl_prefix))
+            print("  >> Wrote OTUs mapping file ({})".format(my_map.name))
+            print("  >> With '{}' as sample name".format(sampl_prefix))
             print()
 
 
@@ -844,35 +830,36 @@ if __name__ == "__main__":
         print()
 
 
-        # Make difference between Tmiss and Fmiss:
-        print("DISCRIMINATION between Tmiss and Fmiss (at read lvl):")
-        possible_notInKeys = my_csv.remark_eval.apply(
-                                                lambda val: "notInKeys" in str(val))
-        miss_notInKey = my_csv[is_miss & possible_notInKeys]
+        # Make difference between TFP and FFP:
+        if False:
+            print("DISCRIMINATION between TFP and FFP (at read lvl):")
+            possible_notInKeys = my_csv.remark_eval.apply(
+                                                    lambda val: "notInKeys" in str(val))
+            miss_notInKey = my_csv[is_miss & possible_notInKeys]
 
-        if miss_notInKey.empty:
-            print("NOT POSSIBLE ! (no miss and/or no 'notInKeys')")
-        else:
-            counts_miss_NotInKey = miss_notInKey.final_taxid.value_counts()
-            counts_miss_NotInKey.name = 'counts'
+            if miss_notInKey.empty:
+                print("NOT POSSIBLE ! (no miss and/or no 'notInKeys')")
+            else:
+                counts_miss_NotInKey = miss_notInKey.final_taxid.value_counts()
+                counts_miss_NotInKey.name = 'counts'
 
-            # We remove 'superkingdom' and 'species' lvls
-            taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
-            df_miss = pd.DataFrame(counts_miss_NotInKey).reset_index()
-            tmp_df = df_miss['index'].apply(discriminate_miss, 
-                                          args=(taxo_not_bact, df_proks)) 
-            df_miss = df_miss.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
-                                 ancester_name=tmp_df[2])
-            del tmp_df
+                # We remove 'superkingdom' and 'species' lvls
+                taxo_not_bact = evaluate.want_taxo[1:][::-1][1:] 
+                df_miss = pd.DataFrame(counts_miss_NotInKey).reset_index()
+                tmp_df = df_miss['index'].apply(discriminate_miss, 
+                                              args=(taxo_not_bact, df_proks)) 
+                df_miss = df_miss.assign(status=tmp_df[0], ancester_taxid=tmp_df[1],
+                                     ancester_name=tmp_df[2])
+                del tmp_df
 
-            tot_Fmiss = sum(df_miss[df_miss.status == 'Fmiss'].counts)
+                tot_Fmiss = sum(df_miss[df_miss.status == 'Fmiss'].counts)
 
-            print('TOT NB OF Fmiss: {} | OVER {} miss_notInKey'.format(tot_Fmiss,
-                                                                   len(miss_notInKey)))
-            tot_miss = dict_stats['miss']
-            print("Total of {} miss --> {} + {} othermiss".format(tot_miss, tot_Fmiss, 
-                                                              tot_miss-tot_Fmiss))
-        print()
+                print('TOT NB OF Fmiss: {} | OVER {} miss_notInKey'.format(tot_Fmiss,
+                                                                       len(miss_notInKey)))
+                tot_miss = dict_stats['miss']
+                print("Total of {} miss --> {} + {} othermiss".format(tot_miss, tot_Fmiss, 
+                                                                  tot_miss-tot_Fmiss))
+            print()
 
 
         sum_stats, sum_counts = sum(dict_stats.values()),sum(dict_count.values())
