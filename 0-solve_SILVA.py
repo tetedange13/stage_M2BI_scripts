@@ -353,6 +353,8 @@ def stats_base(db_to_stat):
     Produce statistics of each databases, concerning the number of different
     taxonomic ranks, present sequences of our 8 expected bacteria etc.
     """
+    print("Proceeding...")
+    
     to_seqid2taxid = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/" +
                       "metage_ONT_2019/Centri_idxes/" + db_to_stat.lower() +
                       '/seqid2taxid')
@@ -726,9 +728,9 @@ if __name__ == "__main__":
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
     #                         "taxids_complete_lineage")
 
-    # stats_base('RRN')
+    stats_base('RRN')
     # detect_RRN_litige(to_dbs_RRN+'acc2taxid', to_dbs_RRN+'species_annotation')
-    transform_ONT_CSV("../2_WIMP_cDNA_run1_trimmed_toNCBIbact.sam")
+    # transform_ONT_CSV("../2_WIMP_cDNA_run1_trimmed_toNCBIbact.sam")
     # transform_ONT_CSV("../EPI2ME_16Skit_run1_500K_toNCBIbact.sam")
     # extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
 
