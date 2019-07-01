@@ -42,8 +42,8 @@ if __name__ == "__main__":
     tuple_check_fq = check.infile(ARGS["--inputFqFile"], 
                                   ('fq', 'fastq', 'fa', 'fasta', 'mfasta'))
     in_fq_path, in_fq_base, _, tail_input_fq, in_fq_ext = tuple_check_fq
-    DB_NAME = check.acceptable_str(
-            ARGS["--db"], ['rrn', 'zymo', 'newlot_zymo', 'silva', 'p_compressed'])
+    DB_NAME = check.acceptable_str(ARGS["--db"], 
+        ['rrn', 'zymo', 'newlot_zymo', 'silva', 'p_compressed', 'ncbi_16s'])
     TRIM = check.acceptable_str(ARGS["--trim"], ["porechop", "no"])
     CHIM = check.acceptable_str(ARGS["--chim"], ["yacrd", "no"])
     DETER = check.acceptable_str(ARGS["--deter"], 
@@ -150,7 +150,22 @@ if __name__ == "__main__":
     if DETER == "minimap2":
         dirOut_minimap = path_proj + "3-deter_minimap2_second/"
 
-        args_minimap2_map = "-N25 -t" + nb_threads + " -ax map-ont "
+        # Determine path to fasta of reference DB:
+        if DB_NAME == 'zymo':
+            to_ref_fa = path_proj + 'zymo_SEGO.fa' 
+        elif DB_NAME == 'rrn':
+            to_ref_fa = to_dbs + 'rrn_8feb19/operons.100.fa'
+        elif DB_NAME == 'silva':
+            to_ref_fa = (to_dbs + 'SILVA_refNR132_28feb19/' + 
+                         'SILVA_132_SSURef_Nr99_tax_silva.fasta')
+        elif DB_NAME == 'ncbi_16s':
+            to_ref_fa = to_dbs + 'NCBI_16S_18-06-2019/bacteria.16SrRNA.fna'
+        else: # Has to be Silva db
+            print("DB not correct with Minimap2..")
+            sys.exit()
+
+        args_minimap2_map = "-K300M -N25 -t" + nb_threads + " -ax map-ont "
+        # args_minimap2_map = "-N25 -t" + nb_threads + " -ax map-ont "
         print("  >> WITH PARAM:", args_minimap2_map)
 
         to_minimap_idxes = to_dbs + "minimap2_idxes/"

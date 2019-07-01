@@ -28,6 +28,74 @@ from docopt import docopt
 import src.check_args as check
 
 
+def transform_ONT_CSV(to_SAM_csv):
+    """
+    Transform the CSV produced by Epi2me to make it usable by my scripts
+    """
+    base_filename = osp.basename(to_SAM_csv).lower()
+
+    if "epi2me" in base_filename:
+        detected_tool = 'EPI2ME'
+        name_col_readID = 'read_id'
+        name_col_taxid = 'taxid'
+    elif "wimp" in base_filename:
+        detected_tool = 'WIMP'
+        name_col_readID = 'readid'
+        name_col_taxid = 'taxID'
+    else:
+        print("ERROR ! Filename must contain either 'EPI2ME' or 'WIMP'")
+        sys.exit()
+
+    print("Transforming CSV generated with {} ONT tool..".format(detected_tool))
+
+    initial_csv = pd.read_csv(to_SAM_csv, header=0, sep=',', 
+                             # usecols=['exit_status', 'taxid', 'accuracy', 
+                             #          'lca'])
+                             usecols=[name_col_readID, 'exit_status', 
+                                      name_col_taxid])
+
+    if all(initial_csv[name_col_readID].isnull()): # Actually NO readID...
+        print("NO readID actually found --> adding a pseudo-readID..")
+        nb_rows = len(initial_csv.index)
+        initial_csv[name_col_readID] = [foo[0]+str(foo[1]) 
+                                    for foo 
+                                    in zip(['read_']*nb_rows, range(nb_rows))]
+    else:
+        # If 'False' here, will need more code to group entries...
+        assert(len(initial_csv[name_col_readID]) == len(initial_csv[name_col_readID].unique()))
+        
+    initial_csv['lineage'] = initial_csv[name_col_taxid].apply(
+                                            lambda val: ';' + str(val) + ';')
+
+    def exitStatus_to_typeAlign(val):
+        """
+        /!\ This func assert that every status different from 
+        'Classif successful' can be considered as 'unmapped' 
+        """
+        if val in ('Classification successful', 'Classified'):
+        # 'Classified' for WIMP and 'Classification successful' for EPI2ME
+            return 'normal'
+        return 'unmapped'
+
+    # print("All different 'exit_status' in this file:")
+    # print(initial_csv.exit_status.value_counts())
+
+    initial_csv['type_align'] = initial_csv.exit_status.apply(
+                                                    exitStatus_to_typeAlign)
+    not_unmapped = initial_csv.type_align != 'unmapped'
+    initial_csv['nb_trashes'] = initial_csv[not_unmapped][name_col_taxid].apply(
+                                        lambda val: int(pll.is_trash(val)))
+
+    initial_csv.drop(columns=[name_col_taxid, 'exit_status'], inplace=True)
+    print("Done ! Head of the written new CSV:")
+    print(initial_csv.head())
+    inbase = osp.splitext(osp.basename(to_SAM_csv))[0]
+    initial_csv.set_index([name_col_readID]).to_csv(inbase+'.csv', 
+                                                    index_label=False)
+    # print("FINISHED ! Wrote: {}.csv".format(inbase))
+    print()
+
+
 def plot_thin_hist(list_values, title_arg="", y_log=True, xlims=(0.15, 0.3)):
     """
     Draw a thin histogram from a list of values
@@ -170,7 +238,9 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
           #" | TEST:", round(pd.np.exp(2-precision), 4))
 
     if not at_taxa_level:
-        sensitivity = round(skm.recall_score(y_true, y_pred), 4)
+        # sensitivity = round(skm.recall_score(y_true, y_pred), 4)
+        tp, fp = dict_stats_to_convert['TP'], dict_stats_to_convert['FP'] # CORRECTION !
+        sensitivity = round(tp/(tp + fp + dict_stats_to_convert['FN']), 4)
     
         print("SENSITIVITY:", sensitivity, " | ", "FNR:", 
               round(1 - sensitivity, 4)) # TPR = well/(well+unass) (or sensitivity, hit rate, recall) 
@@ -200,8 +270,11 @@ if __name__ == "__main__":
     taxfoo = evaluate.taxfoo
     # print(evaluate.taxfoo.get_taxid_rank(136841));sys.exit()
     print("Taxonomic Python module loaded !\n")
-
+   
     taxo_cutoff = check.acceptable_str(ARGS["--taxoCut"], evaluate.want_taxo)
+
+    is_ONT_tool = ('epi2me' in infile_base.lower() or 
+                   'wimp' in infile_base.lower())
     # Guess the database used:
     if "toZymo" in infile_base:
         guessed_db = 'zymo'
@@ -213,7 +286,12 @@ if __name__ == "__main__":
         guessed_db = 'silva'
     elif "toP_compressed" in infile_base:
         guessed_db = 'p_compressed'
-    elif 'toNCBIbact' in infile_base:
+    elif 'toNcbi_16s' in infile_base:
+        guessed_db = 'ncbi_16s'
+    # elif 'toNCBIbact' in infile_base:
+    #     guessed_db = 'NCBIbact'
+    elif is_ONT_tool:
+        # print("ONT tool (WIMP or EPI2ME) detected")
         guessed_db = 'NCBIbact'
     else:
         print("Unkown database !\n")
@@ -238,7 +316,7 @@ if __name__ == "__main__":
 
     # Guess the "mode":
     # Mode for handling of reads-clustering results
-    CLUST_MODE = "_to" not in infile_base 
+    CLUST_MODE = "_to" not in infile_base and not is_ONT_tool
     IS_SAM_FILE = ext_infile == ".sam"
 
     if not CLUST_MODE and not IS_SAM_FILE:
@@ -358,6 +436,12 @@ if __name__ == "__main__":
         to_seqid2taxid = to_dbs + "Centri_idxes/" + guessed_db + "/seqid2taxid"
         print()
 
+        # If ONT tool (WIMP or EPI2ME), we just need to reformat the
+        # (pseudo-) SAM input (actually a CSV) to make it usable:
+        if is_ONT_tool:
+            transform_ONT_CSV(to_infile)
+
+
         to_out_file = infile_base + ".csv"
         if not osp.isfile(to_out_file):
             # To make correspond operon number and taxid:
@@ -460,7 +544,8 @@ if __name__ == "__main__":
 
 
             print("CSV CONVERSION TIME:", t.time() - TOTO)
-            sys.exit()
+            # sys.exit()
+            my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
 
                     
         else:
@@ -571,6 +656,9 @@ if __name__ == "__main__":
 
 
         proc_chunks, chunksize = [], nb_reads_to_process//NB_THREADS
+        if nb_reads_to_process < NB_THREADS: # Case when the nb of reads is too small
+            chunksize = 1
+
         for i_proc in range(NB_THREADS):
             chunkstart = i_proc * chunksize
             # make sure to include the division remainder for the last process
@@ -589,9 +677,14 @@ if __name__ == "__main__":
 
         print('Finalizing evaluation..')
         # Add res to the main CSV:
-        my_res = pd.concat(result_chunks)
-        my_csv = pd.concat([my_csv, my_res.set_index('index')], axis='columns', 
-                           sort=False, copy=False)
+        my_res = pd.concat(result_chunks, sort=True)
+        col_to_add = ['taxid_ancester', 'final_taxid', 'res_eval', 
+                      'remark_eval']
+        my_csv = pd.concat([my_csv, my_res.set_index('index')[col_to_add]], 
+                           axis='columns', sort=True, copy=False)
+        list_col_my_res = my_res.set_index('index').columns.values.tolist()
+        list_col_my_csv = my_csv.columns.values.tolist()
+        assert(sorted(my_csv.columns) == sorted(set(list_col_my_res+list_col_my_csv)))
 
 
 
@@ -614,13 +707,14 @@ if __name__ == "__main__":
         dict_species2res = tmp_df.set_index('species')['res_eval'].to_dict()
         del tmp_df
 
-        print("TIME FOR CSV PROCESSING:", t.time() - TIME_CSV_TREATMENT)
+        print("TIME FOR CSV PROCESSING:", 
+              round(t.time() - TIME_CSV_TREATMENT, 4))
         print("NB of 'no_majo_found':", 
               sum(my_csv.final_taxid.astype(str) == 'no_majo_found'))
         print()
 
         
-        write_map = True
+        write_map = False
         if write_map:
             # OTU mapping file writting:
             # (NaN values are automatically EXCLUDED during the 'groupby')
@@ -628,8 +722,11 @@ if __name__ == "__main__":
             tool_used = 'centri'
             if IS_SAM_FILE:
                 tool_used = 'minimap'
-                if guessed_db == 'NCBIbact':
-                    tool_used = 'epi2me'
+                if is_ONT_tool:
+                    if 'wimp' in infile_base.lower():
+                        tool_used = 'wimp'
+                    else:
+                        tool_used = 'epi2me'
             run_name = '.'.join(infile_base[0:pos_name].split('_'))
             sampl_prefix = (run_name + '.' + tool_used + 
                             guessed_db.capitalize() + 

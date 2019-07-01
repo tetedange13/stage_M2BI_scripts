@@ -158,7 +158,7 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
     return Series([one_csv_index_val, taxid_ancester, int(taxid_to_eval), 
                    classif, remark_eval], 
                   index=['index', 'taxid_ancester', 'final_taxid', 'res_eval', 
-                  'remark_eval'])
+                         'remark_eval'])
 
 
 

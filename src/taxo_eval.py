@@ -145,9 +145,7 @@ def remove_minor_lca(list_of_things, cutoff_discard):
     to_return = [val for val in val_counts]
 
     if nb_majo == 0:
-        print('noMajo:', 
-              [(taxfoo.get_taxid_name(a_taxid), a_freq) 
-               for a_taxid, a_freq in freq_counts.items()])
+        print('READ noMajo !')
         return ('noMajo', None) # NO majoritary
     
     elif nb_majo == 1: # 1 unique majoritary

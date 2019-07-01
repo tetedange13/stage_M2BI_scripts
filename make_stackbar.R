@@ -17,7 +17,13 @@ library(stringr)
 
 df2 <- read.csv(data_to_load, header=T, sep=';', comment.char="#")
 
+# Check which mode (between 'reproduction of Cusco res' and 'normal') we are:
+ncol_less_one <- ncol(df2) - 1
 reprod_cusco <- F
+if (ncol_less_one%%9 == 0) {
+    reprod_cusco <- T
+}
+
 if (!reprod_cusco) {
     stopifnot(ncol(df2)%%2 == 1)
 }
@@ -28,6 +34,7 @@ writeLines("\n")
 rm_topOne = T
 if (rm_topOne) {
     df2$sens_2.topOne <- NULL ; df2$FDR_2.topOne <- NULL
+    df2$sens_4.toNCBI16S <- NULL ; df2$FDR_4.toNCBI16S <- NULL
     writeLines("Warning: removed the 'topOne' column from the input df\n")
 }
 
@@ -99,7 +106,7 @@ p <- ggplot(melted, aes(x=cat, y=value, fill=variable)) +
         geom_bar(stat='identity', position='stack') +
         facet_grid(cols=vars(run), scales="free_x", space="free_x") + # No x-tick for missing + bars same widt
         scale_fill_manual(values=my_palette[1:length(levels(melted$variable))]) + 
-        geom_text(aes(y=label_ypos, label=round(value, 2), fontface="bold"), 
+        geom_text(aes(y=label_ypos, label=round(value, 3), fontface="bold"), 
                   vjust=0.5, color="white", size=3.5) +
         theme(axis.text.x=element_text(angle=45, hjust=1, face="bold", 
                                        size=12)) +
