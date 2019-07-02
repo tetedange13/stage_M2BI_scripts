@@ -13,6 +13,7 @@ fi
 
 base_used=toZymo # To replace if using a different  
 to_metadat_file=metadat_files/$base_used'_tax_metadat.tsv'
+
 if [[ -f $to_metadat_file ]]; then 
     echo;
 else
