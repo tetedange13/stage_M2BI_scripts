@@ -1,7 +1,7 @@
 # Jan 2019: 6-months M2 (BIB) internship
 
 <img src=https://img.shields.io/badge/Python-%3E%3D3-blue.svg> 
-<img src=https://img.shields.io/badge/Runnable-Possible-green.svg>
+<img src=https://img.shields.io/badge/Runnable-YES-green.svg>
 <img src=https://img.shields.io/badge/Plateform-Linux64-lightgrey.svg>
 
 <p align="center"><img src="img/project_img.svg" width="50%"></p>  
@@ -17,6 +17,7 @@ It is composed of 4 python scripts (`0-solve_SILVA.py`, `1-assign_pipeline.py`,
 `2-prim_analysis.py`, `3-second_analysis.py`), and 2 R scripts 
 (`make_stackbar.R`, `make_radar_plot.R`). All 6 are in the base directory and
 Python modules are stored in the `src/` directory. <br>
+
 - Proper usage helps can be produced for most Python scripts, using `-h | --help` 
 option (expect for `0-solve_SILVA.py`). Example:
   ```
@@ -49,7 +50,7 @@ option (expect for `0-solve_SILVA.py`). Example:
 They can all be installed in once using the supplied `requirements.txt` file
 with pip: <br>
 `pip3 install -r requirements.txt` <br>
-(or simply `pip install restOfCmd` if your `pip` runs Python 3)
+(or simply `pip install restOfCmd`, if your `pip` runs Python 3)
 
 - The R librairies required are:
 ```
@@ -61,25 +62,31 @@ with pip: <br>
 
 <br>
 
+## Building a custom Centrifuge index
+Ecrire des trucs
+
+<br>
+
 ## WARNING - Before running any script
-> Use of the taxonomic module:
+> *Use of the taxonomic module:*
 >> Most scripts use the `ncbi_taxdump_utils.py` Python module, which needs 
 2 dump files to be initialized (`names.dmp` and `nodes.dmp`). These 2 files 
 (can be retrieved from NCBI ftp) need to be put in a `dump_files/` folder 
 (at root directory). <br>
-The hard-coded line for this parameter is at line 19 from `src/taxo_eval.py` 
+The hard-coded line for this parameter is at line 19 of the `src/taxo_eval.py` 
 module.
 
-> Modification of `.conf` files:
->> Most scripts are associated to a `.conf` file (CSV format), avoiding 
-hard-written paths. These files have to be adapted to your own configuration <br>
-The generic patterns to specify a path are precised within each corresponding 
-`.conf` file. <br>
+> *Modification of the `pipeline.conf` file:*
+>> Most scripts need to have the location of certain files to work (for example 
+of the Centrifuge index) to work. All this hard-written paths must be put into
+the `pipeline.conf` configuration file (CSV format). This file has to be 
+adapted to your own locations before running any Python script. <br>
+The generic patterns to specify a path are precised within this `.conf` file. <br>
 
 <br>
 
 ## Usage
-### Pre-processing
+### Pre-processing (usage of `0-solve_SILVA.py`)
 - The `0-solve_SILVA.py` script was dedicated to solve all issues linked to
 taxonomy. So it contains several functions, that have to be called by 
 modifying directly the 'main'. <br> 
@@ -90,53 +97,94 @@ modifying directly the 'main'. <br>
         stats_base('SILVA')
 
 ```
-And then: `./solve_SILVA`
+And then: `./0-solve_SILVA.py` (if you are in the root directory of the repository)
 
 ### Usage of `1-assign_pipeline.py`
-- This script proceeds to taxonomic determination with either Centrifuge or 
-Minimap2 against different possible databses (ZYMO, RRN, SILVA, NCBI_16S etc).
+This script proceeds to taxonomic determination with either Centrifuge or 
+Minimap2 against different possible databases (ZYMO, RRN, SILVA, NCBI_16S etc).
 It aims to simplify nomenclature of the output file (SAM for Minimap2 or 
 CSV for Centrifuge), to make output file easily manipulated by 
 `2-prim_analysis.py` script. <br>
-- List of features added within the name:
 
+List of features added within the name:
+
+- The database used, for example: 'your_fav_name*_toRrn*.\*' (with RRN database) <br>
+The name of the database given **must not contain any '\_'**. The ideal is to 
+use 'camelcase' style, something like that: 'pCompressed'.
+- If Centrifuge is used: '*centri_*your_fav_name_toRrn.csv'
+
+Each taxonomic determination produces at least a file containing assignations 
+(.SAM or .CSV) and a .log file. An output directory can be specified with the
+`-o | --outDir` option. Example of command: <br> `./1-assign_pipeline.py 
+-i my_fav_file.fq -D minimap2 -t 20 -d silva -o ../3-deter_minimap2_second/`
 
 
 ### Usage of `2-prim_analysis.py`
-- This script also Currently
-- Example of cmd:
-`2-prim_analysis.py -i /path/to/your_fav_SAM.sam -l genus`
+- This script can currently handle 4 different input files:
+
+
+1. SAM file, produced by Minimap2 (SAM produced with another program are not 
+guaranted to be handled)
+1. TSV file produced by Centrifuge
+1. CSV file produced by WIMP (ONT commercial tool)
+1. CSV file produced by EPI2ME-BLAST (ONT commercial tool) <br>
+
+The extension of the file matters here, as the treatment will be different. With
+ a SAM file, the script will write a CSV file after the SAM parsing 
+(destination given by the `-o | --outDir` option. Like that the next time, the
+script will  look directly (still in 'outDir') for this written CSV and time is saved. <br>
+Example of cmd:
+`2-prim_analysis.py -i /path/to/your_fav_file.sam -l genus -o ./my_CSVs/`
+
+To handle multi-hits, the default way is 'minor_rm+LCA', but 3 other methods 
+('topOne', 'majoVoting', 'LCA') can be used, by setting the proper line, at the
+hard-coded section around line 650 of `2-prim_analysis.py` script.
 
 
 ### Usage of `3-second_analysis.py`
-This script basically performs relative abundance calculations. It takes as 
-input a TSV, produced using several scripts from QIIME1. <br>
-Once you activated a proper Anaconda environment containing QIIME1, the classic 
+- This script basically performs **relative abundance calculations**. It takes as 
+input a TSV, produced using several scripts from [QIIME1](http://qiime.org/). <br>
+Once you activated a proper **Anaconda environment containing QIIME1**, the classic 
 pipeline to obtain such file can be run with 
-`./input_second.sh /path/to/your_fav_SAM.sam /path/ouput/directory`
-(an usage for this Bash script can be found within it)
+`./input_second.sh /path/to/your_fav_SAM.sam /path/ouput/directory` <br>
+(usage for this Bash script can be found within it). 
+
+- This script **has to be run from root directory**, to have an access to the 
+`metadat_files/` folder. This folder contains 'taxonomic metadata files', *i.e.*
+a 2-colums TSV file, associating each taxid from this 'complete_lineage' with 
+its SILVA-formatted taxonomy. <br>
+Such 'taxo_metadata' file can be generated from a seqid2taxid file, using the 
+`write_metadat_file(/path/to/seqid2taxid, name_DB)` function of the 
+`./0-solve_SILVA.py` script.
+
+### Usage of R scripts
+Mettre quelque chose
 
 <br>
 
 ## Examples of results
 - Example of stdout produced by `2-prim_analysis.py` script:
-<img src="img/eg_stdout.svg" width="50%">
+<p align="center"><img src="img/eg_stdout.svg" width="50%"></p>
 
 - Example of R plots that can be produced using R scripts:
-<img src="img/eg_metrics_stacked.svg" width="50%">
+<p align="center"><img src="img/eg_metrics_stacked.svg" width="50%"></p>
 
+<br>
 
 ## Features
-- General pipeline to trim adapters ([Porechop](https://github.com/rrwick/Porechop)), 
+- [x] General pipeline to trim adapters ([Porechop](https://github.com/rrwick/Porechop)), 
 detect chimeras ([yacrd](https://github.com/natir/yacrd)), proceed to taxonomic
 determination (either Minimap2 or Centrifuge), against different possible
 databases (ZYMO, RRN, SILVA or p_compressed, with Centrifuge only)
-- Evalutation of performances after taxonomic assignation
-- Computation of several metagenomic metrics
+- [x] Evalutation of performances after taxonomic assignation
+- [x] Computation of several metagenomic metrics
 
+<br>
 
 ## Main contributor
-- [Félix Vandermeeren](https://github.com/tetedange13)
+- [Felix Vandermeeren](https://github.com/tetedange13)
+
+<br>
 
 ## Troubleshootings
 If you detect any problems or bugs, feel free to contact me.
