@@ -4,7 +4,7 @@
 Long-reads (LR) classification pipeline
 
 Usage:
-  1-assign_pipeline.py (-i <inputFqFile>) [-d <db>] [-T <trim>] [-C <chim>] [-D <deter>] [-t <threads>]
+  1-assign_pipeline.py (-i <inputFqFile>) [-d <db>] [-T <trim>] [-C <chim>] [-D <deter>] [-t <threads>] [-o <outDir>]
   
 Options:
   -h --help                  help
@@ -14,7 +14,8 @@ Options:
   -T --trim=trimming         use Porechop to trim reads [default: no]
   -C --chim=chimera          chimera detection using yacrd [default: no]
   -D --deter=determination   taxonomic determination step [default: no]
-  -t --threads=nb_threads     number of threads for parallelisation [default: 10]
+  -t --threads=nb_threads    number of threads for parallelisation [default: 10]
+  -o --outDir=out_dir        output directory for taxo file (SAM or CSV) [default: ./]
   
 Arguments:
     trimming: 'porechop' or 'no' (default)
@@ -31,22 +32,6 @@ import pandas as pd
 import os.path as osp
 from docopt import docopt
 import src.check_args as check
-
-
-
-def check_list_config(list_config, name_param):
-    """
-    Take a list of config arguments (supposed to be of size 1)
-    """
-    if len(list_config) != 1:
-        if not list_config: # Empty list ==> NO config found for given params:
-            print("ERROR: NO config found with given args for '{}' param".format(name_param))
-        else: # len() > 1 ==> More than 1 possible config
-            print("ERROR: Several config possible for '{}' param".format(name_param))
-        print()
-        sys.exit()
-    
-    return list_config[0]
         
         
 
@@ -66,13 +51,19 @@ if __name__ == "__main__":
     DETER = check.acceptable_str(ARGS["--deter"], 
                                  ["minimap2", "centri", "no"])
     nb_threads = check.input_nb(ARGS["--threads"], "'-t number of threads'")
+    outDir = ARGS["--outDir"]
+    if not osp.isdir(outDir):
+        print("ERROR: outDir does NOT exit !") ; sys.exit()
 
     print()
     print("Tool: {} | Against: {}".format(DETER, DB_NAME))
+    print("Output directory:", outDir)
 
 
     # Extracting parameters from 'pipeline.conf' file:
     conf_csv = pd.read_csv('pipeline.conf', sep=';', comment='#')
+    # Lowercase conversion, to make it more flexible:
+    conf_csv.tool.str.lower() ; conf_csv.type_param.str.lower()
     params_csv = conf_csv[conf_csv.tool == DETER].drop(['tool'], axis='columns')
 
     cond_to_tool = params_csv.type_param == 'to_exe'
@@ -81,23 +72,17 @@ if __name__ == "__main__":
         print("ERROR: Several possible params for 'to_exe'") ; sys.exit()
 
     cond_to_ref_db = ((params_csv.type_param == 'to_ref') & 
-                      (params_csv.supplField_1 == DB_NAME))
+                      (params_csv.supplField_1.str.lower() == DB_NAME))
     list_to_ref_db = params_csv[cond_to_ref_db].supplField_2.values
-    to_ref_db = outDir = check_list_config(list_to_ref_db, 'to_ref')
+    to_ref_db = check.list_config(list_to_ref_db, 'to_ref')
     if DETER != 'centri':
         assert(osp.isfile(to_ref_db))
-
-    cond_outDir = params_csv.type_param == 'out_dir'
-    list_outDir = params_csv[cond_outDir].supplField_1.values
-    outDir = check_list_config(list_outDir, 'outDir')
-    assert(osp.isdir(outDir))
+    
 
     print()
     print("Deducted from conf file:")
     print("To reference database:", to_ref_db)
-    print("Output directory:", outDir)
-    # sys.exit()
-
+    
                 
     #Common variables/params:
     # To databases directory:
@@ -201,7 +186,7 @@ if __name__ == "__main__":
                                  DB_NAME.capitalize())
         cmd_minimap = " ".join([to_minimap2, args_minimap2_map, 
                                 to_ref_db, in_fq_path])
-        print("Core cmd ran:", cmd_minimap)
+        print() ; print("Core cmd ran:", cmd_minimap)
 
         START_MINIMAP = t.time()
         log_minimap = open(root_minimap_outfiles + ".log", 'w')
@@ -215,8 +200,8 @@ if __name__ == "__main__":
     
     elif DETER == "centri": # Classification using centrifuge:
         dirOut_centri = outDir
-        centri_outfile_root = (dirOut_centri + in_fq_base + "_to" +  
-                               DB_NAME.capitalize() )
+        centri_outfile_root = (dirOut_centri + DETER + '_' + in_fq_base + 
+                               "_to" + DB_NAME.capitalize())
         
         param_infile = ' -q '
         if in_fq_ext.lstrip('.') in ('fasta', 'fa', 'mfasta'):
@@ -225,7 +210,7 @@ if __name__ == "__main__":
                       in_fq_path + " -x " + to_ref_db +
                       " --report-file " + centri_outfile_root + "_report.tsv " + 
                       "-S " + centri_outfile_root + "_classif.tsv")
-        print("Core cmd ran:", cmd_centri)
+        print() ; print("Core cmd ran:", cmd_centri)
         centri_log_path = (dirOut_centri + in_fq_base + "_to" + 
                            DB_NAME.capitalize() + "."  + DETER + "log")
         

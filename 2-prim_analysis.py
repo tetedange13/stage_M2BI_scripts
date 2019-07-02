@@ -235,17 +235,16 @@ def compute_metrics(dict_stats_to_convert, at_taxa_level):
 
 # MAIN:
 if __name__ == "__main__":
-    # ARGUMENTS:
+    # START OF ARGUMENTS CHECKING:
     ARGS = docopt(__doc__, version='0.1')
     to_infile, infile_base, _, _, ext_infile = check.infile(ARGS["--inFile"], 
-                                                ['csv', 'tsv', 'txt', 'sam'])
+                                                ['csv', 'tsv', 'sam'])
     write_map = check.bool_type(ARGS["--writeMap"])
     outDir = ARGS["--outDir"]
     assert(osp.isdir(outDir))
 
     # Common variables:
     NB_THREADS = 10
-    to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
     dict_stats = {'unass':0, 'well':0, 'miss':0}
 
     print()
@@ -255,11 +254,33 @@ if __name__ == "__main__":
     pd = evaluate.pd
     taxfoo = evaluate.taxfoo
     print("Taxonomic Python module loaded !\n")
-   
     taxo_cutoff = check.acceptable_str(ARGS["--taxoCut"], evaluate.want_taxo)
 
-    is_ONT_tool = ('epi2me' in infile_base.lower() or 
-                   'wimp' in infile_base.lower())
+    print("PROCESSING FILE:", infile_base)
+    print("OutDir:", outDir)
+    print("Script PARALLELIZED on {} CPUs".format(NB_THREADS))
+
+    # Detect the tool used:
+    IS_SAM_FILE = ext_infile == ".sam"
+    lower_infile_base = infile_base.lower()
+
+    if IS_SAM_FILE:
+        tool_used = 'minimap2'
+    else:
+        if 'centri' in lower_infile_base:
+            tool_used = 'centri'    
+        elif 'epi2me' in lower_infile_base:
+            tool_used = 'epi2me'
+        elif 'wimp' in lower_infile_base:
+            tool_used = 'wimp'
+        else:
+            print("ERROR: With a CSV (or TSV) file, the tool used to " + 
+                  "generate it must be specified within the filename") 
+            print("(ideally like that: 'epi2me_your_fav_file.csv')")
+            print() ; sys.exit()
+    print("DETECTED TOOL:", tool_used)
+
+    is_ONT_tool = tool_used in ('epi2me', 'wimp')
     # Guess the database used:
     if "toZymo" in infile_base:
         guessed_db = 'zymo'
@@ -273,24 +294,35 @@ if __name__ == "__main__":
         guessed_db = 'p_compressed'
     elif 'toNcbi_16s' in infile_base:
         guessed_db = 'ncbi_16s'
-    # elif 'toNCBIbact' in infile_base:
-    #     guessed_db = 'NCBIbact'
     elif is_ONT_tool:
         # print("ONT tool (WIMP or EPI2ME) detected")
-        guessed_db = 'NCBIbact'
+        guessed_db = 'ONT_commercial'
     else:
         print("Unkown database !\n")
         sys.exit(2)
     pos_name = infile_base.find("_to")
-    
     print("DB GUESSED:", guessed_db)
-    print("PROCESSING FILE:", infile_base)
-    print("OutDir:", outDir)
-    print("Script PARALLELIZED on {} CPUs".format(NB_THREADS))
 
 
-    df_proks = evaluate.generate_df_zymo()
+    # Get 'seqid2taxid' path from 'pipeline.conf', in case of Minimap:
+    if IS_SAM_FILE:
+        to_conf_file = 'pipeline.conf'
+        conf_csv = pd.read_csv(to_conf_file, sep=';', comment='#')
+        # Lowercase conversion, to make it more flexible:
+        conf_csv.tool.str.lower() ; conf_csv.type_param.str.lower()
+        params_csv = conf_csv[conf_csv.tool == 'minimap2'].drop(['tool'], axis='columns')
+        cond_to_seqid2taxid = ((params_csv.type_param == 'to_seqid2taxid') & 
+                               (params_csv.supplField_1.str.lower() == guessed_db))
+        list_to_seqid2taxid = params_csv[cond_to_seqid2taxid].supplField_2.values
+        to_seqid2taxid = check.list_config(list_to_seqid2taxid, 
+                                           'to_seqid2taxid')
+        print("Path to the 'seqid2taxid' file deducted from", to_conf_file)
+
+
+    # END of args checking --> The core program can START:
+
     # Generate set of taxa names that belongs to the Zymo at the given level:
+    df_proks = evaluate.generate_df_zymo()
     set_proks = set(map(lambda a_str: a_str[3:], df_proks[taxo_cutoff]))
     # If 'species', str for genus need to be concatenated to the one for species
     if taxo_cutoff == 'species': 
@@ -303,7 +335,7 @@ if __name__ == "__main__":
     # Guess the "mode":
     # Mode for handling of reads-clustering results
     CLUST_MODE = "_to" not in infile_base and not is_ONT_tool
-    IS_SAM_FILE = ext_infile == ".sam"
+    
 
     if not CLUST_MODE and not IS_SAM_FILE:
         print("CENTRIFUGE MODE !\n")
@@ -417,9 +449,6 @@ if __name__ == "__main__":
 
     if not CLUST_MODE and IS_SAM_FILE:
         print("SAM MODE !")
-
-        # Path to the needed 'seqid2taxid' file:
-        to_seqid2taxid = to_dbs + "Centri_idxes/" + guessed_db + "/seqid2taxid"
         print()
 
         # If ONT tool (WIMP or EPI2ME), we just need to reformat the
@@ -676,9 +705,10 @@ if __name__ == "__main__":
 
         # CORRECTION of B. intestinalis:
         if guessed_db == 'rrn':
-            print("\n  >>> CORRECTION OF INTESTINALIS FOR RRN!\n")
+            print("\n  >>> CORRECTION OF INTESTINALIS FOR RRN!")
             are_intestinalis = my_csv.final_taxid == 1963032
             print("(NB of corrected reads: {})".format(sum(are_intestinalis)))
+            print()
             my_csv.loc[are_intestinalis, 'res_eval'] = 'well'
             my_csv.loc[are_intestinalis, 'final_taxid'] = 1423
             ancest_subtilis = taxfoo.get_dict_lineage_as_taxids(1423)[taxo_cutoff]
@@ -704,20 +734,19 @@ if __name__ == "__main__":
         if write_map:
             # (NaN values are automatically EXCLUDED during the 'groupby')
             grped_by_fin_taxid = my_csv.groupby(by=['final_taxid'])
-            tool_used = 'centri'
+
             if IS_SAM_FILE:
-                tool_used = 'minimap'
-                if is_ONT_tool:
-                    if 'wimp' in infile_base.lower():
-                        tool_used = 'wimp'
-                    else:
-                        tool_used = 'epi2me'
-            run_name = '.'.join(infile_base[0:pos_name].split('_'))
+                run_name = '.'.join(infile_base[0:pos_name].split('_'))
+            else:
+                index_underscore = infile_base.find('_') + 1
+                run_name = '.'.join(infile_base[index_underscore:pos_name].split('_'))
+
             sampl_prefix = (run_name + '.' + tool_used + 
                             guessed_db.capitalize() + 
                             MODE.split('_')[0].lower().capitalize())
 
-            with open(infile_base + '_' + MODE + '.map', 'w') as my_map:
+            to_out_map = osp.join(outDir, infile_base + '_' + MODE + '.map')
+            with open(to_out_map, 'w') as my_map:
                 for taxid_grp, grp in grped_by_fin_taxid:
                     readIDs_to_write = map(lambda readID: sampl_prefix + '_' + 
                                                           str(readID), 
