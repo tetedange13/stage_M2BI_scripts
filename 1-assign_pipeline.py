@@ -21,7 +21,7 @@ Arguments:
     trimming: 'porechop' or 'no' (default)
     chimera: 'yacrd' or 'no' (default)
     determination: 'minimap2', 'centri', or 'no' (default)
-    database: 'SILVA', 'rrn', 'p_compressed', 'zymo' or 'newLot_Zymo'
+    database: 'SILVA', 'rrn', 'pCompressed', 'zymo', 'ncbi16S' or 'newLot_Zymo'
 """
 
 import os
@@ -44,8 +44,16 @@ if __name__ == "__main__":
     tuple_check_fq = check.infile(ARGS["--inputFqFile"], 
                                   ('fq', 'fastq', 'fa', 'fasta', 'mfasta'))
     in_fq_path, in_fq_base, _, tail_input_fq, in_fq_ext = tuple_check_fq
-    DB_NAME = check.acceptable_str(ARGS["--db"], 
-        ['rrn', 'zymo', 'newlot_zymo', 'silva', 'p_compressed', 'ncbi_16s'])
+
+    # Check if db_name does not contain any underscore (problematic for 2-prim_analysis.py):
+    DB_NAME = ARGS["--db"]
+    if DB_NAME.find('_') != -1:
+        print("ERROR: Given database name contains (at least) an underscore")
+        camel_db = ''.join(x for x in DB_NAME.title() 
+                                   if x != '_')
+        print("(you should replace it with camelcase: {})".format(camel_db))
+        print() ; sys.exit()
+
     TRIM = check.acceptable_str(ARGS["--trim"], ["porechop", "no"])
     CHIM = check.acceptable_str(ARGS["--chim"], ["yacrd", "no"])
     DETER = check.acceptable_str(ARGS["--deter"], 
@@ -72,11 +80,18 @@ if __name__ == "__main__":
         print("ERROR: Several possible params for 'to_exe'") ; sys.exit()
 
     cond_to_ref_db = ((params_csv.type_param == 'to_ref') & 
-                      (params_csv.supplField_1.str.lower() == DB_NAME))
+                      (params_csv.supplField_1.str.lower() == DB_NAME.lower()))
     list_to_ref_db = params_csv[cond_to_ref_db].supplField_2.values
     to_ref_db = check.list_config(list_to_ref_db, 'to_ref')
     if DETER != 'centri':
-        assert(osp.isfile(to_ref_db))
+        examined_file = to_ref_db
+    else:
+        examined_file = to_ref_db + '.1.cf'
+
+    if not  osp.isfile(examined_file):
+        print("ERROR: Ref file (for DB) provided does NOT exist:", 
+              examined_file)
+        print() ; sys.exit(2)
     
 
     print()
@@ -115,7 +130,7 @@ if __name__ == "__main__":
 
     # Reads overlapping with Minimap2 followed by chim detection yacrd:
     to_minimap2 = 'minimap2' # If nothing specified, use $PATH Unix var
-    if len(list_to_tool) == 1: # NO tool path defined within conf file
+    if len(list_to_tool) == 1: # Else use at the given path
         to_minimap2 = list_to_tool[0]
         assert(osp.isfile(to_minimap2))
 
@@ -183,7 +198,7 @@ if __name__ == "__main__":
         print("  >> WITH PARAM:", args_minimap2_map)
 
         root_minimap_outfiles = (dirOut_minimap + in_fq_base + "_to" + 
-                                 DB_NAME.capitalize())
+                                 DB_NAME[0].upper() + DB_NAME[1:])
         cmd_minimap = " ".join([to_minimap2, args_minimap2_map, 
                                 to_ref_db, in_fq_path])
         print() ; print("Core cmd ran:", cmd_minimap)
@@ -201,7 +216,7 @@ if __name__ == "__main__":
     elif DETER == "centri": # Classification using centrifuge:
         dirOut_centri = outDir
         centri_outfile_root = (dirOut_centri + DETER + '_' + in_fq_base + 
-                               "_to" + DB_NAME.capitalize())
+                               "_to" + DB_NAME[0].upper() + DB_NAME[1:])
         
         param_infile = ' -q '
         if in_fq_ext.lstrip('.') in ('fasta', 'fa', 'mfasta'):
@@ -211,8 +226,7 @@ if __name__ == "__main__":
                       " --report-file " + centri_outfile_root + "_report.tsv " + 
                       "-S " + centri_outfile_root + "_classif.tsv")
         print() ; print("Core cmd ran:", cmd_centri)
-        centri_log_path = (dirOut_centri + in_fq_base + "_to" + 
-                           DB_NAME.capitalize() + "."  + DETER + "log")
+        centri_log_path = centri_outfile_root + ".log"
         
         with open(centri_log_path, 'w') as centri_log:
             sub.Popen(cmd_centri.split(),
