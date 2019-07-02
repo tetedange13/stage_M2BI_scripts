@@ -329,8 +329,9 @@ def parse_and_rewrite_names(filename, to_complete_lineage):
 
 def write_metadat_file(to_seqid2taxid, base_used):
     """
-    Given a complete lineage as the set of taxids, writes the complete lineage
-    list of taxids and the
+    Given a complete lineage as the set of taxids, writes (temporary) the 
+    complete lineage for this given set of taxids and write associating each 
+    taxid from this 'complete_lineage' with its SILVA-formatted taxonomy
     """
     write_complete_lineage(to_seqid2taxid)
 
@@ -342,7 +343,7 @@ def write_metadat_file(to_seqid2taxid, base_used):
         for line in complete_lineage:
             taxid_grp = line.rstrip('\n')
             metadat_file.write(taxid_grp + '\t' + 
-                               pll.eval.taxo_from_taxid(taxid_grp) + '\n')
+                               eval.taxo_from_taxid(taxid_grp) + '\n')
         del line
 
     os.remove('taxids_complete_lineage')
@@ -722,13 +723,13 @@ if __name__ == "__main__":
     # correct_seqid2taxid("old_seqid2taxid", "wrong2good_taxids")
 
     # write_complete_lineage("seqid2taxid")
-    # write_metadat_file(to_dbs + 'Centri_idxes/zymo/seqid2taxid', 'toZymo')
+    write_metadat_file(to_dbs + 'Centri_idxes/ncbi16S/seqid2taxid', 'toZymo')
     # parse_and_rewrite_names(to_dbs_nt + "names.dmp", 
     #                         "taxids_complete_lineage")
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
     #                         "taxids_complete_lineage")
 
-    stats_base('RRN')
+    # stats_base('RRN')
     # detect_RRN_litige(to_dbs_RRN+'acc2taxid', to_dbs_RRN+'species_annotation')
     # transform_ONT_CSV("../2_WIMP_cDNA_run1_trimmed_toNCBIbact.sam")
     # transform_ONT_CSV("../EPI2ME_16Skit_run1_500K_toNCBIbact.sam")
