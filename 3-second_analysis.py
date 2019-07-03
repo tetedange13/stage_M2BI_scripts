@@ -128,7 +128,7 @@ if __name__ == '__main__':
                                    range(int(count)))
                 ref_map_file.write(str(int(idx)) + '\t' + 
                                    '\t'.join(list_readIDs) + '\n')
-             del idx, count
+            del idx, count
         print()
 
 
