@@ -4,7 +4,7 @@
 <img src=https://img.shields.io/badge/Runnable-YES-green.svg>
 <img src=https://img.shields.io/badge/Plateform-Linux64-lightgrey.svg>
 
-<p align="center"><img src="img/project_img.svg" width="50%"></p>  
+<p align="center"><img src="examples/project_img.svg" width="50%"></p>  
 
 <br>
 
@@ -63,7 +63,15 @@ with pip: <br>
 <br>
 
 ## Building a custom Centrifuge index
-Ecrire des trucs
+Once Centrifuge is properly installed, you can **build a custom Centrifuge 
+index** with the following commands:
+
+1. Download NCBI "taxonomy" database dump files (`names.dmp` and `nodes.dmp`): <br>
+`centrifuge-download -v -o ./ taxonomy` (can be reused for all Centrifuge index built)
+1. Generate a proper `seqid2taxid` file (mapping sequence headers with their taxid),
+being sure that present taxids are consistent with downloaded NCBI taxonomy
+1. Build the custom index using both dump files and the “seqid2taxid” file:
+`entrifuge-build --conversion-table seqid2taxid --taxonomy-tree nodes.dmp --name-table names.dmp ref_database.fa outPrefix`
 
 <br>
 
@@ -85,7 +93,7 @@ The generic patterns to specify a path are precised within this `.conf` file. <b
 
 <br>
 
-## Usage
+## Usages
 ### Pre-processing (usage of `0-solve_SILVA.py`)
 - The `0-solve_SILVA.py` script was dedicated to solve all issues linked to
 taxonomy. So it contains several functions, that have to be called by 
@@ -132,8 +140,8 @@ guaranted to be handled)
 The extension of the file matters here, as the treatment will be different. With
  a SAM file, the script will write a CSV file after the SAM parsing 
 (destination given by the `-o | --outDir` option. Like that the next time, the
-script will  look directly (still in 'outDir') for this written CSV and time is saved. <br>
-Example of cmd:
+script will  look directly (still in 'outDir') for this written CSV and time 
+is saved. <br> Example of cmd:
 `2-prim_analysis.py -i /path/to/your_fav_file.sam -l genus -o ./my_CSVs/`
 
 To handle multi-hits, the default way is 'minor_rm+LCA', but 3 other methods 
@@ -157,17 +165,36 @@ Such 'taxo_metadata' file can be generated from a seqid2taxid file, using the
 `write_metadat_file(/path/to/seqid2taxid, name_DB)` function of the 
 `./0-solve_SILVA.py` script.
 
-### Usage of R scripts
-Mettre quelque chose
+### Usage of `R` scripts
+Both scripts can be run giving a CSV as command-line argument: 
+`./make_stackbar.R well_formatted_file.csv`. Examples of input csv can be found 
+in `examples/`:
+
+- Files `cusco2018_abund_vs-different-DB.csv` and 
+`sampl500K_Minimap2_to-different-DB_SPECIES.csv` for `make_stackbar.R`)
+- File `16Skit_run1_sampl500K_Minimap2_raw-vs-filt_toZymo_SPECIES.csv` for 
+`make_radar_plot.R`
+
+For `make_stackbar.R`, lines can represent either runs (*e.g.* '16Skit_run2' and 
+'16Skit_run2') or conditions ('toMockDB'). The most important is the header, 
+which has to be formatted as follow: "species-Name_runID" ('abundances mode') or 
+"metric1_cond1" ('metrics mode'). The key point here being the underscore, that 
+**must be present only once in each column name**, to properly separate each 'category'. <br>
+In 'metrics mode', this script accepts 2 different metrics (normally FDR and recall).
+
+The script `make_radar_plot.R` has been coded on the same principle, except that 
+it aims to generate a 'radar plot', displaying a unique value (*e.g.* a relative abundance) 
+for each species present (in our case: 8 bacteria from Zymo mock community + 
+'misassigned' category) in columns and for several runs/conditions (lines).
 
 <br>
 
 ## Examples of results
 - Example of stdout produced by `2-prim_analysis.py` script:
-<p align="center"><img src="img/eg_stdout.svg" width="50%"></p>
+<p align="center"><img src="examples/eg_stdout.svg" width="50%"></p>
 
 - Example of R plots that can be produced using R scripts:
-<p align="center"><img src="img/eg_metrics_stacked.svg" width="50%"></p>
+<p align="center"><img src="examples/eg_metrics_stacked.svg" width="50%"></p>
 
 <br>
 
