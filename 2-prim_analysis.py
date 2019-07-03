@@ -174,7 +174,7 @@ def format_CSV_for_script(to_SAM_csv):
     grped_csv['type_align'] = grped_csv.lineage.apply(type_align_f)
     tmp_df = pd.DataFrame({'type_align':['unmapped'] * nb_unass}, 
                           index=initial_csv[are_unass].readID)
-    return pd.concat([grped_csv.set_index('readID'), tmp_df], sort=True)
+    return pd.concat([grped_csv.set_index('readID', drop=True), tmp_df], sort=True)
 
 
 def ali_to_dict(align_obj):
@@ -606,6 +606,7 @@ if __name__ == "__main__":
                        axis='columns', sort=True, copy=False)
     list_col_my_res = my_res.set_index('index').columns.values.tolist()
     list_col_my_csv = my_csv.columns.values.tolist()
+    print(sorted(my_csv.columns), sorted(set(list_col_my_res+list_col_my_csv)))
     assert(sorted(my_csv.columns) == sorted(set(list_col_my_res+list_col_my_csv)))
 
 
