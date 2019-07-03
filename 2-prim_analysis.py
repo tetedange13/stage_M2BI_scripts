@@ -30,114 +30,19 @@ from docopt import docopt
 import src.check_args as check
 
 
-def test__centri():
+def type_align_f(lin_val_from_df):
     """
+    Tiny function used to determine the type of alignment, based on the 'lineage'
+    value (string like: ';123;' or ';123s456;')
     """
-    print("Gethering multi-hits from Centrifuge's CSV..")
-    dict_gethered = {}
-    with open(to_infile, 'r') as in_tab_file:
-        in_tab_file.readline() # Skip header
-        set_ignored_hits = set()
-        set_all_readIDs = set()
-
-        for line in in_tab_file:
-            idx_first_tab = line.find('\t')
-            readID = line[0:idx_first_tab] 
-            rest = line[(idx_first_tab+1): ].rstrip('\n')
-            set_all_readIDs.add(readID)
-
-            # /!\ We ignore hits with taxid=0 and ref_name='no rank':
-            if rest.split('\t')[0:2] == ["no rank", "0"]:
-                set_ignored_hits.add(readID + '\t' + rest)
-            else:
-                if readID not in dict_gethered.keys():
-                    dict_gethered[readID] = [rest]
-                else:
-                    dict_gethered[readID].append(rest)
-
-    # Be sure to don't exclude any read:
-    assert(len(set_all_readIDs) == len(dict_gethered.keys()))
-    print("NB OF IGNORED HITS ('no rank' + taxid=0):", 
-          len(set_ignored_hits))
-    print()
-
-    print("Formatting for further taxo eval..")
-    readIDs = dict_gethered.keys()
-    dict_problems = {'2071623':'37482', '585494':'573', '595593':'656366',
-                     '697046':'645', '1870930':'1812935', 
-                     '2036817':'106590', '134962':'53431', 
-                     '1662457':'553814', '1662456':'553814',
-                     '1662458':'553814', '1834200':'1796646',
-                     '1902251':'745377', '913102':'59277'}
-    tmp_dict = {}
-
-    for readID in readIDs:
-        if len(dict_gethered[readID]) > 1:
-            list_taxids = list(map(lambda a_str: a_str.split('\t')[1], 
-                               dict_gethered[readID]))
-
-            # Solve problematic taxids:
-            list_taxids = [dict_problems.get(taxid, taxid) for taxid in list_taxids]
-            if '0' in list_taxids:
-                print(readID);sys.exit()
-
-            nb_trashes = sum(map(pll.is_trash, list_taxids))
-            # In the case of multiple hits, all hits have the same score, 
-            # 2ndBestScore etc, except for the hitLength, that can differ
-            (_, _, score, _, _, queryLength, 
-             numMatches) = dict_gethered[readID][0].split('\t')
-            list_hitLength = list(map(lambda a_str: a_str.split('\t')[4], 
-                                  dict_gethered[readID]))
-            if len(set(list_taxids)) == 1:
-                type_align = 'second_uniq'
-            else:
-                type_align = 'second_plural'
-
-            secondBestScore = pd.np.nan
-
-        else:
-            tupl = dict_gethered[readID][0].split('\t')
-            ( ref_name, taxID, score, secondBestScore,
-              pre_hitLength, queryLength, numMatches ) = tupl
-
-            if taxID in dict_problems.keys():
-                taxID = dict_problems[taxID]
-
-            if ref_name == 'unclassified':
-                type_align = 'unmapped'
-                (lineage, score, secondBestScore, hitLength, queryLength,
-                 numMatches, nb_trashes) = [pd.np.nan] * 7
-            else:
-                type_align = 'normal'    
-                list_hitLength = [pre_hitLength]
-                nb_trashes = int(pll.is_trash(taxID))
-            list_taxids = [taxID]
-
-
-        # /!\ CAREFUL WITH THE ORDER HERE:
-        if type_align != 'unmapped':
-            score = int(score)
-            hitLength = (';' + 'm'.join(list_hitLength) + ';')
-            lineage = (';' + 's'.join(str(taxid) 
-                                      for taxid in sorted(list_taxids)) + 
-                       ';')
-        tmp_dict[readID] = [type_align, lineage, nb_trashes, score, 
-                            secondBestScore, hitLength, queryLength, 
-                            numMatches]
-    del readID
-
-    dict_gethered.clear()
-
-    # /!\ CAREFUL WITH THE ORDER HERE:
-    my_csv = pd.DataFrame.from_dict(tmp_dict, orient='index',
-                                    columns=['type_align', 'lineage', 
-                                             'nb_trashes', 'score', 
-                                             'secondBestScore', 'hitLength', 
-                                             'queryLength', 'numMatches'])
-    tmp_dict.clear()
-
-    print(my_csv.type_align.value_counts())
-    print()
+    splitted_lineage = lin_val_from_df.strip(';').split('s')
+    if len(splitted_lineage) == 1: # NORMAL
+        return 'normal'
+    else:
+        set_lin = set(splitted_lineage)
+        if len(set_lin) == 1: # SEVERAL IDENTIC TAXIDS
+            return 'second_uniq'
+        return 'second_plural'
 
 
 def transform_ONT_CSV(to_SAM_csv):
@@ -160,11 +65,8 @@ def transform_ONT_CSV(to_SAM_csv):
         sep_used = '\t'
         col_to_take = ['readID', 'seqID', 'taxID', 'score', 'hitLength', 
                        'queryLength']
-        # print("ERROR ! Filename must contain either 'EPI2ME' or 'WIMP'")
-        # sys.exit()
 
-    print("Transforming CSV generated with {} ONT tool..".format(detected_tool))
-
+    print("Transforming CSV generated with {} ONT tool !".format(detected_tool))
     initial_csv = pd.read_csv(to_SAM_csv, header=0, sep=sep_used, 
                               usecols=col_to_take)
 
@@ -172,9 +74,8 @@ def transform_ONT_CSV(to_SAM_csv):
     col_conv = {'readid':'readID', 'read_id':'readID', 'taxid':'taxID'}
     initial_csv.columns = [col_conv.get(x, x) for x in initial_csv.columns]
 
-    # print(initial_csv.head());sys.exit()
-
-    if all(initial_csv.readID.isnull()): # Actually NO readID... (no need to group)
+    # Actually NO readID... :
+    if all(initial_csv.readID.isnull()):
         print("NO readID actually found --> adding a pseudo-readID..")
         nb_rows = len(initial_csv.index)
         initial_csv.readID = [foo[0]+str(foo[1]) 
@@ -187,10 +88,58 @@ def transform_ONT_CSV(to_SAM_csv):
                            (initial_csv.taxID == 0))
         print("NB OF IGNORED HITS ('no rank' + taxid=0):", sum(are_odd_entries))
         initial_csv = initial_csv[-are_odd_entries] # We filter them out
-        
+
         # Then we treat 'unmapped':
         are_unass = initial_csv.seqID == 'unclassified'
         are_assigned = -are_unass
+
+        # Then we apply a filter to limit the number of FP:
+        # (In the case of multiple hits, all hits have the same score, 
+        # 2ndBestScore etc, except for the hitLength, that can differ)
+        cutoff_centriScore, cutoff_centriHitLen = 300, 50
+        # cutoff_centriScore, cutoff_centriHitLen = 0, 0
+        centri_filt = initial_csv.score > cutoff_centriScore
+        centri_filt = (centri_filt & 
+                       (initial_csv.hitLength > cutoff_centriHitLen))
+
+        # KEY STEP:
+        initial_csv = initial_csv[centri_filt]
+
+        # def get_min_hitLength(hitLength_val):
+        #     if type(hitLength_val) == str:
+        #         list_val = hitLength_val.strip(';').split('m')
+        #         if len(list_val) > 1:
+        #             return min(map(float, list_val))
+        #         return float(list_val[0])
+        #     return hitLength_val
+
+        # my_csv['min_hitLength'] = my_csv.hitLength.apply(get_min_hitLength)
+        # centri_filter = my_csv.score > cutoff_on_centriScore
+        # centri_filter = (centri_filter & 
+        #                  (my_csv.min_hitLength > cutoff_on_centriHitLength))
+
+        nb_nan = sum(are_unass)
+        nb_pass_before_filter = sum(are_assigned)
+        pass_after_filter = are_assigned & centri_filt
+        nb_removed = nb_pass_before_filter-sum(pass_after_filter)
+        assert(len(pass_after_filter) == sum(pass_after_filter)+nb_removed+nb_nan)
+
+        nb_not_nan = len(pass_after_filter)-nb_nan
+        if not cutoff_centriScore:
+            print("   >> CENTRI NOT FILTERED")
+        else:
+            print("   >> CUTOFF CENTRI SCORE:", cutoff_centriScore, 
+                  " | ", "CUTOFF CENTRI HitLength:", 
+                  cutoff_centriHitLen)
+        print("NB OF UNCLASSIF:", nb_nan, 
+              ' | NB_NOT_NaNs:', nb_not_nan)
+        print("NB REMOVED (NaNs excepted):", nb_removed, 
+              "~ {}% removed".format(int(nb_removed/nb_not_nan*100)))
+
+        # Index has changed, so we need to redefine these variables:
+        are_unass = initial_csv.seqID == 'unclassified'
+        are_assigned = -are_unass
+    
     else:
         # Treat 'unmapped' here too:
         # /!\ This func assert that every status different from 
@@ -198,70 +147,44 @@ def transform_ONT_CSV(to_SAM_csv):
         are_assigned = initial_csv.exit_status == success
         are_unass = -are_assigned
 
-    print("NB UNASS:", sum(are_unass))
+    nb_unass = sum(are_unass)
+    if detected_tool != 'Centrifuge':
+        print("NB UNASS:", nb_unass)
 
-    # only assigned reads are taken for the next part
-    initial_csv[are_unass]["type_align"] = ["unmapped"] * sum(are_unass) 
-    print(initial_csv.type_align.head())
+    print("Formatting properly (for further taxo eval)..")
+    # Only assigned reads are taken for the next part:
     initial_assigned = initial_csv[are_assigned]
-
-
-    sys.exit()
+    
     # if len(initial_csv[name_col_readID]) == len(initial_csv[name_col_readID].unique()):
-    # NO NEED TO GROUP
 
-    def apply_test(group_of_lines):
-        if len(group_of_lines) > 1:
-            list_taxid_target = group_of_lines.taxID.tolist()
-            
-            
-            
-        else:
-            list_taxid_target = group_of_lines.taxID
+    # Solve problematic taxids (mostly with 'p_compressed'):
+    dict_problems = {'2071623':'37482', '585494':'573', '595593':'656366',
+                     '697046':'645', '1870930':'1812935', 
+                     '2036817':'106590', '134962':'53431', 
+                     '1662457':'553814', '1662456':'553814',
+                     '1662458':'553814', '1834200':'1796646',
+                     '1902251':'745377', '913102':'59277'}
+    initial_csv.loc[are_assigned , 'taxID'] = initial_assigned.taxID.apply(
+                                lambda val: dict_problems.get(str(val), val))
 
-        lineage = (';' + 's'.join(str(taxid) for taxid 
-                                             in list_taxid_target) + ';')
-        return Series([one_csv_index_val, lineage, nb_trash], 
-                          index=['index', 'lineage', 'nb_trashes'])
+    # Tiny functions used to obtain needed values (str lineage and nb trashes):
+    lineage_f = lambda a_arr: (';' + 's'.join(
+                                        str(taxid) for taxid in a_arr) + ';')
+    nb_trash_f = lambda a_arr: sum(map(pll.is_trash, a_arr))
 
-    grouped_csv = initial_csv.groupby(by='readID')
+    # Group by read and determine needed values (use of Numpy to speed it up):
+    keys, values = initial_csv[['readID', 'taxID']][are_assigned].sort_values('readID').values.T
+    ukeys, index = pd.np.unique(keys, return_index=True)
+    arrays = pd.np.split(values, index[1:])
+    grped_csv = pd.DataFrame({'readID':ukeys, 
+                              'lineage':[lineage_f(a) for a in arrays],
+                              'nb_trashes':[nb_trash_f(a) for a in arrays]})
 
-    print(grouped_csv.apply(apply_test).head())
-    sys.exit()
-
-    # for read_id, group in grouped_csv:
-    #     assert(len(group) == 1)
-        # print(len(group))
-    sys.exit()    
-    initial_csv['lineage'] = initial_csv.taxID.apply(
-                                            lambda val: ';' + str(val) + ';')
-
-    def exitStatus_to_typeAlign(val):
-        """
-        
-        """
-        if val in ():
-        # '' for WIMP and 'Classification successful' for EPI2ME
-            return 'normal'
-        return 'unmapped'
-
-    # print("All different 'exit_status' in this file:")
-    # print(initial_csv.exit_status.value_counts())
-
-    initial_csv['type_align'] = initial_csv.exit_status.apply(
-                                                    exitStatus_to_typeAlign)
-    not_unmapped = initial_csv.type_align != 'unmapped'
-    initial_csv['nb_trashes'] = initial_csv[not_unmapped][name_col_taxid].apply(
-                                        lambda val: int(pll.is_trash(val)))
-
-    initial_csv.drop(columns=[name_col_taxid, 'exit_status'], inplace=True)
-    print("Done ! Head of the written new CSV:")
-    print(initial_csv.head())
-    inbase = osp.splitext(osp.basename(to_SAM_csv))[0]
-    initial_csv.set_index([name_col_readID]).to_csv(inbase+'.csv', 
-                                                    index_label=False)
-    # print("FINISHED ! Wrote: {}.csv".format(inbase))
-    print()
+    # Add 'type_align' column and 'unmapped' reads:
+    grped_csv['type_align'] = grped_csv.lineage.apply(type_align_f)
+    tmp_df = pd.DataFrame({'type_align':['unmapped'] * nb_unass}, 
+                          index=initial_csv[are_unass].readID)
+    return pd.concat([grped_csv.set_index('readID'), tmp_df], sort=True)
 
 
 def ali_to_dict(align_obj):
@@ -297,7 +220,7 @@ def ali_to_dict(align_obj):
 
 def str_from_res_conv(dict_res_conv):
     """
-    Generate a string (ready to write) from an evaluation result
+    Generate a string (ready to write) from a SAM to CSV conversion
     """
     to_extract = ['readID', 'type_align', 'lineage']
     # ,type_align,lineage,nb_trashes,mapq,len_align," +
@@ -458,7 +381,7 @@ if __name__ == "__main__":
         print() ; sys.exit(2)
     else:
         # /!\ This step is problematic if DB_name contains an underscore:
-        guessed_db = infile_base[(pos_name+3):].split('_')[0].lower()
+        guessed_db = infile_base[(pos_name+3):].split('_')[0]
 
     print("DB GUESSED:", guessed_db) ; print()
 
@@ -490,20 +413,17 @@ if __name__ == "__main__":
         set_proks = set([tupl[0] + " " + tupl[1] 
                          for tupl in zip(list_g, list_s)])
 
-
-    # Guess the "mode":
-    # Mode for handling of reads-clustering results
-    CLUST_MODE = "_to" not in infile_base and not is_ONT_tool
     
-
+    # We start the parsing, according to the type of input file:
     if not IS_SAM_FILE:
         # If CSV file as input (Centrifuge or ONT tools WIMP/EPI2ME), we just 
         # need to reformat this CSV to make it usable:
-        transform_ONT_CSV(to_infile)
-        
-        print("CENTRIFUGE MODE !\n")
-
-
+        formatting_start = t.time()
+        my_csv = transform_ONT_CSV(to_infile)
+        print(my_csv.type_align.value_counts())
+        print()
+        print("ELAPSED TIME FOR FORMATTING:", t.time()-formatting_start)
+        # sys.exit()
 
 
     else: # IS_SAM_FILE == TRUE:
@@ -512,7 +432,7 @@ if __name__ == "__main__":
 
         to_out_file = osp.join(outDir, infile_base + ".csv")
         if not osp.isfile(to_out_file):
-            # To make correspond operon number and taxid:
+            # To make correspond sequence id (fasta header) and taxid:
             dict_seqid2taxid = {}
             with open(to_seqid2taxid, 'r') as seqid2taxid_file:
                 for line in seqid2taxid_file:
@@ -610,7 +530,6 @@ if __name__ == "__main__":
                 out_file.seek(0)
                 out_file.write(header_for_file + '\n' + content)
 
-
             print("CSV CONVERSION TIME:", t.time() - TOTO)
             # sys.exit()
             my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
@@ -624,7 +543,7 @@ if __name__ == "__main__":
 
 
 
-    if not CLUST_MODE:
+    if True:
         # To print the distribution of the number of equivalent hits by reads:
         print_distrib = False
         if print_distrib:
@@ -641,42 +560,7 @@ if __name__ == "__main__":
         with_lineage = ((my_csv.type_align != 'unmapped') & 
                         (my_csv.type_align != 'only_suppl'))
 
-        # FILTER CENTRIFUGE results on score and/or hitLength
-        if not IS_SAM_FILE:
-            cutoff_on_centriScore, cutoff_on_centriHitLength = 300, 50
-
-            def get_min_hitLength(hitLength_val):
-                if type(hitLength_val) == str:
-                    list_val = hitLength_val.strip(';').split('m')
-                    if len(list_val) > 1:
-                        return min(map(float, list_val))
-                    return float(list_val[0])
-                return hitLength_val
-
-            my_csv['min_hitLength'] = my_csv.hitLength.apply(get_min_hitLength)
-            centri_filter = my_csv.score > cutoff_on_centriScore
-            centri_filter = (centri_filter & 
-                             (my_csv.min_hitLength > cutoff_on_centriHitLength))
-            nb_nan = sum(-with_lineage)
-            nb_pass_before_filter = sum(with_lineage)
-            with_lineage = with_lineage & centri_filter
-            nb_removed = nb_pass_before_filter-sum(with_lineage)
-            assert(len(with_lineage) == sum(with_lineage)+nb_removed +nb_nan)
-
-            nb_not_nan = len(with_lineage)-nb_nan
-            if not cutoff_on_centriScore:
-                print("   >> CENTRI NOT FILTERED")
-            else:
-                print("   >> CUTOFF CENTRI SCORE:", cutoff_on_centriScore, 
-                      " | ", "CUTOFF CENTRI HitLength:", 
-                      cutoff_on_centriHitLength)
-            print("NB OF UNCLASSIF:", nb_nan, 
-                  ' | NB_NOT_NaNs:', nb_not_nan)
-            print("NB REMOVED (NaNs excepted):", nb_removed, 
-                  "~ {}% removed".format(int(nb_removed/nb_not_nan*100)))
-
-
-        # Filter only reads that are taxonomically evaluable (mapped):
+        # Filter only reads that are taxonomically evaluable (assigned):
         my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage].reset_index()
         nb_reads_to_process = len(my_csv_to_pll.index)
 
@@ -757,7 +641,7 @@ if __name__ == "__main__":
 
 
         # CORRECTION of B. intestinalis:
-        if guessed_db == 'rrn':
+        if guessed_db.lower() == 'rrn':
             print("\n  >>> CORRECTION OF INTESTINALIS FOR RRN!")
             are_intestinalis = my_csv.final_taxid == 1963032
             print("(NB of corrected reads: {})".format(sum(are_intestinalis)))
@@ -795,8 +679,8 @@ if __name__ == "__main__":
                 run_name = '.'.join(infile_base[index_underscore:pos_name].split('_'))
 
             sampl_prefix = (run_name + '.' + tool_used + 
-                            guessed_db.capitalize() + 
-                            MODE.split('_')[0].lower().capitalize())
+                            guessed_db[0].upper() + guessed_db[1:] + 
+                            MODE.split('_')[0].capitalize())
 
             to_out_map = osp.join(outDir, infile_base + '_' + MODE + '.map')
             with open(to_out_map, 'w') as my_map:
@@ -890,25 +774,23 @@ if __name__ == "__main__":
         # AT THE TAXA LEVEL:
         print("RESULTS AT THE TAXA LEVEL:")
         list_miss = [val for val in dict_species2res 
-                   if dict_species2res[val] == 'miss']
+                                 if dict_species2res[val] == 'miss']
         list_well = [val for val in dict_species2res 
-                   if dict_species2res[val] == 'well']
-        nb_pos_to_find = len(set_proks)
-        recall_at_taxa_level = len(list_well)/nb_pos_to_find
-        print("TO FIND:", list_well)
-        print("NB_miss", len(list_miss), " | NB_well", len(list_well))
-        dict_stats_sp_level = {'well':len(list_well),
-                               'miss':len(list_miss)}
-        prec_at_taxa_level = round(
-                        len(list_well) / (len(list_well)+len(list_miss)), 4)
-        FDR_at_taxa_level = round(1-prec_at_taxa_level, 4)
-        print("PRECISION:  {} | FDR: {}".format(prec_at_taxa_level, 
-                                                FDR_at_taxa_level))
-        print("SENSITIVITY:", recall_at_taxa_level, " | ", "FNR:",
-              1 - recall_at_taxa_level)
+                                 if dict_species2res[val] == 'well']
+        nb_positive_to_find = len(set_proks)
+        nb_well_taxa, nb_miss_taxa = len(list_well), len(list_miss)
+
+        sens_taxa_lvl = len(list_well)/nb_positive_to_find
+        print("TO FIND:", sorted(set_proks))
+        print("NB_MISS", nb_miss_taxa, " | NB_WELL", nb_well_taxa)
+        dict_stats_sp_level = {'well':nb_well_taxa,
+                               'miss':nb_miss_taxa}
+        prec_taxa_lvl = round(nb_well_taxa / (nb_well_taxa + nb_miss_taxa), 4)
+        FDR_taxa_lvl = round(1 - prec_taxa_lvl, 4)
+        print("PRECISION:  {} | FDR: {}".format(prec_taxa_lvl, FDR_taxa_lvl))
+        print("SENSITIVITY:", sens_taxa_lvl, " | ", "FNR:", 1-sens_taxa_lvl)
         calc_f1 = lambda tupl: round((2*tupl[0]*tupl[1])/(tupl[0]+tupl[1]), 4)
-        print("F1-SCORE:", 
-              calc_f1((prec_at_taxa_level, recall_at_taxa_level)))
+        print("F1-SCORE:", calc_f1((prec_taxa_lvl, sens_taxa_lvl)))
         print()
 
 
@@ -949,13 +831,7 @@ if __name__ == "__main__":
         print(sorted(dict_stats.items()))
         dict_to_convert = dict_stats
 
-
-    if CLUST_MODE:
-        print('PAS LAAAAAA');sys.exit()
        
-
-
-
     # COMPUTE METRICS:
     compute_metrics(dict_to_convert, False)
     print()
