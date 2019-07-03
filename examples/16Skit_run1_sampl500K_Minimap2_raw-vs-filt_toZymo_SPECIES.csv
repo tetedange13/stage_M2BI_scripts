@@ -1,0 +1,6 @@
+Zymo_sp;misassigned;s__subtilis;s__faecalis;s__coli;s__fermentum;s__monocytogenes;s__aeruginosa;s__enterica;s__aureus
+expected (oldLot);0.0;0.157;0.104;0.1;0.188;0.159;0.046;0.113;0.133
+RAW;0.0;0.206;0.123;0.096;0.094;0.16;0.001;0.142;0.179
+ALN_LEN_FILT;0.0;0.207;0.123;0.095;0.094;0.16;0.001;0.141;0.179
+LEN_FILT;0.0;0.207;0.123;0.095;0.094;0.16;0.001;0.141;0.179
+
