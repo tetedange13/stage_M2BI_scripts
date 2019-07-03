@@ -31,7 +31,7 @@ print(df2)
 writeLines("\n")
 
 # Remove 'topOne' cols for report:
-rm_topOne = T
+rm_topOne = F
 if (rm_topOne) {
     df2$sens_2.topOne <- NULL ; df2$FDR_2.topOne <- NULL
     # df2$sens_4.toNCBI16S <- NULL ; df2$FDR_4.toNCBI16S <- NULL

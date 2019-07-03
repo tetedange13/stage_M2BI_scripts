@@ -124,7 +124,7 @@ use 'camelcase' style, something like that: 'pCompressed'.
 Each taxonomic determination produces at least a file containing assignations 
 (.SAM or .CSV) and a .log file. An output directory can be specified with the
 `-o | --outDir` option. Example of command: <br> `./1-assign_pipeline.py 
--i my_fav_file.fq -D minimap2 -t 20 -d silva -o ../3-deter_minimap2_second/`
+-i my_fav_file.fq -P minimap2 -t 20 -d silva -o ../3-deter_minimap2_second/`
 
 
 ### Usage of `2-prim_analysis.py`
