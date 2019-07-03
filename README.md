@@ -144,9 +144,15 @@ script will  look directly (still in 'outDir') for this written CSV and time
 is saved. <br> Example of cmd:
 `2-prim_analysis.py -i /path/to/your_fav_file.sam -l genus -o ./my_CSVs/`
 
-To handle multi-hits, the default way is 'minor_rm+LCA', but 3 other methods 
+To handle multi-hits, the **default way is 'minor_rm+LCA'**, but 3 other methods 
 ('topOne', 'majoVoting', 'LCA') can be used, by setting the proper line, at the
-hard-coded section around line 650 of `2-prim_analysis.py` script.
+hard-coded section around line 650 of `2-prim_analysis.py` script. <br>
+The same way, you can apply a **different filter on Centrifuge results**,
+rather based on a ratio 'hitLength/queryLength' > 40% (currently, the cutoff on 
+'hitLength' is fixed at 50, as described in Centrifuge's paper). The concerned  
+section of code is around line 100 of the script. <br>
+This script also performs a **'correction' with RRN database for *B. intestinalis*** 
+(converted into *B. subtillis*), around line .
 
 
 ### Usage of `3-second_analysis.py`
