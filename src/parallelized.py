@@ -43,10 +43,7 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
     readID, align_list = tupl_dict_item
     nb_alignments_for_readID = len(align_list)
     representative = align_list[0]
-    returned_dict = {'readID' : readID,
-                     'mapq' : representative["mapq"], 
-                     'ratio_len' : representative["ratio_len"],
-                     'len_align' : representative["len_align"]}
+    returned_dict = {'readID' : readID}
     
     if nb_alignments_for_readID > 1: # Secondary alignment
         # Get rid of supplementaries:
@@ -61,15 +58,6 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
             max_AS = max(map(lambda dico: dico["AS"], no_suppl_list))
             only_equiv_list = [dico for dico in no_suppl_list 
                                if dico["AS"] == max_AS]
-
-            if representative["has_SA"]: # 1st alignment is a supplementary
-                max_mapq = max([align_obj["mapq"] for align_obj in align_list 
-                                if align_obj["has_SA"]])
-                returned_dict['mapq'] = max_mapq
-                for align_not_suppl in only_equiv_list:
-                    # Need to propagate max value of MAPQ to all secondaries:
-                    align_not_suppl["mapq"] = max_mapq
-                del align_not_suppl
 
         else:
             only_equiv_list = no_suppl_list
@@ -86,7 +74,6 @@ def SAM_to_CSV(tupl_dict_item, conv_seqid2taxid):
         
     else: # Normal case
         type_alignment = 'normal' # i.e. not secondary
-        # de = representative["de"]
         current_taxid = conv_seqid2taxid[representative["ref_name"]]
         list_taxid_target = [current_taxid]
         nb_trashes = int(is_trash(current_taxid))
@@ -162,17 +149,7 @@ def eval_taxo(one_line_from_csv, set_levels_prok, taxonomic_cutoff, mode):
 
 
 
-# FROM CLUST_TAX.PY:
-def rk_search(tupl_enum_taxids, query_rank_func):
-    """
-    To perform parallel local taxonomic rank search
-    """
-    idx, taxid = tupl_enum_taxids
-    #print(taxid)
-    
-    return ( "clust_" + str(idx), query_rank_func(int(taxid)) )
-    
-
+# FOR 0-SOLVE_SILVA.PY:
 def taxid_mapping(chunk, set_accession):
     """
     `chunk` will be a list of CSV rows all with the same name column
