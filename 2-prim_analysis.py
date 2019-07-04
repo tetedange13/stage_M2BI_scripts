@@ -2,15 +2,16 @@
 
 
 """
-Mapping statistics computation
+Taxonomic determination statistics computation
 
 Usage:
-  2-prim_analysis.py (-i <inFile>) (-l <taxoCut>) [-w <writeMap>] [-o <outDir>]
+  2-prim_analysis.py (-i <inFile>) (-c <confFile>) (-l <taxoCut>) [-w <writeMap>] [-o <outDir>]
   
 Options:
   -h --help                  help
   --version                  version of the script
   -i --inFile=input_file     input file
+  -c --confFile=conf_file    path to the configuration file
   -l --taxoCut=taxo_cutoff   cutoff for the taxonomic level
   -w --writeMap=write_map    flag to either write (reads-vs-OTUs) mapping file [default: F] 
   -o --outDir=out_dir        /path/to/output_csv [default: ./]
@@ -30,16 +31,22 @@ from docopt import docopt
 import src.check_args as check
 
 
+# Tiny functions used to obtain needed values (str lineage and nb trashes):
+# lineage_f = lambda a_arr: ('-' + 's'.join(
+#                                         str(taxid) for taxid in a_arr) + '-')
+
+nb_trash_f = lambda a_arr: sum(map(pll.is_trash, a_arr))
+
+
 def type_align_f(lin_val_from_df):
     """
     Tiny function used to determine the type of alignment, based on the 'lineage'
     value (string like: ';123;' or ';123s456;')
     """
-    splitted_lineage = lin_val_from_df.strip(';').split('s')
-    if len(splitted_lineage) == 1: # NORMAL
+    if len(lin_val_from_df) == 1: # NORMAL
         return 'normal'
     else:
-        set_lin = set(splitted_lineage)
+        set_lin = set(lin_val_from_df)
         if len(set_lin) == 1: # SEVERAL IDENTIC TAXIDS
             return 'second_uniq'
         return 'second_plural'
@@ -153,81 +160,70 @@ def format_CSV_for_script(to_SAM_csv):
                      '2036817':'106590', '134962':'53431', 
                      '1662457':'553814', '1662456':'553814',
                      '1662458':'553814', '1834200':'1796646',
-                     '1902251':'745377', '913102':'59277'}
+                     '1902251':'745377', '913102':'59277', '319938':'288004'}
     initial_csv.loc[are_assigned , 'taxID'] = initial_assigned.taxID.apply(
                                 lambda val: dict_problems.get(str(val), val))
 
-    # Tiny functions used to obtain needed values (str lineage and nb trashes):
-    lineage_f = lambda a_arr: (';' + 's'.join(
-                                        str(taxid) for taxid in a_arr) + ';')
-    nb_trash_f = lambda a_arr: sum(map(pll.is_trash, a_arr))
 
     # Group by read and determine needed values (use of Numpy to speed it up):
     keys, values = initial_csv[['readID', 'taxID']][are_assigned].sort_values('readID').values.T
     ukeys, index = pd.np.unique(keys, return_index=True)
     arrays = pd.np.split(values, index[1:])
     grped_csv = pd.DataFrame({'readID':ukeys, 
-                              'lineage':[lineage_f(a) for a in arrays],
-                              'nb_trashes':[nb_trash_f(a) for a in arrays]})
+                              'list_taxids':[list(a) for a in arrays]})
+                              # 'nb_trashes':[nb_trash_f(a) for a in arrays]}
 
     # Add 'type_align' column and 'unmapped' reads:
-    grped_csv['type_align'] = grped_csv.lineage.apply(type_align_f)
-    tmp_df = pd.DataFrame({'type_align':['unmapped'] * nb_unass}, 
-                          index=initial_csv[are_unass].readID)
-    return pd.concat([grped_csv.set_index('readID', drop=True), tmp_df], sort=True)
+    unmap_df = pd.DataFrame({'type_align':['unmapped'] * nb_unass}, 
+                            index=initial_csv[are_unass].readID)
+    print(pd.concat([grped_csv.set_index('readID'), unmap_df], sort=True).columns)
+    return pd.concat([grped_csv.set_index('readID'), unmap_df], sort=True)
 
 
-def ali_to_dict(align_obj):
-    """
-    Takes an alignment instance and return a dict containing the needed
-    attributes (only)
+# def ali_to_dict(align_obj):
+#     """
+#     Takes an alignment instance and return a dict containing the needed
+#     attributes (only)
 
-    With infer_read_length() method, hard-clipped bases are included in the 
-    counting
-    infer_query_length() method does NOT include them
-    """
-    if align_obj.is_unmapped:
-        return 'unmapped'
+#     With infer_read_length() method, hard-clipped bases are included in the 
+#     counting
+#     infer_query_length() method does NOT include them
+#     """
+#     if align_obj.is_unmapped:
+#         return 'unmapped'
 
-    ratio_len = align_obj.infer_query_length()/align_obj.infer_read_length()
-    assert(ratio_len <= 1)
+#     # ratio_len = align_obj.infer_query_length()/align_obj.infer_read_length()
+#     # assert(ratio_len <= 1)
 
-    to_return = {"mapq":align_obj.mapping_quality,
-                 "ref_name": align_obj.reference_name,
-                 "len_align":align_obj.infer_query_length(),
-                 "ratio_len":ratio_len,
-                 "is_suppl":align_obj.is_supplementary,
-                 "has_SA": align_obj.has_tag("SA"),
-                 "is_second":align_obj.is_secondary}
+#     to_return = {"ref_name": align_obj.reference_name,
+#                  "has_SA": align_obj.has_tag("SA")}
                  
-    if align_obj.has_tag('de'):
-        to_return['de'] = round(align_obj.get_tag("de"), 4)
-    if align_obj.has_tag('AS'):
-        to_return['AS'] = align_obj.get_tag("AS")
+#     if align_obj.has_tag('AS'):
+#         to_return['AS'] = align_obj.get_tag("AS")
 
-    return to_return
+#     return to_return
 
 
-def str_from_res_conv(dict_res_conv):
-    """
-    Generate a string (ready to write) from a SAM to CSV conversion
-    """
-    to_extract = ['readID', 'type_align', 'lineage']
-    # ,type_align,lineage,nb_trashes,mapq,len_align," +
-                #                "ratio_len,de\n")
-    rest = [(a_key, dict_res_conv[a_key]) for a_key in dict_res_conv 
-                                          if a_key not in to_extract]
-    to_return = [dict_res_conv['readID'], dict_res_conv['type_align']]
+# def str_from_res_conv(dict_res_conv):
+#     """
+#     Generate a string (ready to write) from a SAM to CSV conversion
+#     """
+#     to_extract = ['readID', 'type_align', 'lineage']
+#     # ,type_align,lineage,nb_trashes,mapq,len_align," +
+#                 #                "ratio_len,de\n")
+#     rest = [(a_key, dict_res_conv[a_key]) for a_key in dict_res_conv 
+#                                           if a_key not in to_extract]
+#     to_return = [dict_res_conv['readID'], dict_res_conv['type_align']]
      
-    if ( dict_res_conv['type_align'] == 'ratio' or 
-         dict_res_conv['type_align'] == 'pb_lca' ):
-        lineage_to_write = dict_res_conv['lineage']
-    else:
-        lineage_to_write = dict_res_conv['lineage']
+#     if ( dict_res_conv['type_align'] == 'ratio' or 
+#          dict_res_conv['type_align'] == 'pb_lca' ):
+#         lineage_to_write = dict_res_conv['lineage']
+#     else:
+#         lineage_to_write = dict_res_conv['lineage']
 
-    return (",".join(to_return + [lineage_to_write] + 
-                     [str(x[1]) for x in rest]), 
-            to_extract[1:] + list(map(lambda x: x[0], rest)))
+#     return (",".join(to_return + [lineage_to_write] + 
+#                      [str(x[1]) for x in rest]), 
+#             to_extract[1:] + list(map(lambda x: x[0], rest)))
 
 
 def get_ancester_name(arg_taxid_ancest):
@@ -302,7 +298,11 @@ if __name__ == "__main__":
                                                 ['csv', 'tsv', 'sam'])
     write_map = check.bool_type(ARGS["--writeMap"])
     outDir = ARGS["--outDir"]
-    assert(osp.isdir(outDir))
+    if not osp.isdir(outDir):
+        print("ERROR OutDir: {} does NOT exit !\n".format(outDir)) ; sys.exit()
+    to_conf_file = ARGS["--confFile"]
+    if not osp.isfile(to_conf_file):
+        print("ERROR ConFile: {} does NOT exit !\n".format(conf_file)) ; sys.exit()
 
     # Common variables:
     NB_THREADS = 10
@@ -310,7 +310,8 @@ if __name__ == "__main__":
 
     print()
     print("Loading taxonomic Python module...")
-    import src.parallelized as pll
+    # import src.parallelized as pll
+    import src.FEparallelized as pll
     evaluate = pll.eval
     pd = evaluate.pd
     taxfoo = evaluate.taxfoo
@@ -360,7 +361,6 @@ if __name__ == "__main__":
 
     # Get 'seqid2taxid' path from 'pipeline.conf', in case of Minimap:
     if IS_SAM_FILE:
-        to_conf_file = 'pipeline.conf'
         conf_csv = pd.read_csv(to_conf_file, sep=';', comment='#')
         # Lowercase conversion, to make it more flexible:
         conf_csv.tool.str.lower() ; conf_csv.type_param.str.lower()
@@ -398,7 +398,7 @@ if __name__ == "__main__":
 
 
     else: # IS_SAM_FILE == TRUE:
-        print("SAM (Minimap2's only) MODE !")
+        print("SAM MODE ! (Minimap2's only)")
         print()
 
         to_out_file = osp.join(outDir, infile_base + ".csv")
@@ -417,8 +417,9 @@ if __name__ == "__main__":
             input_samfile = pys.AlignmentFile(to_infile, "r")
 
             dict_gethered = {}
-            list_suppl = []
+            set_suppl = set() # Information of each suppl entry LOST HERE (set instead of list)
             list_unmapped = []
+            list_mapped = []
 
             for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
                 if (idx+1) % 500000 == 0:
@@ -428,95 +429,97 @@ if __name__ == "__main__":
 
                 if alignment.is_unmapped:
                     list_unmapped.append(query_name)
-
-                else:
-                    dict_align = ali_to_dict(alignment)
-                    if query_name in dict_gethered.keys():
-                        dict_gethered[query_name].append(dict_align)
-                    else:
-                        dict_gethered[query_name] = [dict_align]
-                       
+                elif alignment.has_tag('SA'): # rm supplementary entries
+                    set_suppl.add(query_name)
+                else: # Mapped, 'with secondaries' or 'single' alignments
+                    assert(alignment.has_tag('AS')) # Caracteristic of Minimap's SAM
+                    list_mapped.append((query_name, alignment.reference_name, 
+                                        alignment.get_tag('AS')))                     
             input_samfile.close()
             del idx, alignment
 
-            print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING))
-            print()
-            assert(len(list_unmapped) == len(set(list_unmapped)))
+            print("SAM PARSING TIME:", str(t.time() - START_SAM_PARSING)) ; print()
+            assert(len(list_unmapped) == len(set(list_unmapped)))           
+            mapped_csv = pd.DataFrame(list_mapped, 
+                                      columns=['readID', 'ref_name', 
+                                               'SM_score'])
 
-
-            # Extract relevant SAM info towards a CSV file:
-            TOTO = t.time()
+            # Group by read and determine needed values (use of Numpy to speed it up):
             print("Converting SAM into CSV...")
-            conv_partial = partial(pll.SAM_to_CSV, 
-                                   conv_seqid2taxid=dict_seqid2taxid)
+            grping_time = t.time()
 
+            keys, ref_names, SM_scores = mapped_csv.sort_values('readID').values.T
+            ukeys, index = pd.np.unique(keys, return_index=True)
+            arr_ref_names = pd.np.split(ref_names, index[1:])
+            arr_SM_scores = pd.np.split(SM_scores, index[1:])
 
-            # VERSION 2 (use much less RAM but a bit slower):
-            dict_light = (tupl for tupl in dict_gethered.items())
-            nb_reads_to_process = len(dict_gethered.keys())
-            proc_chunks, chunksize = [], nb_reads_to_process//NB_THREADS
+            # Filter out not equivalent (same SM_score) hits [KEY STEP]:
+            list_wheres = [pd.np.where(a == pd.np.amax(a)) for a in arr_SM_scores]
+            grped_csv = pd.DataFrame({'readID':ukeys, 
+                                      'ref_names0':[a[list_wheres[i]] 
+                                                   for i, a 
+                                                   in enumerate(arr_ref_names)]})
 
-            while True:
-                my_slice = list(islice(dict_light, chunksize))
-                if my_slice:
-                    proc_chunks.append(my_slice)
-                else:
-                    break
-            assert(sum(map(len, proc_chunks)) == nb_reads_to_process)
+            # Create separate df for 'unmapped' and 'only_suppl':
+            # Add 'only_suppl' and 'unmapped':
+            only_suppl_readIDs = [r for r in set_suppl if r not in grped_csv.readID.tolist()]
+            unmap_df = pd.DataFrame({'type_align':['unmapped']*len(list_unmapped) + 
+                                                  ['only_suppl']*len(only_suppl_readIDs)}, 
+                                    index=list_unmapped+only_suppl_readIDs)
 
-            def process_chunk(chunk, partial_fct):
-                return list(map(partial_fct, chunk))
+            # Save this grouped CSV to save time:
+            if True:
+                sep = '&&' # Cuz writting step's problematic if a ref_name contains '&&':
+                assert(all(map(lambda ref_name: sep not in ref_name, ref_names)))
 
-            results = []
-            with mp.Pool(NB_THREADS) as my_pool:
-                proc_results = [my_pool.apply_async(process_chunk, 
-                                                    args=(chunk, conv_partial))
-                                for chunk in proc_chunks]
-                # Magic line that if basically a one-liner of 'extend' method:
-                results = [r for r_ext in proc_results for r in r_ext.get()]
-
-            print("PLL PROCESS FINISHED !")
-            dict_gethered.clear()
-
-
-            # Write outfile:
-            with open(to_out_file, 'w') as out_file:
-                # Write mapped reads:
-                for dict_res_conv in results:
-                    to_write, list_header = str_from_res_conv(dict_res_conv)
-                    if len(dict_res_conv) > 3:
-                        header_for_file = ','.join([''] + list_header)
-                    out_file.write(to_write + '\n')
-                del dict_res_conv
-
-                # Write unmapped reads:
-                if list_unmapped:
-                    for unmapped_read in list_unmapped:
-                        out_file.write(unmapped_read + ',unmapped,no\n')
-                    del unmapped_read
-
-            # Add header to the outfile:
-            with open(to_out_file, 'r+') as out_file:
-                content = out_file.read()
-                out_file.seek(0)
-                out_file.write(header_for_file + '\n' + content)
-
-            print("CSV CONVERSION TIME:", t.time() - TOTO)
-            # sys.exit()
-            my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
+                grped_csv['ref_names'] = grped_csv.ref_names0.apply(
+                                            lambda a_list: '&&'.join(a_list))
+                my_csv = pd.concat([grped_csv.set_index('readID'), unmap_df], 
+                                   sort=True)
+                # my_csv[['ref_names', 'type_align']].to_csv(to_out_file, 
+                #                                             sep=',', 
+                #                                             header=['ref_names', 
+                #                                                     'type_align'])
+                print("Wrote:", to_out_file)
+                my_csv.drop('ref_names0', inplace=True, axis='columns')
+                # sys.exit()
+            
+            print("CSV CONVERSION TIME:", round(t.time()-grping_time, 4))
+            print()
 
                     
         else:
             print("FOUND CSV FILE:", to_out_file)
             print("Loading CSV file...")
             my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
+
             print("CSV loaded !")
+
+
+    # ONCE A PROPER CSV HAS BEEN CREATED/READ:
+    assert(my_csv.index.is_unique)
+    with_lineage = ((my_csv.type_align != 'unmapped') & 
+                    (my_csv.type_align != 'only_suppl'))
+
+    if IS_SAM_FILE: # Need to modify a bit the read CSV
+        assert(sorted(my_csv.columns) == ['ref_names', 'type_align'])
+        # From here, all following steps depend on the 'seqid2taxid' file given:
+        my_csv['list_taxids'] = my_csv[with_lineage].ref_names.apply(
+                                  lambda str_names: [dict_seqid2taxid[x] 
+                                                     for x 
+                                                     in str_names.split('&&')])
+        my_csv.drop('ref_names', inplace=True, axis='columns')
+
+
+    # Back to common part:
+    my_csv['type_align'] = my_csv[with_lineage].list_taxids.apply(type_align_f) 
+    my_csv['nb_trashes'] = my_csv[with_lineage].list_taxids.apply(nb_trash_f)
 
 
     # To print the distribution of the number of equivalent hits by reads:
     print_distrib = False
     if print_distrib:
-        test = my_csv.lineage.dropna()
+        test = my_csv.list_taxids.dropna()
         felix = pd.Series(map(lambda lin: len(lin.split('s')), test))
         bins_val = felix.max()
         felix.plot.hist(bins=bins_val, log=True)
@@ -526,11 +529,8 @@ if __name__ == "__main__":
 
 
     TIME_CSV_TREATMENT = t.time()
-    with_lineage = ((my_csv.type_align != 'unmapped') & 
-                    (my_csv.type_align != 'only_suppl'))
-
     # Filter only reads that are taxonomically evaluable (assigned):
-    my_csv_to_pll = my_csv[['lineage', 'type_align']][with_lineage].reset_index()
+    my_csv_to_pll = my_csv[['list_taxids', 'type_align']][with_lineage].reset_index()
     nb_reads_to_process = len(my_csv_to_pll.index)
 
 
@@ -565,8 +565,7 @@ if __name__ == "__main__":
     print("PROCESSING {} reads from CSV to EVALUATE TAXO..".format(
                                                     nb_reads_to_process))
     print("(Tot nb of entries: {})".format(
-                            sum(map(lambda lin: len(lin.split('s')), 
-                                    my_csv_to_pll.lineage.values))))
+                            sum(map(len, my_csv_to_pll.list_taxids.values))))
 
     partial_eval = partial(pll.eval_taxo, set_levels_prok=set_proks,
                                           taxonomic_cutoff=taxo_cutoff,
@@ -593,8 +592,8 @@ if __name__ == "__main__":
                                               args=(chunk, partial_eval))
                         for chunk in proc_chunks]
         result_chunks = [r.get() for r in proc_results]
-    print("PLL PROCESS FINISHED !")
 
+    print("PLL PROCESS FINISHED !")
     del my_csv_to_pll
 
     print('Finalizing evaluation..')
@@ -602,12 +601,13 @@ if __name__ == "__main__":
     my_res = pd.concat(result_chunks, sort=True)
     col_to_add = ['taxid_ancester', 'final_taxid', 'res_eval', 
                   'remark_eval']
-    my_csv = pd.concat([my_csv, my_res.set_index('index')[col_to_add]], 
+    col_my_csv_before = my_csv.columns.values.tolist()
+    my_res.set_index('readID', inplace=True)
+    my_csv = pd.concat([my_csv, my_res[col_to_add]], 
                        axis='columns', sort=True, copy=False)
-    list_col_my_res = my_res.set_index('index').columns.values.tolist()
-    list_col_my_csv = my_csv.columns.values.tolist()
-    print(sorted(my_csv.columns), sorted(set(list_col_my_res+list_col_my_csv)))
-    assert(sorted(my_csv.columns) == sorted(set(list_col_my_res+list_col_my_csv)))
+    list_col_my_res = my_res.columns.values.tolist()
+    assert(sorted(my_csv.columns) == sorted(set(list_col_my_res +
+                                                        col_my_csv_before)))
 
 
     # CORRECTION of B. intestinalis:
@@ -785,7 +785,7 @@ if __name__ == "__main__":
                                  ancester_name=tmp_df[2])
             del tmp_df
 
-            tot_Fmiss = sum(df_miss[df_miss.status == 'Fmiss'].counts)
+            tot_FFP = sum(df_miss[df_miss.status == 'Fmiss'].counts)
 
             print('TOT NB OF Fmiss: {} | OVER {} miss_notInKey'.format(tot_Fmiss,
                                                                    len(miss_notInKey)))
