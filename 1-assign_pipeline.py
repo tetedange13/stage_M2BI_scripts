@@ -4,18 +4,20 @@
 Long-reads (LR) classification pipeline
 
 Usage:
-  1-assign_pipeline.py (-i <inputFqFile>) (-P <prog>) (-d <db>) [-t <threads>] [-o <outDir>]
+  1-assign_pipeline.py (-i <inputFqFile>) (-c <confFile>) (-P <prog>) (-d <db>) [-t <threads>] [-o <outDir>]
   
 Options:
   -h --help                  help
   --version                  version of the script
   -i --inputFqFile=input_fq  input fastq file
+  -c --confFile=conf_file    path to the configuration file
   -d --db=database           name of the database to use
   -P --prog=program          tool to use for taxonomic determination step
   -t --threads=nb_threads    number of threads for parallelisation [default: 10]
   -o --outDir=out_dir        output directory for taxo file (SAM or CSV) [default: ./]
   
 Arguments:
+    configuration file: e.g. '/projets/metage_ONT_2019/stage_M2BI_scripts/pipeline.conf'
     determination: 'minimap2', 'centri'
     database: 'SILVA', 'rrn', 'pCompressed', 'zymo', 'ncbi16S' or 'newLot_Zymo'
 """
@@ -54,7 +56,10 @@ if __name__ == "__main__":
     nb_threads = check.input_nb(ARGS["--threads"], "'-t number of threads'")
     outDir = ARGS["--outDir"]
     if not osp.isdir(outDir):
-        print("ERROR: outDir does NOT exit !") ; sys.exit()
+        print("ERROR OutDir: {} does NOT exit !\n".format(outDir)) ; sys.exit()
+    to_conf_file = ARGS['--confFile']
+    if not osp.isfile(to_conf_file):
+        print("ERROR ConFile: {} does NOT exit !\n".format(conf_file)) ; sys.exit()
 
     print()
     print("Tool: {} | Against: {}".format(PROG, DB_NAME))
@@ -62,7 +67,7 @@ if __name__ == "__main__":
 
 
     # Extracting parameters from 'pipeline.conf' file:
-    conf_csv = pd.read_csv('pipeline.conf', sep=';', comment='#')
+    conf_csv = pd.read_csv(to_conf_file, sep=';', comment='#')
     # Lowercase conversion, to make it more flexible:
     conf_csv.tool.str.lower() ; conf_csv.type_param.str.lower()
     params_csv = conf_csv[conf_csv.tool == PROG].drop(['tool'], axis='columns')
@@ -103,7 +108,8 @@ if __name__ == "__main__":
     
     if PROG == "minimap2":
         dirOut_minimap = outDir
-        args_minimap2_map = "-K300M -N25 -t" + nb_threads + " -ax map-ont"
+        # The 'MD' tag is requiered for some tools
+        args_minimap2_map = "-K300M -N25 --MD -t" + nb_threads + " -ax map-ont"
         # args_minimap2_map = "-N25 -t" + nb_threads + " -ax map-ont "
         print("  >> WITH PARAM:", args_minimap2_map)
 

@@ -21,17 +21,19 @@ Python modules are stored in the `src/` directory. <br>
 - Proper usage helps can be produced for most Python scripts, using `-h | --help` 
 option (expect for `0-solve_SILVA.py`). Example:
   ```
-    Mapping statistics computation
+    Taxonomic determination statistics computation
 
     Usage:
-      2-prim_analysis.py (-i <inFile>) (-l <taxoCut>) [-w <writeMap>]
+      2-prim_analysis.py (-i <inFile>) (-c <confFile>) (-l <taxoCut>) [-w <writeMap>] [-o <outDir>]
       
     Options:
       -h --help                  help
       --version                  version of the script
       -i --inFile=input_file     input file
+      -c --confFile_conf_file    path to the configuration file
       -l --taxoCut=taxo_cutoff   cutoff for the taxonomic level
-      -w --writeMap=write_map    Flag to either write (reads-vs-OTUs) mapping file [default: F] 
+      -w --writeMap=write_map    flag to either write (reads-vs-OTUs) mapping file [default: F] 
+      -o --outDir=out_dir        /path/to/output_csv [default: ./]
   ```
 
 <br>
@@ -124,7 +126,7 @@ use 'camelcase' style, something like that: 'pCompressed'.
 Each taxonomic determination produces at least a file containing assignations 
 (.SAM or .CSV) and a .log file. An output directory can be specified with the
 `-o | --outDir` option. Example of command: <br> `./1-assign_pipeline.py 
--i my_fav_file.fq -P minimap2 -t 20 -d silva -o ../3-deter_minimap2_second/`
+-i my_fav_file.fq -c pipeline.conf -P minimap2 -t 20 -d silva -o ../3-deter_minimap2_second/`
 
 
 ### Usage of `2-prim_analysis.py`
@@ -141,8 +143,8 @@ The extension of the file matters here, as the treatment will be different. With
  a SAM file, the script will write a CSV file after the SAM parsing 
 (destination given by the `-o | --outDir` option. Like that the next time, the
 script will  look directly (still in 'outDir') for this written CSV and time 
-is saved. <br> Example of cmd:
-`2-prim_analysis.py -i /path/to/your_fav_file.sam -l genus -o ./my_CSVs/`
+is saved. This CSV is minimalist enough (only reads with a list  their target seq<br> Example of cmd:
+`2-prim_analysis.py -i /path/to/your_fav_file.sam -c pipeline.conf -l genus -o ./my_CSVs/`
 
 To handle multi-hits, the **default way is 'minor_rm+LCA'**, but 3 other methods 
 ('topOne', 'majoVoting', 'LCA') can be used, by setting the proper line, at the
