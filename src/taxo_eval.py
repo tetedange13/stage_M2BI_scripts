@@ -153,7 +153,7 @@ def remove_minor_lca(list_of_things, cutoff_discard):
     to_return = [val for val in val_counts]
 
     if nb_majo == 0:
-        print('READ noMajo !')
+        # print('READ noMajo !')
         return ('noMajo', None) # NO majoritary
     
     elif nb_majo == 1: # 1 unique majoritary

@@ -143,7 +143,8 @@ The extension of the file matters here, as the treatment will be different. With
  a SAM file, the script will write a CSV file after the SAM parsing 
 (destination given by the `-o | --outDir` option. Like that the next time, the
 script will  look directly (still in 'outDir') for this written CSV and time 
-is saved. This CSV is minimalist enough (only reads with a list  their target seq<br> Example of cmd:
+is saved. This CSV is minimalist enough (only reads with a list  their target 
+seqID , from mapping<br> Example of cmd:
 `2-prim_analysis.py -i /path/to/your_fav_file.sam -c pipeline.conf -l genus -o ./my_CSVs/`
 
 To handle multi-hits, the **default way is 'minor_rm+LCA'**, but 3 other methods 
@@ -154,7 +155,7 @@ rather based on a ratio 'hitLength/queryLength' > 40% (currently, the cutoff on
 'hitLength' is fixed at 50, as described in Centrifuge's paper). The concerned  
 section of code is around line 100 of the script. <br>
 This script also performs a **'correction' with RRN database for *B. intestinalis*** 
-(converted into *B. subtillis*), around line .
+(converted into *B. subtillis*), around line 460.
 
 
 ### Usage of `3-second_analysis.py`

@@ -61,21 +61,21 @@ def format_CSV_for_script(to_SAM_csv):
 
     if "epi2me" in base_filename:
         detected_tool = 'EPI2ME'
-        col_to_take = ['read_id', 'taxid', 'exit_status']
+        dict_types = {'read_id':str, 'taxid':int, 'exit_status':str}
         success = 'Classification successful'
     elif "wimp" in base_filename:
         detected_tool = 'WIMP'
-        col_to_take = ['readid', 'taxID', 'exit_status']
+        dict_types = {'readid':str, 'taxID':int, 'exit_status':str}
         success = 'Classified'
     else: # Centrifuge-generated CSV
         detected_tool = 'Centrifuge'
         sep_used = '\t'
-        col_to_take = ['readID', 'seqID', 'taxID', 'score', 'hitLength', 
-                       'queryLength']
+        dict_types = {'readID':str, 'seqID':str, 'taxID':int, 'score':int, 
+                      'hitLength':int, 'queryLength':int}
 
     print("Transforming CSV generated with {} ONT tool !".format(detected_tool))
     initial_csv = pd.read_csv(to_SAM_csv, header=0, sep=sep_used, 
-                              usecols=col_to_take)
+                              usecols=dict_types.keys())
 
     # Homogeneization of columns names:
     col_conv = {'readid':'readID', 'read_id':'readID', 'taxid':'taxID'}
@@ -107,12 +107,16 @@ def format_CSV_for_script(to_SAM_csv):
         # cutoff_centriScore, cutoff_centriHitLen = 0, 0
         cutoff_centriRatioHitLen = 0.4 # 40%, as in Centrifuge's MANUAL (website)
 
+        print("   >> CUTOFF CENTRI SCORE:", cutoff_centriScore)
+                  
         centri_filt = initial_csv.score > cutoff_centriScore
         fixed_cutoff_hitLen = True
         if fixed_cutoff_hitLen:
+            print(" | ", "CUTOFF CENTRI HitLength:", cutoff_centriHitLen)
             centri_filt = (centri_filt & 
                            (initial_csv.hitLength > cutoff_centriHitLen))
         else:
+            print(" | ", "CUTOFF CENTRI HitLength:", cutoff_centriRatioHitLen)
             ratio_hitLen = initial_csv.hitLength/initial_csv.queryLength
             centri_filt = (centri_filt &
                            (ratio_hitLen > 0.4))
@@ -125,12 +129,7 @@ def format_CSV_for_script(to_SAM_csv):
         nb_removed = nb_pass_before_filter-sum(pass_after_filter)
         assert(len(pass_after_filter) == sum(pass_after_filter)+nb_removed+nb_nan)
 
-        nb_not_nan = len(pass_after_filter)-nb_nan
-        if not cutoff_centriScore:
-            print("   >> CENTRI NOT FILTERED")
-        else:
-            print("   >> CUTOFF CENTRI SCORE:", cutoff_centriScore, 
-                  " | ", "CUTOFF CENTRI HitLength:", cutoff_centriHitLen)
+        nb_not_nan = len(pass_after_filter)-nb_nan          
         print("NB OF UNCLASSIF:", nb_nan, ' | NB_NOT_NaNs:', nb_not_nan)
         print("NB REMOVED (NaNs excepted):", nb_removed, 
               "~ {}% removed".format(int(nb_removed/nb_not_nan*100)))
@@ -176,54 +175,7 @@ def format_CSV_for_script(to_SAM_csv):
     # Add 'type_align' column and 'unmapped' reads:
     unmap_df = pd.DataFrame({'type_align':['unmapped'] * nb_unass}, 
                             index=initial_csv[are_unass].readID)
-    print(pd.concat([grped_csv.set_index('readID'), unmap_df], sort=True).columns)
     return pd.concat([grped_csv.set_index('readID'), unmap_df], sort=True)
-
-
-# def ali_to_dict(align_obj):
-#     """
-#     Takes an alignment instance and return a dict containing the needed
-#     attributes (only)
-
-#     With infer_read_length() method, hard-clipped bases are included in the 
-#     counting
-#     infer_query_length() method does NOT include them
-#     """
-#     if align_obj.is_unmapped:
-#         return 'unmapped'
-
-#     # ratio_len = align_obj.infer_query_length()/align_obj.infer_read_length()
-#     # assert(ratio_len <= 1)
-
-#     to_return = {"ref_name": align_obj.reference_name,
-#                  "has_SA": align_obj.has_tag("SA")}
-                 
-#     if align_obj.has_tag('AS'):
-#         to_return['AS'] = align_obj.get_tag("AS")
-
-#     return to_return
-
-
-# def str_from_res_conv(dict_res_conv):
-#     """
-#     Generate a string (ready to write) from a SAM to CSV conversion
-#     """
-#     to_extract = ['readID', 'type_align', 'lineage']
-#     # ,type_align,lineage,nb_trashes,mapq,len_align," +
-#                 #                "ratio_len,de\n")
-#     rest = [(a_key, dict_res_conv[a_key]) for a_key in dict_res_conv 
-#                                           if a_key not in to_extract]
-#     to_return = [dict_res_conv['readID'], dict_res_conv['type_align']]
-     
-#     if ( dict_res_conv['type_align'] == 'ratio' or 
-#          dict_res_conv['type_align'] == 'pb_lca' ):
-#         lineage_to_write = dict_res_conv['lineage']
-#     else:
-#         lineage_to_write = dict_res_conv['lineage']
-
-#     return (",".join(to_return + [lineage_to_write] + 
-#                      [str(x[1]) for x in rest]), 
-#             to_extract[1:] + list(map(lambda x: x[0], rest)))
 
 
 def get_ancester_name(arg_taxid_ancest):
@@ -302,16 +254,16 @@ if __name__ == "__main__":
         print("ERROR OutDir: {} does NOT exit !\n".format(outDir)) ; sys.exit()
     to_conf_file = ARGS["--confFile"]
     if not osp.isfile(to_conf_file):
-        print("ERROR ConFile: {} does NOT exit !\n".format(conf_file)) ; sys.exit()
+        print("ERROR ConFile: {} does NOT exit !\n".format(to_conf_file)) ; sys.exit()
 
     # Common variables:
-    NB_THREADS = 10
+    NB_THREADS = 15
     dict_stats = {'unass':0, 'well':0, 'miss':0}
 
     print()
     print("Loading taxonomic Python module...")
     # import src.parallelized as pll
-    import src.FEparallelized as pll
+    import src.parallelized as pll
     evaluate = pll.eval
     pd = evaluate.pd
     taxfoo = evaluate.taxfoo
@@ -370,7 +322,7 @@ if __name__ == "__main__":
         list_to_seqid2taxid = params_csv[cond_to_seqid2taxid].supplField_2.values
         to_seqid2taxid = check.list_config(list_to_seqid2taxid, 
                                            'to_seqid2taxid')
-        print("Path to the 'seqid2taxid' file deducted from", to_conf_file)
+        print("Path to the 'seqid2taxid' file deducted from:", to_conf_file)
 
 
     # END of args checking --> The core program can START:
@@ -394,7 +346,6 @@ if __name__ == "__main__":
         my_csv = format_CSV_for_script(to_infile)
         print("ELAPSED TIME FOR FORMATTING:", 
               round(t.time()-formatting_start, 4))
-        # sys.exit()
 
 
     else: # IS_SAM_FILE == TRUE:
@@ -403,14 +354,6 @@ if __name__ == "__main__":
 
         to_out_file = osp.join(outDir, infile_base + ".csv")
         if not osp.isfile(to_out_file):
-            # To make correspond sequence id (fasta header) and taxid:
-            dict_seqid2taxid = {}
-            with open(to_seqid2taxid, 'r') as seqid2taxid_file:
-                for line in seqid2taxid_file:
-                    splitted_line = line.rstrip('\n').split('\t')
-                    dict_seqid2taxid[splitted_line[0]] = int(splitted_line[1])
-                del line
-
             # Start SAM file parsing:
             print("Extracting information from SAM file...")
             START_SAM_PARSING = t.time()
@@ -423,7 +366,7 @@ if __name__ == "__main__":
 
             for idx, alignment in enumerate(input_samfile.fetch(until_eof=True)):
                 if (idx+1) % 500000 == 0:
-                    print("500 000 SAM entries elapsed !")
+                    print("500,000 SAM entries elapsed !")
                 query_name = alignment.query_name
                 assert(query_name) # Different from ""
 
@@ -458,7 +401,8 @@ if __name__ == "__main__":
             grped_csv = pd.DataFrame({'readID':ukeys, 
                                       'ref_names0':[a[list_wheres[i]] 
                                                    for i, a 
-                                                   in enumerate(arr_ref_names)]})
+                                                   in enumerate(arr_ref_names)]},
+                                     dtype=str)
 
             # Create separate df for 'unmapped' and 'only_suppl':
             # Add 'only_suppl' and 'unmapped':
@@ -466,24 +410,21 @@ if __name__ == "__main__":
             unmap_df = pd.DataFrame({'type_align':['unmapped']*len(list_unmapped) + 
                                                   ['only_suppl']*len(only_suppl_readIDs)}, 
                                     index=list_unmapped+only_suppl_readIDs)
+            grped_csv['ref_names'] = grped_csv.ref_names0.apply(
+                                            lambda a_list: '&&'.join(a_list))
+            my_csv = pd.concat([grped_csv.set_index('readID'), unmap_df], 
+                               sort=True)
 
             # Save this grouped CSV to save time:
             if True:
                 sep = '&&' # Cuz writting step's problematic if a ref_name contains '&&':
                 assert(all(map(lambda ref_name: sep not in ref_name, ref_names)))
-
-                grped_csv['ref_names'] = grped_csv.ref_names0.apply(
-                                            lambda a_list: '&&'.join(a_list))
-                my_csv = pd.concat([grped_csv.set_index('readID'), unmap_df], 
-                                   sort=True)
-                # my_csv[['ref_names', 'type_align']].to_csv(to_out_file, 
-                #                                             sep=',', 
-                #                                             header=['ref_names', 
-                #                                                     'type_align'])
-                print("Wrote:", to_out_file)
-                my_csv.drop('ref_names0', inplace=True, axis='columns')
-                # sys.exit()
+                my_csv[['ref_names', 'type_align']].to_csv(
+                                        to_out_file, sep=',', 
+                                        header=['ref_names', 'type_align'])
+                print("Wrote:", to_out_file)  
             
+            my_csv.drop('ref_names0', inplace=True, axis='columns')
             print("CSV CONVERSION TIME:", round(t.time()-grping_time, 4))
             print()
 
@@ -491,19 +432,26 @@ if __name__ == "__main__":
         else:
             print("FOUND CSV FILE:", to_out_file)
             print("Loading CSV file...")
-            my_csv = pd.read_csv(to_out_file, header=0, index_col=0)
-
-            print("CSV loaded !")
+            my_csv = pd.read_csv(to_out_file, header=0, index_col=0,
+                                 dtype=str)
+            print("CSV loaded !")# ; sys.exit()
 
 
     # ONCE A PROPER CSV HAS BEEN CREATED/READ:
     assert(my_csv.index.is_unique)
-    with_lineage = ((my_csv.type_align != 'unmapped') & 
-                    (my_csv.type_align != 'only_suppl'))
+    with_lineage = ((my_csv.type_align.astype(str) != 'unmapped') & 
+                    (my_csv.type_align.astype(str) != 'only_suppl'))
 
     if IS_SAM_FILE: # Need to modify a bit the read CSV
         assert(sorted(my_csv.columns) == ['ref_names', 'type_align'])
         # From here, all following steps depend on the 'seqid2taxid' file given:
+        dict_seqid2taxid = {} # To make correspond sequence id (fasta header) and taxid
+        with open(to_seqid2taxid, 'r') as seqid2taxid_file:
+            for line in seqid2taxid_file:
+                splitted_line = line.rstrip('\n').split('\t')
+                dict_seqid2taxid[splitted_line[0]] = int(splitted_line[1])
+            del line
+
         my_csv['list_taxids'] = my_csv[with_lineage].ref_names.apply(
                                   lambda str_names: [dict_seqid2taxid[x] 
                                                      for x 
@@ -511,23 +459,33 @@ if __name__ == "__main__":
         my_csv.drop('ref_names', inplace=True, axis='columns')
 
 
-    # Back to common part:
-    my_csv['type_align'] = my_csv[with_lineage].list_taxids.apply(type_align_f) 
-    my_csv['nb_trashes'] = my_csv[with_lineage].list_taxids.apply(nb_trash_f)
+    # CORRECTION of B. intestinalis:
+    if guessed_db.lower() == 'rrn':
+        print("  >>> CORRECTION OF INTESTINALIS FOR RRN!")
+        with_intestinalis = my_csv[with_lineage].list_taxids.apply(
+                                            lambda a_list: 1963032 in a_list)
+        print("  (NB of corrected reads: {})".format(sum(with_intestinalis)))
+        print()
+        conv_bacil = {1963032:1423}
+        my_csv.list_taxids = my_csv[with_lineage].list_taxids.apply(
+                        lambda a_list: [conv_bacil.get(x, x) for x in a_list])
 
+
+    # Back to common part:
+    my_csv.loc[with_lineage, 'type_align'] = my_csv[with_lineage].list_taxids.apply(type_align_f) 
+    my_csv['nb_trashes'] = my_csv[with_lineage].list_taxids.apply(nb_trash_f)
 
     # To print the distribution of the number of equivalent hits by reads:
     print_distrib = False
     if print_distrib:
-        test = my_csv.list_taxids.dropna()
-        felix = pd.Series(map(lambda lin: len(lin.split('s')), test))
+        felix = my_csv.list_taxids.dropna().apply(len)
         bins_val = felix.max()
         felix.plot.hist(bins=bins_val, log=True)
         print("% DE + DE 25 SECOND:", sum(felix > 26)/len(felix)*100)
-        plt.show()
-        sys.exit()
+        print() ; plt.show() ; sys.exit()
+        
 
-
+    # NOW STARTS PLL TAXONOMIC EVALUATION:s
     TIME_CSV_TREATMENT = t.time()
     # Filter only reads that are taxonomically evaluable (assigned):
     my_csv_to_pll = my_csv[['list_taxids', 'type_align']][with_lineage].reset_index()
@@ -577,6 +535,7 @@ if __name__ == "__main__":
 
 
     proc_chunks, chunksize = [], nb_reads_to_process//NB_THREADS
+    
     if nb_reads_to_process < NB_THREADS: # Case when the nb of reads is too small
         chunksize = 1
 
@@ -606,21 +565,10 @@ if __name__ == "__main__":
     my_csv = pd.concat([my_csv, my_res[col_to_add]], 
                        axis='columns', sort=True, copy=False)
     list_col_my_res = my_res.columns.values.tolist()
+    # print(sorted(my_csv.columns), sorted(set(list_col_my_res +
+    #                                                     col_my_csv_before)))
     assert(sorted(my_csv.columns) == sorted(set(list_col_my_res +
                                                         col_my_csv_before)))
-
-
-    # CORRECTION of B. intestinalis:
-    if guessed_db.lower() == 'rrn':
-        print("\n  >>> CORRECTION OF INTESTINALIS FOR RRN!")
-        are_intestinalis = my_csv.final_taxid == 1963032
-        print("(NB of corrected reads: {})".format(sum(are_intestinalis)))
-        print()
-        my_csv.loc[are_intestinalis, 'res_eval'] = 'well'
-        my_csv.loc[are_intestinalis, 'final_taxid'] = 1423
-        ancest_subtilis = taxfoo.get_dict_lineage_as_taxids(1423)[taxo_cutoff]
-        my_csv.loc[are_intestinalis, 'taxid_ancester'] = ancest_subtilis
-
 
     my_csv['species'] = my_csv.taxid_ancester.apply(get_ancester_name)
 
@@ -732,7 +680,6 @@ if __name__ == "__main__":
 
     print("MISS STATS:")
     print(my_csv[is_miss].remark_eval.value_counts())
-    # print(my_csv[is_miss & (my_csv.remark_eval == 'second_uniq;misassigned')].final_taxid.apply(taxfoo.get_taxid_name).value_counts())
     print()
 
     # Add numbers of well and miss to the dict of stats:
