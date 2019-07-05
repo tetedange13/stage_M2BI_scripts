@@ -5,8 +5,10 @@ Aims to containing functions common to several scripts
 """
 
 
+import sys
 import pandas as pd
 import src.ncbi_taxdump_utils as taxo_utils
+import os.path as osp
 
 
 global taxfoo
@@ -14,9 +16,15 @@ taxfoo = taxo_utils.NCBI_TaxonomyFoo()
 want_taxo = taxo_utils.default_want_taxonomy
 
 # Path to dump files:
-to_dbs = "/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/metage_ONT_2019/"
-nodes_path = to_dbs + "nt_db/taxo_18feb19/nodes.dmp"
-names_path = to_dbs + "nt_db/taxo_18feb19/names.dmp"
+to_dumps = "dump_files/"
+if not osp.isdir(to_dumps):
+    print("ERROR: Need to create a 'dump_files/' folder and put dump files" + 
+          " within it")
+    print()
+    sys.exit()
+
+nodes_path = osp.join(to_dumps, "nodes.dmp")
+names_path = osp.join(to_dumps, "names.dmp")
 taxfoo.load_nodes_dmp(nodes_path)
 taxfoo.load_names_dmp(names_path)
 
@@ -145,9 +153,7 @@ def remove_minor_lca(list_of_things, cutoff_discard):
     to_return = [val for val in val_counts]
 
     if nb_majo == 0:
-        print('noMajo:', 
-              [(taxfoo.get_taxid_name(a_taxid), a_freq) 
-               for a_taxid, a_freq in freq_counts.items()])
+        # print('READ noMajo !')
         return ('noMajo', None) # NO majoritary
     
     elif nb_majo == 1: # 1 unique majoritary
@@ -223,33 +229,3 @@ def in_zymo(taxo_taxid, set_levels_prok, taxonomic_cutoff):
             if taxo_name in set_levels_prok:
                 return (taxid_ancester, 'well', 'true_pos')
             return (taxid_ancester, 'miss', 'misassigned')
-
-
-def in_zymo_new(taxo_taxid, set_levels_prok, taxonomic_cutoff):
-    """
-    Given the taxid of a read (lowest one in the taxo), determine if the 
-    organism belongs to the Zymo mock comm, at a given taxonomic cutoff 
-    """
-    if taxo_taxid == 'no_majo_found':
-        returned_list = ['no_majo_found', 'miss', 'no_majo_found']
-
-    else:
-        lineage = taxfoo.get_dict_lineage_as_taxids(taxo_taxid)
-
-        if not lineage: # "cannot find taxid {a_taxid}; quitting." --> empty dict
-            returned_list = [pd.np.nan, 'miss', 'taxid_unknown']
-        else:
-            taxo_levels = lineage.keys()
-
-            if taxonomic_cutoff not in taxo_levels:
-                returned_list = [pd.np.nan, 'miss', 'notInKeys']
-            else:
-                taxid_ancester = lineage[taxonomic_cutoff]
-                assert(taxid_ancester)
-                taxo_name = taxfoo.get_taxid_name(taxid_ancester)
-                if taxo_name in set_levels_prok:
-                    returned_list = [taxid_ancester, 'well', 'true_pos']
-                else:
-                    returned_list = [taxid_ancester, 'miss', 'misassigned']
-
-    return pd.Series(returned_list)

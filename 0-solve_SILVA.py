@@ -329,8 +329,9 @@ def parse_and_rewrite_names(filename, to_complete_lineage):
 
 def write_metadat_file(to_seqid2taxid, base_used):
     """
-    Given a complete lineage as the set of taxids, writes the complete lineage
-    list of taxids and the
+    Given a complete lineage as the set of taxids, writes (temporary) the 
+    complete lineage for this given set of taxids and write associating each 
+    taxid from this 'complete_lineage' with its SILVA-formatted taxonomy
     """
     write_complete_lineage(to_seqid2taxid)
 
@@ -342,7 +343,7 @@ def write_metadat_file(to_seqid2taxid, base_used):
         for line in complete_lineage:
             taxid_grp = line.rstrip('\n')
             metadat_file.write(taxid_grp + '\t' + 
-                               pll.eval.taxo_from_taxid(taxid_grp) + '\n')
+                               eval.taxo_from_taxid(taxid_grp) + '\n')
         del line
 
     os.remove('taxids_complete_lineage')
@@ -353,6 +354,8 @@ def stats_base(db_to_stat):
     Produce statistics of each databases, concerning the number of different
     taxonomic ranks, present sequences of our 8 expected bacteria etc.
     """
+    print("Proceeding...")
+    
     to_seqid2taxid = ("/mnt/72fc12ed-f59b-4e3a-8bc4-8dcd474ba56f/" +
                       "metage_ONT_2019/Centri_idxes/" + db_to_stat.lower() +
                       '/seqid2taxid')
@@ -377,7 +380,7 @@ def stats_base(db_to_stat):
         list_taxids = [line.rstrip('\n').split('\t')[1] 
                        for line in seqid2taxid_file]
 
-    print(sum(map(pll.is_trash, list_taxids)));sys.exit()
+    # print(sum(map(pll.is_trash, list_taxids)));sys.exit()
     
     dict_tmp = {}
     dict_bacil = {'Bacillus intestinalis':0, 'Bacillus subtilis':0}
@@ -418,42 +421,76 @@ def stats_base(db_to_stat):
     print()
 
 
-def transform_EPI2ME_CSV(to_initial_csv):
+def transform_ONT_CSV(to_initial_csv):
     """
     Transform the CSV produced by Epi2me to make it usable by my scripts
     """
     print("Transforming EPI2ME CSV..")
+    base_filename = osp.basename(to_initial_csv).lower()
+
+    if "epi2me" in base_filename:
+        print("Detected EPI2ME tool !")
+        name_col_readID = 'read_id'
+        name_col_taxid = 'taxid'
+    elif "wimp" in base_filename:
+        print("Detected WIMP tool !")
+        name_col_readID = 'readid'
+        name_col_taxid = 'taxID'
+    else:
+        print("ERROR ! Filename must contain either 'EPI2ME' or 'WIMP'")
+        sys.exit()
 
     initial_csv = pd.read_csv(to_initial_csv, header=0, sep=',', 
-                             usecols=['exit_status', 'taxid', 'accuracy', 
-                                      'lca'])
-    nb_rows = len(initial_csv.index)
-    initial_csv['readID'] = [foo[0]+str(foo[1]) 
-                             for foo in zip(['read_']*nb_rows, range(nb_rows))]
-    initial_csv['lineage'] = initial_csv.taxid.apply(
+                             # usecols=['exit_status', 'taxid', 'accuracy', 
+                             #          'lca'])
+                             usecols=[name_col_readID, 'exit_status', 
+                                      name_col_taxid])
+
+    if all(initial_csv[name_col_readID].isnull()): # Actually NO readID...
+        print("NO readID actually found --> adding a pseudo-readID..")
+        nb_rows = len(initial_csv.index)
+        initial_csv[name_col_readID] = [foo[0]+str(foo[1]) 
+                                    for foo 
+                                    in zip(['read_']*nb_rows, range(nb_rows))]
+    else:
+        # If 'False' here, will need more code to group entries...
+        assert(len(initial_csv[name_col_readID]) == len(initial_csv[name_col_readID].unique()))
+        
+    initial_csv['lineage'] = initial_csv[name_col_taxid].apply(
                                             lambda val: ';' + str(val) + ';')
 
+
     def exitStatus_to_typeAlign(val):
-        if val == 'Classification successful':
+        """
+        /!\ This func assert that every status different from 
+        'Classif successful' can be considered as 'unmapped' 
+        """
+        if val in ('Classification successful', 'Classified'):
+        # 'Classified' for WIMP and 'Classification successful' for EPI2ME
             return 'normal'
         return 'unmapped'
 
     # Before applying this func, be sure not another category
-    possible_exit_status = ['Classification below QC threshold', 
-                            'Classification successful', 'No classification'] 
-    assert(sorted(initial_csv.exit_status.unique()) == possible_exit_status)
+    # possible_exit_status = ['Classification below QC threshold', 
+    #                         'Classification successful', 'No classification']
+    print("All different 'exit_status' in this file:")
+    print(initial_csv.exit_status.value_counts())
+    # assert(sorted(initial_csv.exit_status.unique()) == possible_exit_status)
 
     initial_csv['type_align'] = initial_csv.exit_status.apply(
-    
                                                     exitStatus_to_typeAlign)
-    initial_csv['nb_trashes'] = initial_csv[initial_csv.type_align!='unmapped'].taxid.apply(
-                        lambda val: int(pll.is_trash(val)))
+    not_unmapped = initial_csv.type_align != 'unmapped'
+    initial_csv['nb_trashes'] = initial_csv[not_unmapped][name_col_taxid].apply(
+                                        lambda val: int(pll.is_trash(val)))
 
-    initial_csv.drop(columns=['taxid', 'exit_status'], inplace=True)
+    initial_csv.drop(columns=[name_col_taxid, 'exit_status'], inplace=True)
     print("Done ! Head of the written new CSV:")
     print(initial_csv.head())
     inbase = osp.splitext(osp.basename(to_initial_csv))[0]
-    initial_csv.set_index(['readID']).to_csv(inbase+'.csv', index_label=False)
+    initial_csv.set_index([name_col_readID]).to_csv(inbase+'.csv', 
+                                                    index_label=False)
+    print("FINISHED ! Wrote: {}.csv".format(inbase))
+    print()
 
 
 def extract_reference_seq(to_extractable, to_zymo_SEGO):
@@ -618,8 +655,46 @@ def correct_spf(to_spf):
 
     print('New spf file:', to_spf.rstrip('0'))
     test.to_csv(to_spf.rstrip('0'), sep='\t', index=False)
+
+
+def parse_gbff(to_gbff):
+    """
+    Parse gbff file (NCBI "16S" db), in order to get all couples (acc_nb;taxid)
+    """
+    print("Parsing gbff file to get taxid associated with each acc_nb..")
+    import re
+
+    # We get all couples using 2 regex:
+    reg_acc_nb = re.compile("(?:VERSION\s+)(.*)")
+    reg_taxid = re.compile("(?:.*db_xref.*taxon:)([0-9]+)")
+
+    with open(to_gbff, 'r') as gbff_file:
+        to_search_in = ''
+        list_couples = []
+
+        for line in gbff_file:
+            if line != "//\n": # Delimiter between each 
+                to_search_in += line
+            else:
+                matches_acc_nb = reg_acc_nb.findall(to_search_in)
+                matches_taxid = reg_taxid.findall(to_search_in)
+                assert(len(matches_acc_nb) == 1)
+                assert(len(matches_taxid) == 1)
+
+                list_couples.append((matches_acc_nb[0], matches_taxid[0]))
+
+                # We reset the str to search into:
+                to_search_in = ''
     
-    
+    # We write the corresponding seqid2taxid as output: 
+    with open("seqid2taxid", 'w') as seqid2taxid_file:
+        for acc_nb, taxid in list_couples:
+            seqid2taxid_file.write(acc_nb + '\t' + taxid + '\n')
+        del acc_nb, taxid
+
+    print("FINISHED! Found {} couples".format(len(list_couples)))
+    print()
+
 
 
 # MAIN:
@@ -637,6 +712,7 @@ if __name__ == "__main__":
 
     # detect_problems("seqid2taxid", to_dbs_SILVA + "seqid2acc", 
     #                 to_dbs_SILVA + "headers.txt")
+    #detect_problems("seqid2taxid", "seqid2acc", "headers.txt")
 
     # local_taxid_search("wgs", "problems.txt")
     # local_taxid_search("gb", "wgs_need_remote")
@@ -647,21 +723,24 @@ if __name__ == "__main__":
     # correct_seqid2taxid("old_seqid2taxid", "wrong2good_taxids")
 
     # write_complete_lineage("seqid2taxid")
-    # write_metadat_file(to_dbs + 'Centri_idxes/zymo/seqid2taxid', 'toZymo')
+    write_metadat_file(to_dbs + 'Centri_idxes/ncbi16S/seqid2taxid', 'toZymo')
     # parse_and_rewrite_names(to_dbs_nt + "names.dmp", 
     #                         "taxids_complete_lineage")
     # parse_and_rewrite_nodes(to_dbs_nt + "nodes.dmp", 
     #                         "taxids_complete_lineage")
 
-    # stats_base('SILVA')
+    # stats_base('RRN')
     # detect_RRN_litige(to_dbs_RRN+'acc2taxid', to_dbs_RRN+'species_annotation')
-    # transform_EPI2ME_CSV("../EPI2ME_cusco_run2_toNCBIbact.sam")
+    # transform_ONT_CSV("../2_WIMP_cDNA_run1_trimmed_toNCBIbact.sam")
+    # transform_ONT_CSV("../EPI2ME_16Skit_run1_500K_toNCBIbact.sam")
     # extract_reference_seq("extractable_16SkitRun1Zymo.csv", "../../zymo_SEGO.fa")
 
     # tiny_func_for_STAMP_2("OTUs_maps_n_tables/toZymo_L7.txt")
     # correct_spf("OTUs_maps_n_tables/toRrn.spf0")
 
-    # if False:
-    if len(sys.argv) > 1:
+    if False:
+    # if len(sys.argv) > 1:
         # tiny_func_for_STAMP(sys.argv[1])
         tiny_func_for_STAMP_2(sys.argv[1])
+
+    # parse_gbff(to_dbs + "NCBI_16S_18-06-2019/bacteria.16SrRNA.gbff")

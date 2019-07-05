@@ -4,7 +4,7 @@
 Mapping statistics computation
 
 Usage:
-  second_analysis.py (-i <inOTUs>) (-l <taxoCut>)
+  3-second_analysis.py (-i <inOTUs>) (-l <taxoCut>)
   
 Options:
   -h --help                  help
@@ -17,6 +17,7 @@ Remarks:
 explained on qiime.org) and be at the SPECIES level
 2) Ideally the file resulting from this cmd: 
 `summarize_taxa.py -i my_biom_w_metadat.biom -o . --level 7 --absolute_abundance --suppress_biom_table_output`
+3) The script 'input_second.sh' (in root directory) is able to produce such input file
 """
 
 import os, sys
@@ -127,7 +128,7 @@ if __name__ == '__main__':
                                    range(int(count)))
                 ref_map_file.write(str(int(idx)) + '\t' + 
                                    '\t'.join(list_readIDs) + '\n')
-                # print(idx, count)
+            del idx, count
         print()
 
 
@@ -176,7 +177,6 @@ if __name__ == '__main__':
     plot_stacked_bar = False
     if plot_stacked_bar:
         tmp_series = df_counts.obs_counts.drop('0-misassigned').sort_index(ascending=False)/sum(df_counts.obs_counts)
-        # print(tmp_series);sys.exit()
         tmp_df = pd.DataFrame([tmp_series.to_dict(), 
                                {felix:0 for i, felix in enumerate(tmp_series.index)}], 
                               index=[0,1])#.sort_values(by=1, axis='columns')

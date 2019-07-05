@@ -15,7 +15,7 @@ def infile(infile_path, list_acceptable_ext):
     """
     if not os.path.isfile(infile_path):
         print("ERROR! Specified input file does not exit")
-        sys.exit(2)
+        print() ; sys.exit(2)
     else:
         head_infile, tail_infile = os.path.split(infile_path)
         infile_base, infile_ext = os.path.splitext(tail_infile)
@@ -41,7 +41,7 @@ def input_nb(input_nb, param_name=""):
     except ValueError:
         print("ERROR! You should give an integer for the parameter:", 
               param_name)
-        sys.exit(2)
+        print() ; sys.exit(2)
     
     return input_nb
 
@@ -61,7 +61,7 @@ def bool_type(rep):
         return False
     else:
         print("Enter a boolean type (True, T, False, F) !")
-        sys.exit(2)
+        print() ; sys.exit(2)
 
 
 def acceptable_str(input_str, list_acceptable):
@@ -75,4 +75,20 @@ def acceptable_str(input_str, list_acceptable):
     else:
         print("ERROR! String given as parameter not valid. Should be in:",
               list_acceptable)
-        sys.exit(2)        
+        print() ; sys.exit(2)
+
+
+def list_config(list_config, name_param):
+    """
+    Take a list of config arguments and check its size (supposed to be of 
+    size 1), to decided whether to return the path (within the list) or send
+    an error
+    """
+    if len(list_config) != 1:
+        if not list_config: # Empty list ==> NO config found for given params:
+            print("ERROR: NO config found with given args for '{}' param".format(name_param))
+        else: # len() > 1 ==> More than 1 possible config
+            print("ERROR: Several config possible for '{}' param".format(name_param))
+        print() ; sys.exit(2)
+    
+    return list_config[0]  
