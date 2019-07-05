@@ -82,7 +82,7 @@ being sure that present taxids are consistent with downloaded NCBI taxonomy
 >> Most scripts use the `ncbi_taxdump_utils.py` Python module, which needs 
 2 dump files to be initialized (`names.dmp` and `nodes.dmp`). These 2 files 
 (can be retrieved from NCBI ftp) need to be put in a `dump_files/` folder 
-(at root directory). <br>
+at root directory (or in the same folder from where you ran one of the scripts). <br>
 The hard-coded line for this parameter is at line 19 of the `src/taxo_eval.py` 
 module.
 
@@ -144,8 +144,9 @@ The extension of the file matters here, as the treatment will be different. With
 (destination given by the `-o | --outDir` option. Like that the next time, the
 script will  look directly (still in 'outDir') for this written CSV and time 
 is saved. This CSV is minimalist enough (only reads with a list  their target 
-seqID , from mapping<br> Example of cmd:
-`2-prim_analysis.py -i /path/to/your_fav_file.sam -c pipeline.conf -l genus -o ./my_CSVs/`
+seqID from mapping), **to be reused with another `seqid2taxid`**.<br> 
+Example of cmd:`2-prim_analysis.py -i /path/to/your_fav_file.sam 
+-c pipeline.conf -l genus -o ./my_CSVs/`
 
 To handle multi-hits, the **default way is 'minor_rm+LCA'**, but 3 other methods 
 ('topOne', 'majoVoting', 'LCA') can be used, by setting the proper line, at the
